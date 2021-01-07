@@ -22,6 +22,7 @@
 #include "srradint.h"
 #include "srradmnp.h"
 #include "sroptcnt.h"
+#include "sroptgtr.h"
 #include "srgsnbm.h"
 #include "srpersto.h"
 #include "srpowden.h"
@@ -826,6 +827,13 @@ EXP int CALL srwlCalcIntFromElecField(char* pInt, SRWLWfr* pWfr, char polar, cha
 	}
 	if(pTrjDat != 0) delete pTrjDat;
 	return 0;
+}
+
+//-------------------------------------------------------------------------
+//HG28122020
+EXP int CALL srwlCalcTransm(SRWLOptT *pOptElem, const double* pAttenLen, const double* pDelta, const double* pShapeDefs, int ShapeDefCount, void *pPrescParams)
+{
+	return srTGenTransmissionSample::CalcTransm(pOptElem, pAttenLen, pDelta, pShapeDefs, ShapeDefCount);
 }
 
 //-------------------------------------------------------------------------

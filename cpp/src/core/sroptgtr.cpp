@@ -1487,3 +1487,77 @@ int srTGenTransmission::EstimateMinNpToResolveOptElem(srTSRWRadStructAccessData*
 }
 
 //*************************************************************************
+//HG05012021
+int srTGenTransmissionSample::CalcTransm(SRWLOptT *pOptElem, const double* pDelta, const double* pAttenLen, const double* pShapeDefs, int ShapeDefCount) {
+	
+	double Coords[3] = { 0 };
+	double thickness = 0;
+
+	//Retrieve mesh data
+	double* arTr = pOptElem->arTr;
+	long nx = pOptElem->mesh.nx;
+	long ny = pOptElem->mesh.ny;
+	long ne = pOptElem->mesh.ne;
+	double lcorn_x = pOptElem->mesh.xStart;
+	double lcorn_y = pOptElem->mesh.yStart;
+	double rcorn_x = pOptElem->mesh.xFin;
+	double rcorn_y = pOptElem->mesh.yFin;
+	double step_x = (rcorn_x - lcorn_x) / nx;
+	double step_y = (rcorn_y - lcorn_y) / ny;
+
+	for (int shape_idx = 0; shape_idx < ShapeDefCount;) {
+
+		//Read object coordinates
+		Coords[0] = pShapeDefs[shape_idx++];
+		Coords[1] = pShapeDefs[shape_idx++];
+		Coords[2] = pShapeDefs[shape_idx++];
+
+		//Handle object specific behavior
+		if (pShapeDefs[shape_idx++] == 0) {	//SPHERE = 0
+
+			//Read any additional object specific information
+			double rad = pShapeDefs[shape_idx++];
+
+			//Determine bounds for computing OPD in
+			double sph_w = std::fmin(rcorn_x, Coords[0] + rad);
+			double sph_h = std::fmin(rcorn_y, Coords[1] + rad);
+			double sph_spos_x = std::fmax(lcorn_x, Coords[0] - rad);
+			double sph_spos_y = std::fmax(lcorn_y, Coords[1] - rad);
+
+			//Update the maximum possible value stored in the array
+			thickness = std::fmax(thickness, 2 * rad);
+
+			//Determine the thickness of the sphere at the given point via pythagorean theorem
+			double sph_r_sq = rad * rad;
+			for (double y = sph_spos_y; y < sph_h; y+= step_y)
+				for (double x = sph_spos_x; x < sph_w; x+= step_x) {
+					double c_dist = (x - Coords[0]) * (x - Coords[0]) + (y - Coords[1]) * (y - Coords[1]);
+					if (c_dist <= sph_r_sq) {
+						long idx = (long)((y - lcorn_y) / step_y) * nx + (long)((x - lcorn_x) / step_x); //convert coordinates into pixel coordinates
+						arTr[idx * 2] = std::fmax(arTr[idx * 2], 2 * std::sqrt(sph_r_sq - c_dist));
+					}
+				}
+		}
+		else {
+			return -1;
+		}
+	}
+
+	//Compute transmittance
+	long offset = 0;
+	for (long iy = 0; iy < ny; iy++)
+		for (long ix = 0; ix < nx; ix++) {
+			double pathInBody = arTr[(iy * nx + ix) * 2];
+			double minHalfPathInBody = -0.5 * pathInBody;
+			
+			for (long ie = 0; ie < ne; ie++) {
+				arTr[offset] = std::exp(minHalfPathInBody / pAttenLen[ie]);
+				arTr[offset + 1] = -pDelta[ie] * pathInBody;
+				offset += 2;
+			}
+		}
+
+	return 0;
+}
+
+//*************************************************************************

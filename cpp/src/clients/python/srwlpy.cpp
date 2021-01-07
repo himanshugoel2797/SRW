@@ -84,6 +84,7 @@ static const char strEr_FailedAllocPyArray[] = "Failed to allocate Python array 
 static const char strEr_FailedUpdateInt[] = "Failed to update intensity data after propagation";
 //static const char strEr_FailedCreateList[] = "Failed to create resulting data list"; //OC09032019 (defined in pyparse.h)
 
+static const char strEr_BadArg_CalcTransm[] = "Incorrect arguments for transmission calculation";
 static const char strEr_BadArg_CalcMagnField[] = "Incorrect arguments for magnetic field calculation/tabulation function";
 static const char strEr_BadArg_CalcPartTraj[] = "Incorrect arguments for trajectory calculation function";
 static const char strEr_BadArg_CalcPartTrajFromKickMatr[] = "Incorrect arguments for trajectory calculation function from kick matrices";
@@ -4600,6 +4601,45 @@ static PyObject* srwlpy_CalcIntFromElecField(PyObject *self, PyObject *args)
 }
 
 /************************************************************************//**
+ * Calculates transmission from shape definitions;
+ * see help to srwlCalcTransm
+ ***************************************************************************/
+static PyObject* srwlpy_CalcTransm(PyObject* self, PyObject* args)
+{	
+	vector<double> shape_def_vec;
+	double* delta = 0, * atten_len = 0, * shape_defs = 0;
+	int shape_def_count = 0;
+
+	try {
+		PyObject* shape_defs_obj = 0, * delta_obj = 0, * atten_len_obj = 0, * optT_obj = 0, * presc_obj;
+		if (!PyArg_ParseTuple(args, "OOOOO:CalcTransm", &optT_obj, &atten_len_obj, &delta_obj, &shape_defs_obj, &presc_obj)) throw strEr_BadArg_CalcTransm;
+
+		//Parse SRWLOptT object
+		SRWLOptT pOptElem;
+		ParseSructSRWLOptT((SRWLOptT*)&pOptElem, optT_obj, nullptr);
+
+		//Parse objects
+		delta = nullptr;
+		atten_len = nullptr;
+		int ne_tmp = pOptElem.mesh.ne;
+		CopyPyListElemsToNumArray(delta_obj, 'd', delta, ne_tmp);
+		CopyPyListElemsToNumArray(atten_len_obj, 'd', atten_len, ne_tmp);
+		CopyPyListElemsToNumArray(shape_defs_obj, 'd', shape_defs, shape_def_count);
+
+		ProcRes(srwlCalcTransm(&pOptElem, atten_len, delta, shape_defs, shape_def_count, nullptr));
+	}
+	catch (const char* erText) {
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+
+	if (shape_defs != nullptr) delete[] shape_defs;
+	if (atten_len != nullptr) delete[] atten_len;
+	if (delta != nullptr) delete[] delta;
+
+	Py_RETURN_NONE;
+}
+
+/************************************************************************//**
  * "Resizes" Electric Field Wavefront vs transverse positions / angles or photon energy / time
  * see help to srwlResizeElecField
  ***************************************************************************/
@@ -5268,6 +5308,7 @@ static PyMethodDef srwlpy_methods[] = {
 	{"CalcStokesUR", srwlpy_CalcStokesUR, METH_VARARGS, "CalcStokesUR() Calculates Stokes parameters of Synchrotron Radiation by a relativistic finite-emittance electron beam traveling in periodic magnetic field of an undulator"},
 	{"CalcPowDenSR", srwlpy_CalcPowDenSR, METH_VARARGS, "CalcPowDenSR() Calculates Power Density distribution of Synchrotron Radiation by a relativistic finite-emittance electron beam traveling in arbitrary magnetic field"},
 	{"CalcIntFromElecField", srwlpy_CalcIntFromElecField, METH_VARARGS, "CalcIntFromElecField() Calculates/extracts Intensity from pre-calculated Electric Field"},
+	{"CalcTransm", srwlpy_CalcTransm, METH_VARARGS, "CalcTransm() Calculates transmission for shape definitions"},
 	{"ResizeElecField", srwlpy_ResizeElecField, METH_VARARGS, "ResizeElecField() \"Resizes\" Electric Field Wavefront vs transverse positions / angles or photon energy / time"},
 	{"ResizeElecFieldMesh", srwlpy_ResizeElecFieldMesh, METH_VARARGS, "ResizeElecFieldMesh() \"Resizes\" Electric Field Wavefront vs transverse positions / angles or / and photon energy / time according to given mesh parameters"},
 	{"SetRepresElecField", srwlpy_SetRepresElecField, METH_VARARGS, "SetRepresElecField() Changes Representation of Electric Field: coordinates<->angles, frequency<->time"},

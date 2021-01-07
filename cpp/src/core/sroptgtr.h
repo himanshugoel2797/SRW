@@ -141,4 +141,14 @@ public:
 
 //*************************************************************************
 
+//Represents a transmission sample definition, defined by an optical transmission element
+class srTGenTransmissionSample : public srTGenTransmission { //HG01112020
+	srTGenTransmissionSample(const SRWLOptT& OptTrans) : srTGenTransmission(OptTrans) { }
+
+public:
+	static int CalcTransm(SRWLOptT *pOptElem, const double* pAttenLen, const double* pDelta, const double* pShapeDefs, int ShapeDefCount);
+};
+
+//*************************************************************************
+
 #endif

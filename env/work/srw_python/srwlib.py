@@ -9032,6 +9032,14 @@ function calculates/"extracts" Intensity from pre-calculated Electric Field
 :param _inX: input horizontal position [m] to keep fixed (to be taken into account for dependences vs e, y, e&y)
 :param _inY: input vertical position [m] to keep fixed (to be taken into account for dependences vs e, x, e&x)
 """
+helpCalcTransm = """CalcTransm(_opT, _attenLen, _delta, _shapeDefs, _inPresc)
+    Setup Transmittance for an Optical Element with list of 3d shapes.
+:param _opT: optical transmission element.
+:param _attenLen: attenuation length [m].
+:param _delta: refractive index decrement.
+:param _shapeDefs: list of object shape definitions.
+:param _inPresc: input precision parameters.
+"""
 helpResizeElecField = """ResizeElecField(_wfr, _inType, _inPar)
 function resizes Electric Field Wavefront vs transverse positions / angles or photon energy / time
 :param _wfr: input / output Wavefront structure (instance of SRWLWfr)

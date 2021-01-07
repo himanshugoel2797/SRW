@@ -13,6 +13,7 @@ import time
 from array import array
 
 import srwlib
+import srwlpy as srwl
 import uti_io
 
 
@@ -789,3 +790,69 @@ def srwl_opt_setup_smp_rnd_obj2d( #RAC06052020
     if(_ret == 'srw'): return opT 
     elif(_ret == 'all'): return opT, img
     else: return None
+
+
+# ********************** Create transmission element from the data from a list of object definitions:
+def srwl_opt_setup_transm_from_obj2d(
+        shape_defs, delta, atten_len, rx, ry, nx, ny,
+        arTr=None, extTr=0, fx=1e+23, fy=1e+23,
+        xc=0, yc=0, ne=1, e_start=0, e_fin=0
+):
+    """Setup Sample element from a list of object definitions.
+
+    :param shape_defs: list of object shape definitions.
+    :param delta: refractive index decrement.
+    :param atten_len: attenuation length [m].
+    :param rx: range of the horizontal coordinate [m] for which the transmission is defined
+    :param ry: range of the vertical coordinate [m] for which the transmission is defined
+    :param nx: number of transmission data points in the horizontal direction
+    :param ny: number of transmission data points in the vertical direction
+    :param arTr: complex C-aligned data array (of 2*ne*nx*ny length) storing amplitude transmission and optical path difference as function of transverse coordinates.
+    :param extTr: transmission outside the grid/mesh is zero (0), or it is same as on boundary (1).
+    :param fx: estimated focal length in the horizontal plane [m].
+    :param fy: estimated focal length in the vertical plane [m].
+    :param xc: horizontal coordinate of center [m].
+    :param yc: vertical coordinate of center [m].
+    :param ne: number of transmission data points vs photon energy.
+    :param e_start: initial photon energy [eV].
+    :param e_fin: final photon energy [eV].
+    :return: by default, transmission (SRWLOptT) type optical element which simulates the Sample.
+    """
+
+    input_parms = {
+        "type": "sample",
+        "refractiveIndex": delta,
+        "attenuationLength": atten_len,
+        "horizontalCenterCoordinate": xc,
+        "verticalCenterCoordinate": yc,
+        "initialPhotonEnergy": e_start,
+        "finalPhotonPnergy": e_fin,
+        "horizontalRange": rx,
+        "verticalRange": ry,
+        "horizontalPoints": nx,
+        "verticalPoints": ny,
+    }
+
+    #OC10112018
+    specPropAreDef = False
+    if(ne > 1):
+        if((isinstance(delta, list) or isinstance(delta, array)) and (isinstance(atten_len, list) or isinstance(atten_len, array))):
+            lenDelta = len(delta)
+            if((lenDelta == len(atten_len)) and (lenDelta == ne)): specPropAreDef = True
+            else: raise Exception("Inconsistent spectral refractive index decrement and/or attenuation length data")
+    
+    if not isinstance(delta, list):
+        delta = [delta]
+    if not isinstance(atten_len, list):
+        atten_len = [atten_len]
+
+    nTot = 2 * ne * nx * ny
+    arTr = array('d', [0]*nTot)
+
+    opT = srwlib.SRWLOptT(_nx=nx, _ny=ny, _rx=rx, _ry=ry,
+                          _arTr=arTr, _extTr=extTr, _Fx=fx, _Fy=fy,
+                          _x=xc, _y=yc, _ne=ne, _eStart=e_start, _eFin=e_fin)
+    opT.input_parms = input_parms
+    srwl.CalcTransm(opT, atten_len, delta, shape_defs, None)
+
+    return opT
