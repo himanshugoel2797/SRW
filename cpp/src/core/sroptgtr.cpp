@@ -154,7 +154,7 @@ srTGenTransmission::srTGenTransmission(const SRWLOptT& tr)
 
 	GenTransNumData.pData = (char*)(tr.arTr);
 	GenTransNumData.DataType[0] = 'c';
-	GenTransNumData.DataType[1] = 'f';
+	GenTransNumData.DataType[1] = 'f'; //OC29012021 note: this seems to be wrong (!); GenTransNumData is double (as it is used at propagation)
 	//GenTransNumData.AmOfDims = 2;
 	GenTransNumData.AmOfDims = 3; //OC112312
 	
@@ -1487,10 +1487,97 @@ int srTGenTransmission::EstimateMinNpToResolveOptElem(srTSRWRadStructAccessData*
 }
 
 //*************************************************************************
-//HG05012021
-int srTGenTransmissionSample::CalcTransm(SRWLOptT *pOptElem, const double* pDelta, const double* pAttenLen, const double* pShapeDefs, int ShapeDefCount) {
-	
-	double Coords[3] = { 0 };
+//int srTGenTransmissionSample::CalcTransm(SRWLOptT *pOptElem, const double* pDelta, const double* pAttenLen, const double* pShapeDefs, int ShapeDefCount) //HG28012021
+int srTGenTransmissionSample::SetFromListOfObj3D(const double* arDelta, const double* arAttenLen,  double** arObjDefs, int nObj3D, const double* arPar) //OC28012021
+{
+	if((arDelta == 0) || (arAttenLen == 0) || (arObjDefs == 0)) return 0; //?
+
+	//double eStart = GenTransNumData.DimStartValues[0], eStep = GenTransNumData.DimSteps[0];
+	double xStart = GenTransNumData.DimStartValues[1], xStep = GenTransNumData.DimSteps[1];
+	double yStart = GenTransNumData.DimStartValues[2], yStep = GenTransNumData.DimSteps[2];
+	int ne = (int)GenTransNumData.DimSizes[0], nx = (int)GenTransNumData.DimSizes[1], ny = (int)GenTransNumData.DimSizes[2];
+	int nx_mi_1 = nx - 1, ny_mi_1 = ny - 1;
+	double xEnd = xStart + xStep*nx_mi_1, yEnd = yStart + yStep*ny_mi_1;
+
+	long long perE = 2;
+	long long perX = perE*ne;
+	long long perY = perX*nx;
+	long long nTotHalf = ((long long)ne)*((long long)nx)*((long long)ny);
+	//long long ofst;
+	double *pTr0 = (double*)(GenTransNumData.pData);
+	//NOTE: GenTransNumData.DataType[2] is not used here
+
+	double *tTr = pTr0;
+	for(long long j=0; j<nTotHalf; j++)
+	{
+		*(tTr++) = 1.; //Amplitude Transm.
+		*(tTr++) = 0.; //Opt. Path Diff.
+	}
+
+	double stepTol = 1.e-12; //to steer
+	double xc, yc, zc, xMin, xMax, yMin, yMax, r, re2, pathInObj, dx, dy;
+	//int ixStart, ixEnd, iyStart, iyEnd;
+	char typeObj;
+	double **tObjDefs = arObjDefs;
+	for(int i=0; i<nObj3D; i++)
+	{
+		double *pCurObj = *(tObjDefs++);
+		double *tCurObj = pCurObj;
+		xc = *(tCurObj++); yc = *(tCurObj++); zc = *(tCurObj++);
+		typeObj = (char)(*(tCurObj++)); //Type of 3D object 'S' (ASCII 83) means Sphere
+
+		if(typeObj == 83) //Sphere
+		{
+			r = *tCurObj;
+			re2 = r*r;
+			xMin = xc - r; xMax = xc + r;
+			yMin = yc - r; yMax = yc + r;
+		}
+
+		int ixStart = (int)((xMin - xStart)/xStep + stepTol) + 1;
+		if(ixStart < 0) ixStart = 0;
+		int ixEnd = (int)((xMax - xStart)/xStep + stepTol);
+		if(ixEnd > nx_mi_1) ixEnd = nx_mi_1;
+
+		int iyStart = (int)((yMin - yStart)/yStep + stepTol) + 1;
+		if(iyStart < 0) iyStart = 0;
+		int iyEnd = (int)((yMax - yStart)/yStep + stepTol);
+		if(iyEnd > ny_mi_1) iyEnd = ny_mi_1;
+
+		double y = yStart + iyStart*yStep;
+		for(int iy=iyStart; iy<=iyEnd; iy++)
+		{
+			dy = y - yc;
+			double x = xStart + ixStart*xStep;
+			for(int ix=ixStart; ix<=ixEnd; ix++)
+			{
+				pathInObj = 0;
+				dx = x - xc;
+				if(typeObj == 83) //Sphere
+				{
+					double de2 = re2 - dx*dx - dy*dy;
+					if(de2 > 0.) pathInObj = 2.*sqrt(de2);
+				}
+				//Add other shapes here
+
+				if(pathInObj > 0.)
+				{
+					tTr = pTr0 + (ix*perX + iy*perY);
+					for(int ie=0; ie<ne; ie++)
+					{
+						*(tTr++) *= exp(-0.5*pathInObj/arAttenLen[ie]); //Amplitude Transm.
+						*(tTr++) -= arDelta[ie]*pathInObj; //Opt. Path Diff.
+					}
+				}
+				x += xStep;
+			}
+			y += yStep;
+		}
+	}
+	return 0;
+
+/**
+	double Coords[3] ={ 0 };
 	double thickness = 0;
 
 	//Retrieve mesh data
@@ -1505,7 +1592,7 @@ int srTGenTransmissionSample::CalcTransm(SRWLOptT *pOptElem, const double* pDelt
 	double step_x = (rcorn_x - lcorn_x) / nx;
 	double step_y = (rcorn_y - lcorn_y) / ny;
 
-	for (int shape_idx = 0; shape_idx < ShapeDefCount;) {
+	for(int shape_idx = 0; shape_idx < ShapeDefCount;) {
 
 		//Read object coordinates
 		Coords[0] = pShapeDefs[shape_idx++];
@@ -1513,7 +1600,7 @@ int srTGenTransmissionSample::CalcTransm(SRWLOptT *pOptElem, const double* pDelt
 		Coords[2] = pShapeDefs[shape_idx++];
 
 		//Handle object specific behavior
-		if (pShapeDefs[shape_idx++] == 0) {	//SPHERE = 0
+		if(pShapeDefs[shape_idx++] == 0) {	//SPHERE = 0
 
 			//Read any additional object specific information
 			double rad = pShapeDefs[shape_idx++];
@@ -1529,10 +1616,10 @@ int srTGenTransmissionSample::CalcTransm(SRWLOptT *pOptElem, const double* pDelt
 
 			//Determine the thickness of the sphere at the given point via pythagorean theorem
 			double sph_r_sq = rad * rad;
-			for (double y = sph_spos_y; y < sph_h; y+= step_y)
-				for (double x = sph_spos_x; x < sph_w; x+= step_x) {
+			for(double y = sph_spos_y; y < sph_h; y+= step_y)
+				for(double x = sph_spos_x; x < sph_w; x+= step_x) {
 					double c_dist = (x - Coords[0]) * (x - Coords[0]) + (y - Coords[1]) * (y - Coords[1]);
-					if (c_dist <= sph_r_sq) {
+					if(c_dist <= sph_r_sq) {
 						long idx = (long)((y - lcorn_y) / step_y) * nx + (long)((x - lcorn_x) / step_x); //convert coordinates into pixel coordinates
 						arTr[idx * 2] = std::fmax(arTr[idx * 2], 2 * std::sqrt(sph_r_sq - c_dist));
 					}
@@ -1545,19 +1632,18 @@ int srTGenTransmissionSample::CalcTransm(SRWLOptT *pOptElem, const double* pDelt
 
 	//Compute transmittance
 	long offset = 0;
-	for (long iy = 0; iy < ny; iy++)
-		for (long ix = 0; ix < nx; ix++) {
+	for(long iy = 0; iy < ny; iy++)
+		for(long ix = 0; ix < nx; ix++) {
 			double pathInBody = arTr[(iy * nx + ix) * 2];
 			double minHalfPathInBody = -0.5 * pathInBody;
-			
-			for (long ie = 0; ie < ne; ie++) {
+
+			for(long ie = 0; ie < ne; ie++) {
 				arTr[offset] = std::exp(minHalfPathInBody / pAttenLen[ie]);
 				arTr[offset + 1] = -pDelta[ie] * pathInBody;
 				offset += 2;
 			}
 		}
-
-	return 0;
+**/
 }
 
 //*************************************************************************

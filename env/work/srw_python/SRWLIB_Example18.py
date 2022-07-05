@@ -1,32 +1,28 @@
 #############################################################################
-# SRWLIB Example#18: Simulating Coherent X-ray (Gaussian beam) Scattering with 3d Samples as 2d Discs
-# on Experimental Samples defined using different methods
-# Authors: O.C., M. Rakitin, R. Coles (BNL, NSLS-II), H. Goel
-# SEM images of nano-fabricated samples from J. Lhermitte, K. Yager (BNL, CFN)
-# v 0.01
+# SRWLIB Example#18: Simulating Coherent X-ray (Gaussian beam) Scattering from from ensemble of 3D Nano-Particles randomly distributed over a volume
+# Authors: H. Goel (SBU/ECE), O.C. (BNL/NSLS-II)
+# v 0.02
 #############################################################################
 
 from __future__ import print_function #Python 2.7 compatibility
 from srwlib import *
 from srwl_uti_smp import *
+import srwl_uti_smp_rnd_obj3d
 from uti_plot import * #required for plotting
 import copy
 import os
-import sys
 import time
 
-print('SRWLIB Python Example # 18:')
-print('Simulating Coherent X-ray (Gaussian beam) Scattering on Experimental Samples with 3d Samples as 2d Discs')
+print('SRWLIB Python Example # 18 (Randomly distributed spheres):')
+print('Simulating Coherent X-ray (Gaussian beam) Scattering on Modelled 3d Samples')
 
-#**********************Input Parameters and Structures
 #***********Folder and Data File Names
-strDataFolderName = 'data_example_18' #data sub-folder name
-strSampDefFolderName = 'samples'
-strSampDefInFileName01 = 'sph.def' #Object definition of Rings of spheres
-strSampImgOutFileName01 = 'ex18_samp_img_proc.tif' #Processes (output) sample file name
-strSampOptPathDifOutFileName01 = 'ex18_samp_opt_path_dif.dat' #Optical path difference corresponding to selected sample
-strIntInitOutFileName01 = 'ex18_res_int_in.dat' #initial wavefront intensity distribution output file name
-strIntPropOutFileName01 = 'ex18_res_int_prop.dat' #propagated wavefront intensity distribution output file name
+strDataFolderName = 'data_example_18' #Data sub-folder name
+strSampDefFolderName = 'samples' #Sub-folder name for storing sample data
+strSampDefInFileName = 'smp_sph3d_list_%d.dat' #Sample definition file name core
+strSampOptPathDifOutFileName = 'ex18_samp_opt_path_dif_%d.dat' #File name of Optical Path Difference corresponding to selected sample
+strIntInitOutFileName = 'ex18_res_int_in.dat' #initial wavefront intensity distribution output file name
+strIntPropOutFileName = 'ex18_res_int_prop.dat' #propagated wavefront intensity distribution output file name
 
 #***********Gaussian Beam Source
 GsnBm = SRWLGsnBm() #Gaussian Beam structure (just parameters)
@@ -50,7 +46,7 @@ GsnBm.sigT = 10e-15 #Pulse duration [fs] (not used?)
 GsnBm.mx = 0 #Transverse Gauss-Hermite Mode Orders
 GsnBm.my = 0
 
-#***********Initial Wavefront
+#***********Initial Wavefront Parameters
 wfr = SRWLWfr() #Initial Electric Field Wavefront
 wfr.allocate(1, 100, 100) #Numbers of points vs Photon Energy (1), Horizontal and Vertical Positions (dummy)
 wfr.mesh.zStart = 0.5 #Longitudinal Position [m] at which initial Electric Field has to be calculated, i.e. the position of the first optical element
@@ -75,72 +71,33 @@ wfr.partBeam.partStatMom1.z = GsnBm.z
 wfr.partBeam.partStatMom1.xp = GsnBm.xp
 wfr.partBeam.partStatMom1.yp = GsnBm.yp
 
-def AuxReadInObjDef3D(filePath, sCom = '\t'):  #HG171120
-    shape_data = []
-    try:
-        with open(filePath) as f:
-            for line in f:
-                parts = line.split(sCom)
-                x_coord, y_coord, z_coord, shape = float(parts[0]), float(parts[1]), float(parts[2]), parts[3]
+#***********Defining Sample, Beamline, Propagation Parameters
 
-                if shape == "S": #Parse each shape explicitly to allow for error checking
-                    shape_id = 0
-                    sph_rad = float(parts[4])
-                    shape_data += [x_coord, y_coord, z_coord, shape_id, sph_rad]
-                else:
-                    print ("Unknown shape %s, Skipping..." % (shape))
-    except IOError:
-        print ("Failed to open %s" % (filePath))
-        return None
-    return shape_data
-
-#***********Detector
-npx = 2048 #Detector Number of Pixels in Horizontal direction
-npy = 2048 #Detector Number of Pixels in Vertical direction
-pSize = 75e-06 #Detector Pizel Size
-xrDet = npx*pSize
-yrDet = npy*pSize
-det = SRWLDet(_xStart = -0.5*xrDet, _xFin = 0.5*xrDet, _nx = npx, _yStart = -0.5*yrDet, _yFin = 0.5*yrDet, _ny = npy)
-
-#***********Defining Sample and Propagation Parameters
-print('   Setting up Transmission optical element from input Sample data ... ', end='')
-t = time.time()
-
-shapeData = AuxReadInObjDef3D(
-    os.path.join(os.getcwd(), strDataFolderName, strSampDefFolderName, strSampDefInFileName01)) #Read object definition file
-
-#Object material characteristics (Au at 8 keV)
+#Sample (/ Nano-Objects) Material Parameters (Au at 8 keV)
 matDelta = 4.773e-05 #Refractive Index Decrement
 matAttenLen = 2.48644e-06 #Attenuation Length [m]
 
-#************Transmittance
-nx = 1024
-ny = 1024
-ps = 2.481e-9
-rx = nx * ps
-ry = ny * ps
-opSmp = srwl_opt_setup_transm_from_obj2d(
-    shape_defs=shapeData,
-    delta = matDelta, atten_len = matAttenLen, 
-    rx = rx, ry = ry, nx = nx, ny = ny, xc = 0, yc = 0, 
-    extTr = 1)
-    
-print('done in', round(time.time() - t, 3), 's')
+nObj = 200 #Total number of Nano-Objects in the Sample
+dAvgObj = 100e-09 #Average size of objects [m]
+dSigObj = 25e-09 #Standard deviation of object sizes [m]
 
-print('   Extracting Optical Path Difference data from Sample Transmission optical element ... ', end='')
-t = time.time()
-#Extracting and saving Optical Path Difference for eventual tests
-opPathDif = opSmp.get_data(_typ = 3, _dep = 3)
-print('done in', round(time.time() - t, 3), 's')
-print('   Saving Optical Path Difference data from Sample Transmission optical element ... ', end='')
-t = time.time()
-srwl_uti_save_intens_ascii(
-    opPathDif, opSmp.mesh, os.path.join(os.getcwd(), strDataFolderName, strSampOptPathDifOutFileName01), 0,
-    ['Photon Energy', 'Horizontal Position', 'Vertical Position', 'Optical Path Difference'], _arUnits=['eV', 'm', 'm', 'm'])
-print('done in', round(time.time() - t, 3), 's')
+#Volume dimensions within which Sample is defined
+rx = 10e-06
+ry = 10e-06
+rz = 100e-06
+
+nSlices = 5 #10 #Number of "slices" of the Sample separated by small drifts on the beam propagation direction
+nObjPart = int(nObj/nSlices) #Number of 3D Nano-Objects in one Slice
+dRz = rz/nSlices #Small drift length (if nSlices > 1)
+
+wfr.mesh.zStart -= 0.5*dRz*(nSlices - 1) #Slightly reducing the distance to the source for "thick" samples (nSlices > 1)
+
+#Small Drift between "slices" (thin Transmission elements) for "thick" Sample
+opSmpDr = SRWLOptD(dRz)
 
 #Drift from Sample to Detector
-opSmp_Det = SRWLOptD(10.)
+lenDriftSmp_Det = 10. - 0.5*dRz*(nSlices - 1)
+opSmp_Det = SRWLOptD(lenDriftSmp_Det)
 
 #Wavefront Propagation Parameters:
 #[0]: Auto-Resize (1) or not (0) Before propagation
@@ -157,21 +114,75 @@ opSmp_Det = SRWLOptD(10.)
 #[11]: New Vertical wavefront Center position after Shift
 #           [0][1][2] [3][4] [5] [6] [7]  [8]  [9][10][11] 
 ppSmp =     [0, 0, 1., 0, 0, 1., 55., 1., 55.,  0, 0, 0]
+ppSmpDr =   [0, 0, 1., 0, 0, 1., 1.,  1.,  1.,  0, 0, 0] #?
 ppSmp_Det = [0, 0, 1., 3, 0, 1., 1.,  1.,  1.,  0, 0, 0]
 ppFin =     [0, 0, 1., 0, 0, 1., 1.,  1.,  1.,  0, 0, 0]
 
-opBL = SRWLOptC([opSmp, opSmp_Det],
-                [ppSmp, ppSmp_Det, ppFin])
+arOpEl = [] #List of all Optical Elements (to be updated further)
+arPP = [ppSmp] #List of the corresponding Propagation Parameters (to be updated further)
 
-#**********************Main Calculations
-#***********Initial Wavefront of Gaussian Beam
-#Initial Wavefront and extracting Intensity:
+seed = 10 #Random generator seed number
+zc = -0.5*dRz*(nSlices - 1) #Local longitudinal position of the first slice
+
+print('   Generating Sample Slices and all Beamline ... ', end='')
+t = time.time()
+
+for i in range(nSlices):
+
+    curSeed = seed if(i == 0) else None #For deterministic distribution of Nano-Particles
+
+    #Defining list of Nano-Particles composing the Slice of the Sample 
+    curSmpData = srwl_uti_smp_rnd_obj3d.setup_list_obj3d( #Initial list of 3D object (sphere) parameters
+        _n = nObjPart, #Number of 3D nano-particles
+        _ranges = [0.95*rx, 0.95*ry, dRz], #Ranges of horizontal, vertical and longitudinal position within which the 3D objects are defined
+        _cen = [0., 0., zc], #Horizontal, Vertical and Longitudinal coordinates of center position around which the 3D objects are defined
+        _dist = 'uniform', #Type (and eventual parameters) of distributions of 3D objects
+        _obj_shape = ['S', 'gauss', dAvgObj, dSigObj], #Type of 3D objects, their distribution type and parameters (min. and max. diameter for the 'uniform' distribution)
+        _allow_overlap = False, #Allow or not the 3D objects to overlap
+        _seed = curSeed,
+        _fp = os.path.join(os.getcwd(), strDataFolderName, strSampDefFolderName, strSampDefInFileName%(i)))
+
+    #Defining thin Transmission object corresponding to the Slice
+    curOpTr = srwl_opt_setup_transm_from_obj3d(shape_defs=curSmpData, delta=matDelta, atten_len=matAttenLen, rx=rx, ry=ry, nx=2000, ny=2000, xc=0, yc=0, extTr=1)
+
+    #Extracting Optical Path Difference for the Slice and saving it to a file
+    opPathDif = curOpTr.get_data(_typ = 3, _dep = 3)
+    meshS = curOpTr.mesh
+    srwl_uti_save_intens_ascii(opPathDif, meshS, os.path.join(os.getcwd(), strDataFolderName, strSampOptPathDifOutFileName%(i)), 0, 
+        ['Photon Energy', 'Horizontal Position', 'Vertical Position', 'Optical Path Difference'], _arUnits=['eV', 'm', 'm', 'm'])
+
+    #Creating Plots of Optical Path Difference in Sample Slices (to be shown at the end of the example)
+    plotMeshSx = [meshS.xStart, meshS.xFin, meshS.nx]
+    plotMeshSy = [meshS.yStart, meshS.yFin, meshS.ny]
+    uti_plot2d(opPathDif, plotMeshSx, plotMeshSy, labels=['Horizontal Position', 'Vertical Position', 'Optical Path Diff. in Sample Slice #%d'%(i+1)], units=['m', 'm', 'm'])
+
+    arOpEl.append(curOpTr) #Adding thin Transmission optical element corresponding to this Slice to the Container (/ BEamline)
+    
+    if(i > 0): arPP.append(ppSmpDr) #Same P.P. for Sample Slice and Drift bw Slices
+   
+    if(i < nSlices - 1): 
+        arOpEl.append(opSmpDr) #Adding small Drift Space between Slices
+        arPP.append(ppSmpDr) #Same P.P. for sample Slice and Drift bw Slices
+
+    zc += dRz
+
+print('done in', round(time.time() - t), 's')
+
+#Adding Drift from Sample to Detector and corresponding Propagation Params
+arOpEl.append(opSmp_Det)
+arPP.append(ppSmp_Det)
+arPP.append(ppFin) #Adding Final Resizing Params
+
+opBL = SRWLOptC(arOpEl, arPP) #Defining Beamline / Container of Optical Elements
+
+#***********Calculating Initial Wavefront of Gaussian Beam
+#Calculating Initial Wavefront and extracting Intensity:
 srwl.CalcElecFieldGaussian(wfr, GsnBm, arPrecPar)
 mesh0 = deepcopy(wfr.mesh)
 arI0 = array('f', [0]*mesh0.nx*mesh0.ny) #"flat" array to take 2D intensity data
-srwl.CalcIntFromElecField(arI0, wfr, 6, 0, 3, mesh0.eStart, 0, 0) #extracts intensity
+srwl.CalcIntFromElecField(arI0, wfr, 6, 0, 3, mesh0.eStart, 0, 0) #Extracting Intensity
 srwl_uti_save_intens_ascii(
-    arI0, mesh0, os.path.join(os.getcwd(), strDataFolderName, strIntInitOutFileName01), 0,
+    arI0, mesh0, os.path.join(os.getcwd(), strDataFolderName, strIntInitOutFileName), 0,
     ['Photon Energy', 'Horizontal Position', 'Vertical Position', 'Intensity'], _arUnits=['eV', 'm', 'm', 'ph/s/.1%bw/mm^2'])
 
 #***********Wavefront Propagation
@@ -180,16 +191,25 @@ t = time.time()
 srwl.PropagElecField(wfr, opBL)
 print('done in', round(time.time() - t), 's')
 
-print('   Extracting, projecting propagated wavefront intensity on detector and saving it to file ... ', end='')
+print('   Extracting and projecting propagated wavefront intensity on detector and saving it to file ... ', end='')
 t = time.time()
 mesh1 = deepcopy(wfr.mesh)
 arI1 = array('f', [0]*mesh1.nx*mesh1.ny) #"flat" array to take 2D intensity data
-srwl.CalcIntFromElecField(arI1, wfr, 6, 0, 3, mesh1.eStart, 0, 0) #extracts intensity
+srwl.CalcIntFromElecField(arI1, wfr, 6, 0, 3, mesh1.eStart, 0, 0) #Extracting Intensity
 
-stkDet = det.treat_int(arI1, _mesh = mesh1) #"Projecting" intensity on detector (by interpolation)
+#***********Detector
+nxDet = 2048 #Detector Number of Pixels in Horizontal direction
+nyDet = 2048 #Detector Number of Pixels in Vertical direction
+pSize = 75.e-06 #Detector Pizel Size
+xrDet = (nxDet - 1)*pSize
+yrDet = (nyDet - 1)*pSize
+det = SRWLDet(_xStart = -0.5*xrDet, _xFin = 0.5*xrDet, _nx = nxDet, _yStart = -0.5*yrDet, _yFin = 0.5*yrDet, _ny = nyDet)
+
+stkDet = det.treat_int(arI1, _mesh = mesh1) #"Projecting" Intensity on Detector (by interpolation)
 mesh1 = stkDet.mesh; arI1 = stkDet.arS
-srwl_uti_save_intens_ascii(
-    arI1, mesh1, os.path.join(os.getcwd(), strDataFolderName, strIntPropOutFileName01), 0,
+
+srwl_uti_save_intens_ascii( #Saving "Projected" Intensity to a file
+    arI1, mesh1, os.path.join(os.getcwd(), strDataFolderName, strIntPropOutFileName), 0,
     ['Photon Energy', 'Horizontal Position', 'Vertical Position', 'Spectral Fluence'], _arUnits=['eV', 'm', 'm', 'J/eV/mm^2'])
 print('done in', round(time.time() - t), 's')
 
@@ -199,11 +219,6 @@ plotMesh0x = [mesh0.xStart, mesh0.xFin, mesh0.nx]
 plotMesh0y = [mesh0.yStart, mesh0.yFin, mesh0.ny]
 uti_plot2d1d(arI0, plotMesh0x, plotMesh0y, x=0, y=0, labels=['Horizontal Position', 'Vertical Position', 'Intensity at Sample'], units=['m', 'm', 'ph/s/.1%bw/mm^2'])
 
-meshS = opSmp.mesh
-plotMeshSx = [meshS.xStart, meshS.xFin, meshS.nx]
-plotMeshSy = [meshS.yStart, meshS.yFin, meshS.ny]
-uti_plot2d1d(opPathDif, plotMeshSx, plotMeshSy, x=0, y=0, labels=['Horizontal Position', 'Vertical Position', 'Optical Path Diff. in Sample'], units=['m', 'm', 'm'])
-
 plotMesh1x = [mesh1.xStart, mesh1.xFin, mesh1.nx]
 plotMesh1y = [mesh1.yStart, mesh1.yFin, mesh1.ny]
 arLogI1 = copy.copy(arI1)
@@ -211,9 +226,8 @@ nTot = mesh1.ne*mesh1.nx*mesh1.ny
 for i in range(nTot):
     curI = arI1[i]
     if(curI <= 0.): arLogI1[i] = 0
-    else: arLogI1[i] = log(curI)
+    else: arLogI1[i] = log(curI, 10)
 uti_plot2d1d(arLogI1, plotMesh1x, plotMesh1y, x=0, y=0, labels=['Horizontal Position', 'Vertical Position', 'Log of Intensity at Detector'], units=['m', 'm', ''])
 
 uti_plot_show() #show all graphs (blocks script execution; close all graph windows to proceed)
 print('done')
-
