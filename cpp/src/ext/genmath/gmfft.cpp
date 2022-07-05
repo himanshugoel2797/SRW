@@ -14,6 +14,10 @@
 
 #include "gmfft.h"
 
+#ifdef _OFFLOAD_GPU
+#include "gmfftgpu0.h"
+#endif
+
 //#include "srwlib.h" //Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP
 
 #ifdef _WITH_OMP //OC27102018
@@ -132,6 +136,25 @@ long CGenMathFFT::LenGoodNum1000s = 11;
 long CGenMathFFT::GoodNum10000s[] = { 0,479,636,743,830,900,960,1017,1064,1109,1150 };
 long CGenMathFFT::LenGoodNum10000s = 11;
 
+#ifdef _OFFLOAD_GPU
+long CGenMathFFT1D::PlanLen;
+long CGenMathFFT1D::dPlanLen;
+long CGenMathFFT1D::HowMany;
+long CGenMathFFT1D::dHowMany;
+cufftHandle CGenMathFFT1D::Plan1DFFT_cu;
+cufftHandle CGenMathFFT1D::dPlan1DFFT_cu;
+#endif
+
+#ifdef _OFFLOAD_GPU
+long CGenMathFFT2D::PlanNx;
+long CGenMathFFT2D::PlanNy;
+long CGenMathFFT2D::HowMany;
+long CGenMathFFT2D::dPlanNx;
+long CGenMathFFT2D::dPlanNy;
+long CGenMathFFT2D::dHowMany;
+cufftHandle CGenMathFFT2D::Plan2DFFT_cu;
+cufftHandle CGenMathFFT2D::dPlan2DFFT_cu;
+#endif
 //*************************************************************************
 
 void CGenMathFFT::NextCorrectNumberForFFT(long& n)
@@ -207,21 +230,31 @@ void CGenMathFFT::NextCorrectNumberForFFT(long& n)
 
 //*************************************************************************
 
-int CGenMathFFT1D::Make1DFFT_InPlace(CGenMathFFT1DInfo& FFT1DInfo)
+int CGenMathFFT1D::Make1DFFT_InPlace(CGenMathFFT1DInfo& FFT1DInfo, gpuUsageArg_t *pGpuUsage)
 {
-	//long TotAmOfPo = (FFT1DInfo.Nx << 1)*FFT1DInfo.HowMany;
-	long long TotAmOfPo = ((long long)(FFT1DInfo.Nx << 1))*((long long)FFT1DInfo.HowMany);
-	float* AuxDataCont = new float[TotAmOfPo];
-	if(AuxDataCont == 0) return MEMORY_ALLOCATION_FAILURE;
-	FFT1DInfo.pOutData = AuxDataCont;
+	GPU_COND(pGpuUsage,
+	{
+		//HG03082022 GPU can do an inplace fft without being given a temporary buffer
+		FFT1DInfo.pOutData = FFT1DInfo.pInData;
+		int result;
+		if (result = Make1DFFT(FFT1DInfo, pGpuUsage)) return result;
+	})
+	else
+	{
+		//long TotAmOfPo = (FFT1DInfo.Nx << 1)*FFT1DInfo.HowMany;
+		long long TotAmOfPo = ((long long)(FFT1DInfo.Nx << 1))*((long long)FFT1DInfo.HowMany);
+		float* AuxDataCont = new float[TotAmOfPo];
+		if(AuxDataCont == 0) return MEMORY_ALLOCATION_FAILURE;
+		FFT1DInfo.pOutData = AuxDataCont;
 
-	int result;
-	if(result = Make1DFFT(FFT1DInfo)) return result;
+		int result;
+		if(result = Make1DFFT(FFT1DInfo)) return result;
 
-	float *tOut = FFT1DInfo.pInData, *t = AuxDataCont;
-	for(int ix=0; ix<TotAmOfPo; ix++) *(tOut++) = *(t++);
+		float *tOut = FFT1DInfo.pInData, *t = AuxDataCont;
+		for(int ix=0; ix<TotAmOfPo; ix++) *(tOut++) = *(t++);
 
-	if(AuxDataCont != 0) delete[] AuxDataCont;
+		if(AuxDataCont != 0) delete[] AuxDataCont;
+	}
 	return 0;
 }
 
@@ -254,7 +287,7 @@ int CGenMathFFT2D::AuxDebug_TestFFT_Plans()
 //Modification by S.Yakubov for parallelizing SRW via OpenMP:
 // SY: creation (and deletion) of FFTW plans is not thread-safe. Therefore added option to use precreated plans
 #ifdef _FFTW3 //OC29012019
-int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwf_plan* pPrecreatedPlan2DFFT, fftw_plan* pdPrecreatedPlan2DFFT)
+int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwf_plan* pPrecreatedPlan2DFFT, fftw_plan* pdPrecreatedPlan2DFFT, gpuUsageArg_t *pGpuUsage)
 //int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwf_plan* pPrecreatedPlan2DFFT)
 #else
 int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecreatedPlan2DFFT) //OC27102018
@@ -294,50 +327,68 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 	//ArrayShiftX = 0; ArrayShiftY = 0; 
 	m_ArrayShiftX = 0; m_ArrayShiftY = 0; //OC02022019
 	m_dArrayShiftX = 0; m_dArrayShiftY = 0;
-	if(FFT2DInfo.pData != 0)
+	if (FFT2DInfo.pData != 0)
 	{
-		if(NeedsShiftBeforeX || NeedsShiftAfterX)
+		if (NeedsShiftBeforeX || NeedsShiftAfterX)
 		{
 			//ArrayShiftX = new float[Nx << 1];
 			//if(ArrayShiftX == 0) return MEMORY_ALLOCATION_FAILURE;
-			m_ArrayShiftX = new float[Nx << 1];
-			if(m_ArrayShiftX == 0) return MEMORY_ALLOCATION_FAILURE;
+			m_ArrayShiftX = ALLOC_ARRAY(float, Nx << 1);
+			if (m_ArrayShiftX == 0) return MEMORY_ALLOCATION_FAILURE;
 		}
-		if(NeedsShiftBeforeY || NeedsShiftAfterY)
+		if (NeedsShiftBeforeY || NeedsShiftAfterY)
 		{
 			//ArrayShiftY = new float[Ny << 1];
 			//if(ArrayShiftY == 0) return MEMORY_ALLOCATION_FAILURE;
-			m_ArrayShiftY = new float[Ny << 1];
-			if(m_ArrayShiftY == 0) return MEMORY_ALLOCATION_FAILURE;
+			m_ArrayShiftY = ALLOC_ARRAY(float, Ny << 1);
+			if (m_ArrayShiftY == 0) return MEMORY_ALLOCATION_FAILURE;
 		}
 	}
-	else if(FFT2DInfo.pdData != 0)
+	else if (FFT2DInfo.pdData != 0)
 	{
-		if(NeedsShiftBeforeX || NeedsShiftAfterX)
+		if (NeedsShiftBeforeX || NeedsShiftAfterX)
 		{
-			m_dArrayShiftX = new double[Nx << 1];
-			if(m_dArrayShiftX == 0) return MEMORY_ALLOCATION_FAILURE;
+			m_dArrayShiftX = ALLOC_ARRAY(double, Nx << 1);
+			if (m_dArrayShiftX == 0) return MEMORY_ALLOCATION_FAILURE;
 		}
-		if(NeedsShiftBeforeY || NeedsShiftAfterY)
+		if (NeedsShiftBeforeY || NeedsShiftAfterY)
 		{
-			m_dArrayShiftY = new double[Ny << 1];
-			if(m_dArrayShiftY == 0) return MEMORY_ALLOCATION_FAILURE;
+			m_dArrayShiftY = ALLOC_ARRAY(double, Ny << 1);
+			if (m_dArrayShiftY == 0) return MEMORY_ALLOCATION_FAILURE;
 		}
 	}
 
-#ifdef _FFTW3 //OC28012019
+#ifdef _FFTW3
 	fftwf_plan Plan2DFFT;
 	fftw_plan dPlan2DFFT;
-	fftwf_complex *DataToFFT=0;
-	fftw_complex *dDataToFFT=0;
+	fftwf_complex* DataToFFT = 0;
+	fftw_complex* dDataToFFT = 0;
+#endif
 
-	if(FFT2DInfo.pData != 0) DataToFFT = (fftwf_complex*)(FFT2DInfo.pData);
-	else if(FFT2DInfo.pdData != 0) dDataToFFT = (fftw_complex*)(FFT2DInfo.pdData); //OC02022019
+	GPU_COND(pGpuUsage, //HG02112021
+	{
+		if (FFT2DInfo.pData != 0) 
+		{
+			DataToFFT = (fftwf_complex*)(FFT2DInfo.pData);
+			cudaMemPrefetchAsync(DataToFFT, FFT2DInfo.Nx * FFT2DInfo.Ny * FFT2DInfo.howMany * 2 * sizeof(float), UtiDev::GetDevice(pGpuUsage), 0);
+		}
+		else if (FFT2DInfo.pdData != 0) 
+		{
+			dDataToFFT = (fftw_complex*)(FFT2DInfo.pdData); //OC02022019
+			cudaMemPrefetchAsync(dDataToFFT, FFT2DInfo.Nx * FFT2DInfo.Ny * FFT2DInfo.howMany * 2 * sizeof(double), UtiDev::GetDevice(pGpuUsage), 0);
+		}
+	})
+	else
+	{
+#if _FFTW3 //OC28012019
+		if (FFT2DInfo.pData != 0) DataToFFT = (fftwf_complex*)(FFT2DInfo.pData);
+		else if (FFT2DInfo.pdData != 0) dDataToFFT = (fftw_complex*)(FFT2DInfo.pdData); //OC02022019
 
 #else
-	fftwnd_plan Plan2DFFT;
-	FFTW_COMPLEX *DataToFFT = (FFTW_COMPLEX*)(FFT2DInfo.pData);
+		fftwnd_plan Plan2DFFT;
+		FFTW_COMPLEX* DataToFFT = (FFTW_COMPLEX*)(FFT2DInfo.pData);
 #endif
+	}
 
 	char t0SignMult = (FFT2DInfo.Dir > 0)? -1 : 1;
 
@@ -353,122 +404,303 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 		if(m_ArrayShiftY != 0) FillArrayShift('y', t0SignMult*y0_Before, FFT2DInfo.yStep, m_ArrayShiftY);
 		else if(m_dArrayShiftY != 0) FillArrayShift('y', t0SignMult*y0_Before, FFT2DInfo.yStep, m_dArrayShiftY);
 	}
-	if(NeedsShiftBeforeX || NeedsShiftBeforeY) 
+	if (NeedsShiftBeforeX || NeedsShiftBeforeY) //HG02112021
 	{
-		if(DataToFFT != 0) TreatShifts(DataToFFT);
+		GPU_COND(pGpuUsage, {
+			if (DataToFFT != 0) {
+				TreatShifts2D_CUDA((float*)DataToFFT, Nx, Ny, FFT2DInfo.howMany, NeedsShiftBeforeX, NeedsShiftBeforeY, m_ArrayShiftX, m_ArrayShiftY);
+			}
+			else if (dDataToFFT != 0) {
+				TreatShifts2D_CUDA((double*)dDataToFFT, Nx, Ny, FFT2DInfo.howMany, NeedsShiftBeforeX, NeedsShiftBeforeY, m_dArrayShiftX, m_dArrayShiftY);
+			}
+		})
+		else {
+			if (DataToFFT != 0) TreatShifts(DataToFFT, FFT2DInfo.howMany);
 
 #ifdef _FFTW3 //OC27022019
-		else if(dDataToFFT != 0) TreatShifts(dDataToFFT); //OC02022019
+			else if (dDataToFFT != 0) TreatShifts(dDataToFFT, FFT2DInfo.howMany); //OC02022019
 #endif
+		}
 	}
 
-	if(FFT2DInfo.Dir > 0)
+	bool alreadyNormalized = false; //HG17032022
+	//double Mult = FFT2DInfo.xStep*FFT2DInfo.yStep;
+	double Mult = FFT2DInfo.xStep * FFT2DInfo.yStep * FFT2DInfo.ExtraMult; //OC20112017
+	if (FFT2DInfo.Dir > 0)
 	{
-		//Plan2DFFT = fftw2d_create_plan(Ny, Nx, FFTW_FORWARD, FFTW_IN_PLACE);
-		//OC27102018
-		//SY: adopted for OpenMP
-#ifdef _FFTW3 //OC28012019
-
-		if(DataToFFT != 0)
+		//HG02112021
+		GPU_COND(pGpuUsage, 
 		{
-			if(pPrecreatedPlan2DFFT == 0) Plan2DFFT = fftwf_plan_dft_2d(Ny, Nx, DataToFFT, DataToFFT, FFTW_FORWARD, FFTW_ESTIMATE); 
-			else Plan2DFFT = *pPrecreatedPlan2DFFT;
-			if(Plan2DFFT == 0) return ERROR_IN_FFT;
+			if (DataToFFT != 0)
+			{
+				if (pPrecreatedPlan2DFFT == 0) 
+				{
+					if (Plan2DFFT_cu == NULL | !(PlanNx == Nx && PlanNy == Ny && HowMany == FFT2DInfo.howMany)) 
+					{
+						if (Plan2DFFT_cu != NULL)
+						{
+							cufftDestroy(Plan2DFFT_cu);
+							Plan2DFFT_cu = NULL;
+						}
 
-			fftwf_execute(Plan2DFFT);
-		}
-		else if(dDataToFFT != 0)
+						PlanNx = Nx;
+						PlanNy = Ny;
+						HowMany = FFT2DInfo.howMany;
+						int plan_shape[2]; plan_shape[0] = Nx; plan_shape[1] = Ny;
+						cufftPlanMany(&Plan2DFFT_cu, 2, plan_shape, NULL, 0, 0, NULL, 0, 0, CUFFT_C2C, FFT2DInfo.howMany);
+						//cufftPlan2d(&Plan2DFFT_cu, Nx, Ny, CUFFT_C2C);
+					}
+				}
+				else Plan2DFFT_cu = *(cufftHandle*)pPrecreatedPlan2DFFT;
+				if (Plan2DFFT_cu == 0) return ERROR_IN_FFT;
+
+				auto res = cufftExecC2C(Plan2DFFT_cu, (cufftComplex*)DataToFFT, (cufftComplex*)DataToFFT, CUFFT_FORWARD);
+				if (res != CUFFT_SUCCESS)
+					printf("CUFFT Error: %d\r\n", res);
+			}
+			else if (dDataToFFT != 0)
+			{
+				if (pdPrecreatedPlan2DFFT == 0) 
+				{
+					if (dPlan2DFFT_cu == NULL | !(dPlanNx == Nx && dPlanNy == Ny && dHowMany == FFT2DInfo.howMany)) 
+					{
+						if (dPlan2DFFT_cu != NULL)
+						{
+							cufftDestroy(dPlan2DFFT_cu);
+							dPlan2DFFT_cu = NULL;
+						}
+
+						dPlanNx = Nx;
+						dPlanNy = Ny;
+						HowMany = FFT2DInfo.howMany;
+						int plan_shape[2]; plan_shape[0] = Nx; plan_shape[1] = Ny;
+						cufftPlanMany(&Plan2DFFT_cu, 2, plan_shape, 0, 0, 0, 0, 0, 0, CUFFT_Z2Z, FFT2DInfo.howMany);
+						//cufftPlan2d(&dPlan2DFFT_cu, Nx, Ny, CUFFT_Z2Z);
+					}
+				}
+				else dPlan2DFFT_cu = *(cufftHandle*)pdPrecreatedPlan2DFFT;
+				if (dPlan2DFFT_cu == 0) return ERROR_IN_FFT;
+
+				cufftExecZ2Z(dPlan2DFFT_cu, (cufftDoubleComplex*)dDataToFFT, (cufftDoubleComplex*)dDataToFFT, CUFFT_FORWARD);
+			}
+		})
+		else 
 		{
-			if(pdPrecreatedPlan2DFFT == 0) dPlan2DFFT = fftw_plan_dft_2d(Ny, Nx, dDataToFFT, dDataToFFT, FFTW_FORWARD, FFTW_ESTIMATE); 
-			else dPlan2DFFT = *pdPrecreatedPlan2DFFT;
-			if(dPlan2DFFT == 0) return ERROR_IN_FFT;
+			//Plan2DFFT = fftw2d_create_plan(Ny, Nx, FFTW_FORWARD, FFTW_IN_PLACE);
+			//OC27102018
+			//SY: adopted for OpenMP
+#if _FFTW3 //OC28012019
 
-			fftw_execute(dPlan2DFFT);
-		}
+			for (long iHowMany = 0; iHowMany < FFT2DInfo.howMany; iHowMany++)
+			{
+				long iFFT = Nx * Ny * iHowMany;
+				if (DataToFFT != 0)
+				{
+					if (pPrecreatedPlan2DFFT == 0) Plan2DFFT = fftwf_plan_dft_2d(Ny, Nx, DataToFFT + iFFT, DataToFFT + iFFT, FFTW_FORWARD, FFTW_ESTIMATE);
+					else Plan2DFFT = *pPrecreatedPlan2DFFT;
+					if (Plan2DFFT == 0) return ERROR_IN_FFT;
+
+					fftwf_execute(Plan2DFFT);
+				}
+				else if (dDataToFFT != 0)
+				{
+					if (pdPrecreatedPlan2DFFT == 0) dPlan2DFFT = fftw_plan_dft_2d(Ny, Nx, dDataToFFT + iFFT, dDataToFFT + iFFT, FFTW_FORWARD, FFTW_ESTIMATE);
+					else dPlan2DFFT = *pdPrecreatedPlan2DFFT;
+					if (dPlan2DFFT == 0) return ERROR_IN_FFT;
+
+					fftw_execute(dPlan2DFFT);
+				}
+			}
 
 #else
-		if(pPrecreatedPlan2DFFT == 0) Plan2DFFT = fftw2d_create_plan(Ny, Nx, FFTW_FORWARD, FFTW_IN_PLACE);
-		else Plan2DFFT = *pPrecreatedPlan2DFFT;
-		if(Plan2DFFT == 0) return ERROR_IN_FFT;
-		fftwnd(Plan2DFFT, 1, DataToFFT, 1, 0, DataToFFT, 1, 0);
+			if (pPrecreatedPlan2DFFT == 0) Plan2DFFT = fftw2d_create_plan(Ny, Nx, FFTW_FORWARD, FFTW_IN_PLACE);
+			else Plan2DFFT = *pPrecreatedPlan2DFFT;
+			if (Plan2DFFT == 0) return ERROR_IN_FFT;
+			fftwnd(Plan2DFFT, 1, DataToFFT, 1, 0, DataToFFT, 1, 0);
 #endif
-
-		if(DataToFFT != 0)
-		{
-			RepairSignAfter2DFFT(DataToFFT);
-			RotateDataAfter2DFFT(DataToFFT);
 		}
+
+		GPU_COND(pGpuUsage, 
+		{
+			if (DataToFFT != 0)
+			{
+				//RepairSignAfter2DFFT_CUDA((float*)DataToFFT, Nx, Ny, FFT2DInfo.howMany);
+				//RotateDataAfter2DFFT_CUDA((float*)DataToFFT, Nx, Ny, FFT2DInfo.howMany);
+				RepairSignAndRotateDataAfter2DFFT_CUDA((float*)DataToFFT, Nx, Ny, FFT2DInfo.howMany, Mult);
+			}
+			else if (dDataToFFT != 0)
+			{
+				//RepairSignAfter2DFFT_CUDA((double*)dDataToFFT, Nx, Ny, FFT2DInfo.howMany);
+				//RotateDataAfter2DFFT_CUDA((double*)dDataToFFT, Nx, Ny, FFT2DInfo.howMany);
+				RepairSignAndRotateDataAfter2DFFT_CUDA((double*)dDataToFFT, Nx, Ny, FFT2DInfo.howMany, Mult);
+			}
+			alreadyNormalized = true;
+		})
+		else 
+		{
+			if (DataToFFT != 0)
+			{
+				RepairSignAfter2DFFT(DataToFFT, FFT2DInfo.howMany);
+				RotateDataAfter2DFFT(DataToFFT, FFT2DInfo.howMany);
+			}
 
 #ifdef _FFTW3 //OC27022019
-		else if(dDataToFFT != 0)
-		{
-			RepairSignAfter2DFFT(dDataToFFT);
-			RotateDataAfter2DFFT(dDataToFFT);
-		}
+			else if (dDataToFFT != 0)
+			{
+				RepairSignAfter2DFFT(dDataToFFT, FFT2DInfo.howMany);
+				RotateDataAfter2DFFT(dDataToFFT, FFT2DInfo.howMany);
+			}
 #endif
+		}
 	}
 	else
 	{
-		//Plan2DFFT = fftw2d_create_plan(Ny, Nx, FFTW_BACKWARD, FFTW_IN_PLACE);
-		//OC27102018
-		//SY: adopted for OpenMP
-#ifdef _FFTW3 //OC28012019
-		if(DataToFFT != 0)
+		GPU_COND(pGpuUsage, 
 		{
-			if(pPrecreatedPlan2DFFT == 0) Plan2DFFT = fftwf_plan_dft_2d(Ny, Nx, DataToFFT, DataToFFT, FFTW_BACKWARD, FFTW_ESTIMATE); 
+			if (DataToFFT != 0)
+			{
+				if (pPrecreatedPlan2DFFT == 0) {
+					if (Plan2DFFT_cu == NULL | !(PlanNx == Nx && PlanNy == Ny && HowMany == FFT2DInfo.howMany)) 
+					{
+						if (Plan2DFFT_cu != NULL){
+							cufftDestroy(Plan2DFFT_cu);
+							Plan2DFFT_cu = NULL;
+						}
+
+						PlanNx = Nx;
+						PlanNy = Ny;
+						HowMany = FFT2DInfo.howMany;
+						int plan_shape[2]; plan_shape[0] = Nx; plan_shape[1] = Ny;
+						cufftPlanMany(&Plan2DFFT_cu, 2, plan_shape, NULL, 0, 0, NULL, 0, 0, CUFFT_C2C, FFT2DInfo.howMany);
+						//cufftPlan2d(&Plan2DFFT_cu, Nx, Ny, CUFFT_C2C);
+					}
+				}
+				else Plan2DFFT_cu = *(cufftHandle*)pPrecreatedPlan2DFFT;
+				if (Plan2DFFT_cu == 0) return ERROR_IN_FFT;
+
+				RotateDataAfter2DFFT_CUDA((float*)DataToFFT, Nx, Ny, FFT2DInfo.howMany);
+				RepairSignAfter2DFFT_CUDA((float*)DataToFFT, Nx, Ny, FFT2DInfo.howMany);
+				cufftExecC2C(Plan2DFFT_cu, (cufftComplex*)DataToFFT, (cufftComplex*)DataToFFT, CUFFT_INVERSE);
+			}
+			else if (dDataToFFT != 0)
+			{
+				if (pdPrecreatedPlan2DFFT == 0) {
+					if (dPlan2DFFT_cu == NULL | !(dPlanNx == Nx && dPlanNy == Ny && dHowMany == FFT2DInfo.howMany)) 
+					{
+						if (dPlan2DFFT_cu != NULL){
+							cufftDestroy(dPlan2DFFT_cu);
+							dPlan2DFFT_cu = NULL;
+						}
+
+						dPlanNx = Nx;
+						dPlanNy = Ny;
+						dHowMany = FFT2DInfo.howMany;
+						int plan_shape[2]; plan_shape[0] = Nx; plan_shape[1] = Ny;
+						cufftPlanMany(&Plan2DFFT_cu, 2, plan_shape, NULL, 0, 0, NULL, 0, 0, CUFFT_Z2Z, FFT2DInfo.howMany);
+						//cufftPlan2d(&dPlan2DFFT_cu, Nx, Ny, CUFFT_Z2Z);
+					}
+				}
+				else dPlan2DFFT_cu = *(cufftHandle*)pdPrecreatedPlan2DFFT;
+				if (dPlan2DFFT_cu == 0) return ERROR_IN_FFT;
+
+				RotateDataAfter2DFFT_CUDA((double*)dDataToFFT, Nx, Ny, FFT2DInfo.howMany);
+				RepairSignAfter2DFFT_CUDA((double*)dDataToFFT, Nx, Ny, FFT2DInfo.howMany);
+				cufftExecZ2Z(dPlan2DFFT_cu, (cufftDoubleComplex*)dDataToFFT, (cufftDoubleComplex*)dDataToFFT, CUFFT_INVERSE);
+			}
+		})
+		else 
+		{
+			//Plan2DFFT = fftw2d_create_plan(Ny, Nx, FFTW_BACKWARD, FFTW_IN_PLACE);
+			//OC27102018
+			//SY: adopted for OpenMP
+#ifdef _FFTW3 //OC28012019
+			for (long iHowMany = 0; iHowMany < FFT2DInfo.howMany; iHowMany++)
+			{
+				long iFFT = Nx * Ny * iHowMany;
+				if (DataToFFT != 0)
+				{
+					if (pPrecreatedPlan2DFFT == 0) Plan2DFFT = fftwf_plan_dft_2d(Ny, Nx, DataToFFT + iFFT, DataToFFT + iFFT, FFTW_BACKWARD, FFTW_ESTIMATE);
+					else Plan2DFFT = *pPrecreatedPlan2DFFT;
+					if (Plan2DFFT == 0) return ERROR_IN_FFT;
+					RotateDataAfter2DFFT(DataToFFT, FFT2DInfo.howMany);
+					RepairSignAfter2DFFT(DataToFFT, FFT2DInfo.howMany);
+					fftwf_execute(Plan2DFFT);
+				}
+				else if (dDataToFFT != 0)
+				{
+					if (pdPrecreatedPlan2DFFT == 0) dPlan2DFFT = fftw_plan_dft_2d(Ny, Nx, dDataToFFT + iFFT, dDataToFFT + iFFT, FFTW_BACKWARD, FFTW_ESTIMATE);
+					else dPlan2DFFT = *pdPrecreatedPlan2DFFT;
+					if (dPlan2DFFT == 0) return ERROR_IN_FFT;
+					RotateDataAfter2DFFT(dDataToFFT, FFT2DInfo.howMany);
+					RepairSignAfter2DFFT(dDataToFFT, FFT2DInfo.howMany);
+					fftw_execute(dPlan2DFFT);
+				}
+			}
+#else
+			if (pPrecreatedPlan2DFFT == 0) Plan2DFFT = fftw2d_create_plan(Ny, Nx, FFTW_BACKWARD, FFTW_IN_PLACE);
 			else Plan2DFFT = *pPrecreatedPlan2DFFT;
-			if(Plan2DFFT == 0) return ERROR_IN_FFT;
+			if (Plan2DFFT == 0) return ERROR_IN_FFT;
 			RotateDataAfter2DFFT(DataToFFT);
 			RepairSignAfter2DFFT(DataToFFT);
-			fftwf_execute(Plan2DFFT);
-		}
-		else if(dDataToFFT != 0)
-		{
-			if(pdPrecreatedPlan2DFFT == 0) dPlan2DFFT = fftw_plan_dft_2d(Ny, Nx, dDataToFFT, dDataToFFT, FFTW_BACKWARD, FFTW_ESTIMATE); 
-			else dPlan2DFFT = *pdPrecreatedPlan2DFFT;
-			if(dPlan2DFFT == 0) return ERROR_IN_FFT;
-			RotateDataAfter2DFFT(dDataToFFT);
-			RepairSignAfter2DFFT(dDataToFFT);
-			fftw_execute(dPlan2DFFT);
-		}
-#else
-		if(pPrecreatedPlan2DFFT == 0) Plan2DFFT = fftw2d_create_plan(Ny, Nx, FFTW_BACKWARD, FFTW_IN_PLACE);
-		else Plan2DFFT = *pPrecreatedPlan2DFFT;
-		if(Plan2DFFT == 0) return ERROR_IN_FFT;
-		RotateDataAfter2DFFT(DataToFFT);
-		RepairSignAfter2DFFT(DataToFFT);
-		fftwnd(Plan2DFFT, 1, DataToFFT, 1, 0, DataToFFT, 1, 0);
+			fftwnd(Plan2DFFT, 1, DataToFFT, 1, 0, DataToFFT, 1, 0);
 #endif
+		}
 	}
 	
-	//double Mult = FFT2DInfo.xStep*FFT2DInfo.yStep;
-	double Mult = FFT2DInfo.xStep*FFT2DInfo.yStep*FFT2DInfo.ExtraMult; //OC20112017
-
-	if(DataToFFT != 0) NormalizeDataAfter2DFFT(DataToFFT, Mult);
+	if (!alreadyNormalized){
+		GPU_COND(pGpuUsage, 
+		{
+			if (DataToFFT != 0)
+				NormalizeDataAfter2DFFT_CUDA((float*)DataToFFT, Nx, Ny, FFT2DInfo.howMany, Mult);
+			else if (dDataToFFT != 0)
+				NormalizeDataAfter2DFFT_CUDA((double*)dDataToFFT, Nx, Ny, FFT2DInfo.howMany, Mult);
+		})
+		else 
+		{
+			if (DataToFFT != 0) NormalizeDataAfter2DFFT(DataToFFT, Mult, FFT2DInfo.howMany);
 
 #ifdef _FFTW3 //OC27022019
-	else if(dDataToFFT != 0) NormalizeDataAfter2DFFT(dDataToFFT, Mult);
+			else if (dDataToFFT != 0) NormalizeDataAfter2DFFT(dDataToFFT, Mult, FFT2DInfo.howMany);
 #endif
+		}
+	}
 
 	//if(NeedsShiftAfterX) FillArrayShift('x', t0SignMult*x0_After, FFT2DInfo.xStepTr);
 	//if(NeedsShiftAfterY) FillArrayShift('y', t0SignMult*y0_After, FFT2DInfo.yStepTr);
-	if(NeedsShiftAfterX) 
-	{//OC02022019
-		if(m_ArrayShiftX != 0) FillArrayShift('x', t0SignMult*x0_After, FFT2DInfo.xStepTr, m_ArrayShiftX);
-		else if(m_dArrayShiftX != 0) FillArrayShift('x', t0SignMult*x0_After, FFT2DInfo.xStepTr, m_dArrayShiftX);
-	}
-	if(NeedsShiftAfterY) 
-	{//OC02022019
-		if(m_ArrayShiftY != 0) FillArrayShift('y', t0SignMult*y0_After, FFT2DInfo.yStepTr, m_ArrayShiftY);
-		else if(m_dArrayShiftY != 0) FillArrayShift('y', t0SignMult*y0_After, FFT2DInfo.yStepTr, m_dArrayShiftY);
-	}
-	if(NeedsShiftAfterX || NeedsShiftAfterY) 
+
+	GPU_COND(pGpuUsage, 
 	{
-		if(DataToFFT != 0) TreatShifts(DataToFFT);
+		cudaDeviceSynchronize();
+	})
+	if (NeedsShiftAfterX)
+	{//OC02022019
+		if (m_ArrayShiftX != 0) FillArrayShift('x', t0SignMult * x0_After, FFT2DInfo.xStepTr, m_ArrayShiftX);
+		else if (m_dArrayShiftX != 0) FillArrayShift('x', t0SignMult * x0_After, FFT2DInfo.xStepTr, m_dArrayShiftX);
+	}
+	if (NeedsShiftAfterY)
+	{//OC02022019
+		if (m_ArrayShiftY != 0) FillArrayShift('y', t0SignMult * y0_After, FFT2DInfo.yStepTr, m_ArrayShiftY);
+		else if (m_dArrayShiftY != 0) FillArrayShift('y', t0SignMult * y0_After, FFT2DInfo.yStepTr, m_dArrayShiftY);
+	}
+	if (NeedsShiftAfterX || NeedsShiftAfterY)
+	{
+		GPU_COND(pGpuUsage, 
+		{
+			if (DataToFFT != 0) {
+				TreatShifts2D_CUDA((float*)DataToFFT, Nx, Ny, FFT2DInfo.howMany, NeedsShiftAfterX, NeedsShiftAfterY, m_ArrayShiftX, m_ArrayShiftY);
+			}
+			else if (dDataToFFT != 0) {
+				TreatShifts2D_CUDA((double*)dDataToFFT, Nx, Ny, FFT2DInfo.howMany, NeedsShiftAfterX, NeedsShiftAfterY, m_dArrayShiftX, m_dArrayShiftY);
+			}
+		})
+		else 
+		{
+			if (DataToFFT != 0) TreatShifts(DataToFFT, FFT2DInfo.howMany);
 
 #ifdef _FFTW3 //OC27022019
-		else if(dDataToFFT != 0) TreatShifts(dDataToFFT); //OC02022019
+			else if (dDataToFFT != 0) TreatShifts(dDataToFFT, FFT2DInfo.howMany); //OC02022019
 #endif
+		}
 	}
 
 	//OC_NERSC: to comment-out the following line for NERSC (to avoid crash with "python-mpi")
@@ -476,25 +708,41 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 	//OC27102018
 	//SY: adopted for OpenMP
 
-#ifdef _FFTW3 //OC28012019
-	if(DataToFFT != 0)
+	GPU_COND(pGpuUsage, 
 	{
-		if(pPrecreatedPlan2DFFT == 0) fftwf_destroy_plan(Plan2DFFT);
-	}
-	else if(dDataToFFT != 0) //OC03022019
+		if (dPlan2DFFT_cu != NULL)
+		{
+			cufftDestroy(dPlan2DFFT_cu);
+			dPlan2DFFT_cu = NULL;
+		}
+		if (Plan2DFFT_cu != NULL)
+		{
+			cufftDestroy(Plan2DFFT_cu);
+			Plan2DFFT_cu = NULL;
+		}
+	})
+	else
 	{
-		if(pdPrecreatedPlan2DFFT == 0) fftw_destroy_plan(dPlan2DFFT);
-	}
+#elif _FFTW3 //OC28012019
+		if (DataToFFT != 0)
+		{
+			if (pPrecreatedPlan2DFFT == 0) fftwf_destroy_plan(Plan2DFFT);
+		}
+		else if (dDataToFFT != 0) //OC03022019
+		{
+			if (pdPrecreatedPlan2DFFT == 0) fftw_destroy_plan(dPlan2DFFT);
+		}
 #else
-	if(pPrecreatedPlan2DFFT == 0) fftwnd_destroy_plan(Plan2DFFT);
+		if (pPrecreatedPlan2DFFT == 0) fftwnd_destroy_plan(Plan2DFFT);
 #endif
+	}
 
 	//if(ArrayShiftX != 0) { delete[] ArrayShiftX; ArrayShiftX = 0;}
 	//if(ArrayShiftY != 0) { delete[] ArrayShiftY; ArrayShiftY = 0;}
-	if(m_ArrayShiftX != 0) { delete[] m_ArrayShiftX; m_ArrayShiftX = 0;}
-	if(m_ArrayShiftY != 0) { delete[] m_ArrayShiftY; m_ArrayShiftY = 0;}
-	if(m_dArrayShiftX != 0) { delete[] m_dArrayShiftX; m_dArrayShiftX = 0;} //OC02022019
-	if(m_dArrayShiftY != 0) { delete[] m_dArrayShiftY; m_dArrayShiftY = 0;}
+	if (m_ArrayShiftX != 0) { FREE_ARRAY(m_ArrayShiftX);}
+	if (m_ArrayShiftY != 0) { FREE_ARRAY(m_ArrayShiftY);}
+	if (m_dArrayShiftX != 0) { FREE_ARRAY(m_dArrayShiftX);} //OC02022019
+	if (m_dArrayShiftY != 0) { FREE_ARRAY(m_dArrayShiftY);}
 
 	return 0;
 }
@@ -502,7 +750,7 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 //*************************************************************************
 //Forward FFT: Int f(x)*exp(-i*2*Pi*qx*x)dx
 //Backward FFT: Int f(qx)*exp(i*2*Pi*qx*x)dqx
-int CGenMathFFT1D::Make1DFFT(CGenMathFFT1DInfo& FFT1DInfo)
+int CGenMathFFT1D::Make1DFFT(CGenMathFFT1DInfo& FFT1DInfo, gpuUsageArg_t *pGpuUsage) //HG20012022
 {// Assumes Nx, Ny even !
 	//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
 	//double start;
@@ -529,261 +777,411 @@ int CGenMathFFT1D::Make1DFFT(CGenMathFFT1DInfo& FFT1DInfo)
 
 	m_ArrayShiftX = 0;
 	m_dArrayShiftX = 0;
-	if(NeedsShiftBeforeX || NeedsShiftAfterX)
+	if (NeedsShiftBeforeX || NeedsShiftAfterX)
 	{
-		if(FFT1DInfo.pInData != 0)
+		if (FFT1DInfo.pInData != 0)
 		{
-			m_ArrayShiftX = new float[Nx << 1];
-			if(m_ArrayShiftX == 0) return MEMORY_ALLOCATION_FAILURE;
+			m_ArrayShiftX = ALLOC_ARRAY(float, Nx << 1);
+			if (m_ArrayShiftX == 0) return MEMORY_ALLOCATION_FAILURE;
 		}
-		else if(FFT1DInfo.pdInData != 0)
+		else if (FFT1DInfo.pdInData != 0)
 		{
-			m_dArrayShiftX = new double[Nx << 1];
-			if(m_dArrayShiftX == 0) return MEMORY_ALLOCATION_FAILURE;
+			m_dArrayShiftX = ALLOC_ARRAY(double, Nx << 1);
+			if (m_dArrayShiftX == 0) return MEMORY_ALLOCATION_FAILURE;
 		}
 	}
 
 #ifdef _FFTW3 //OC28012019
 	fftwf_plan Plan1DFFT;
-	fftwf_complex *DataToFFT=0, *OutDataFFT=0; //, *pOutDataFFT=0;
+	fftwf_complex* DataToFFT = 0, * OutDataFFT = 0; //, *pOutDataFFT=0;
 
 	fftw_plan dPlan1DFFT;
-	fftw_complex *dDataToFFT=0, *dOutDataFFT=0; //, *pdOutDataFFT=0;
-
-	if((FFT1DInfo.pInData != 0) && (FFT1DInfo.pOutData != 0))
-	{
-		DataToFFT = (fftwf_complex*)(FFT1DInfo.pInData);
-		OutDataFFT = (fftwf_complex*)(FFT1DInfo.pOutData);
-		//pOutDataFFT = OutDataFFT; //OC03092016 to be used solely in fftw call
-	}
-	else if((FFT1DInfo.pdInData != 0) && (FFT1DInfo.pdOutData != 0))
-	{
-		dDataToFFT = (fftw_complex*)(FFT1DInfo.pdInData);
-		dOutDataFFT = (fftw_complex*)(FFT1DInfo.pdOutData);
-		//pdOutDataFFT = dOutDataFFT;
-	}
-#else
-	fftw_plan Plan1DFFT;
-	FFTW_COMPLEX *DataToFFT = (FFTW_COMPLEX*)(FFT1DInfo.pInData);
-	FFTW_COMPLEX *OutDataFFT = (FFTW_COMPLEX*)(FFT1DInfo.pOutData);
-	FFTW_COMPLEX *pOutDataFFT = OutDataFFT; //OC03092016 to be used solely in fftw call
-/**
-	Pointed-out by Sergey Yakubov (E-XFEL).
-	From FFTW 2.1.5 docs:
-	void fftw(fftw_plan plan, int howmany,
-          fftw_complex *in, int istride, int idist,
-          fftw_complex *out, int ostride, int odist);
-	...
-	out, ostride and odist describe the output array(s). The format is the same as for the input array. 
-	In-place transforms:  If the plan specifies an in-place transform, ostride and odist are always ignored. 
-	If out is NULL, out is ignored, too. Otherwise, out is interpreted as a pointer to an array of n complex numbers, 
-	that FFTW will use as temporary space to perform the in-place computation. out is used as scratch space and its contents destroyed. 
-	In this case, out must be an ordinary array whose elements are contiguous in memory (no striding). 
-**/
+	fftw_complex* dDataToFFT = 0, * dOutDataFFT = 0; //, *pdOutDataFFT=0;
 #endif
 
-	char t0SignMult = (FFT1DInfo.Dir > 0)? -1 : 1;
-	if(NeedsShiftBeforeX) 
+	GPU_COND(pGpuUsage, //HG20012022
 	{
-		//FillArrayShift(t0SignMult*x0_Before, FFT1DInfo.xStep);
-		if(m_ArrayShiftX != 0) FillArrayShift(t0SignMult*x0_Before, FFT1DInfo.xStep, m_ArrayShiftX);
-		else if(m_dArrayShiftX != 0) FillArrayShift(t0SignMult*x0_Before, FFT1DInfo.xStep, m_dArrayShiftX);
+		if ((FFT1DInfo.pInData != 0) && (FFT1DInfo.pOutData != 0))
+		{
+			DataToFFT = (fftwf_complex*)FFT1DInfo.pInData;
+			OutDataFFT = (fftwf_complex*)FFT1DInfo.pOutData;
+			cudaMemPrefetchAsync(DataToFFT, FFT1DInfo.Nx * FFT1DInfo.HowMany * 2 * sizeof(float), UtiDev::GetDevice(pGpuUsage), 0);
+		}
+		else if ((FFT1DInfo.pdInData != 0) && (FFT1DInfo.pdOutData != 0))
+		{
+			dDataToFFT = (fftw_complex*)FFT1DInfo.pdInData;
+			dOutDataFFT = (fftw_complex*)FFT1DInfo.pdOutData;
+			cudaMemPrefetchAsync(dDataToFFT, FFT1DInfo.Nx * FFT1DInfo.HowMany * 2 * sizeof(double), UtiDev::GetDevice(pGpuUsage), 0);
+		}
+	})
+	else 
+	{
+#ifdef _FFTW3 //OC28012019
+		if ((FFT1DInfo.pInData != 0) && (FFT1DInfo.pOutData != 0))
+		{
+			DataToFFT = (fftwf_complex*)(FFT1DInfo.pInData);
+			OutDataFFT = (fftwf_complex*)(FFT1DInfo.pOutData);
+			//pOutDataFFT = OutDataFFT; //OC03092016 to be used solely in fftw call
+		}
+		else if ((FFT1DInfo.pdInData != 0) && (FFT1DInfo.pdOutData != 0))
+		{
+			dDataToFFT = (fftw_complex*)(FFT1DInfo.pdInData);
+			dOutDataFFT = (fftw_complex*)(FFT1DInfo.pdOutData);
+			//pdOutDataFFT = dOutDataFFT;
+		}
+#else
+		fftw_plan Plan1DFFT;
+		FFTW_COMPLEX* DataToFFT = (FFTW_COMPLEX*)(FFT1DInfo.pInData);
+		FFTW_COMPLEX* OutDataFFT = (FFTW_COMPLEX*)(FFT1DInfo.pOutData);
+		FFTW_COMPLEX* pOutDataFFT = OutDataFFT; //OC03092016 to be used solely in fftw call
+	/**
+		Pointed-out by Sergey Yakubov (E-XFEL).
+		From FFTW 2.1.5 docs:
+		void fftw(fftw_plan plan, int howmany,
+			  fftw_complex *in, int istride, int idist,
+			  fftw_complex *out, int ostride, int odist);
+		...
+		out, ostride and odist describe the output array(s). The format is the same as for the input array.
+		In-place transforms:  If the plan specifies an in-place transform, ostride and odist are always ignored.
+		If out is NULL, out is ignored, too. Otherwise, out is interpreted as a pointer to an array of n complex numbers,
+		that FFTW will use as temporary space to perform the in-place computation. out is used as scratch space and its contents destroyed.
+		In this case, out must be an ordinary array whose elements are contiguous in memory (no striding).
+	**/
+#endif
+	}
 
-		if(DataToFFT != 0) TreatShift(DataToFFT, FFT1DInfo.HowMany);
+	char t0SignMult = (FFT1DInfo.Dir > 0) ? -1 : 1;
+	if (NeedsShiftBeforeX)
+	{
+		GPU_COND(pGpuUsage, //HG20012022
+		{
+			if (m_ArrayShiftX != 0) FillArrayShift_CUDA(t0SignMult * x0_Before, FFT1DInfo.xStep, Nx, m_ArrayShiftX);
+			else if (m_dArrayShiftX != 0) FillArrayShift_CUDA(t0SignMult * x0_Before, FFT1DInfo.xStep, Nx, m_dArrayShiftX);
+
+			if (DataToFFT != 0) TreatShift_CUDA((float*)DataToFFT, FFT1DInfo.HowMany, Nx, m_ArrayShiftX);
+			else if (dDataToFFT != 0) TreatShift_CUDA((double*)dDataToFFT, FFT1DInfo.HowMany, Nx, m_dArrayShiftX);
+		})
+		else 
+		{
+			//FillArrayShift(t0SignMult*x0_Before, FFT1DInfo.xStep);
+			if (m_ArrayShiftX != 0) FillArrayShift(t0SignMult * x0_Before, FFT1DInfo.xStep, m_ArrayShiftX);
+			else if (m_dArrayShiftX != 0) FillArrayShift(t0SignMult * x0_Before, FFT1DInfo.xStep, m_dArrayShiftX);
+
+			if (DataToFFT != 0) TreatShift(DataToFFT, FFT1DInfo.HowMany);
 
 #ifdef _FFTW3 //OC27022019
-		else if(dDataToFFT != 0) TreatShift(dDataToFFT, FFT1DInfo.HowMany);
+			else if (dDataToFFT != 0) TreatShift(dDataToFFT, FFT1DInfo.HowMany);
 #endif
+		}
 	}
 
 	//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
 	//srwlPrintTime("::Make1DFFT : before fft",&start);
 	
 	int flags = FFTW_ESTIMATE; //OC30012019
+	bool alreadyNormalized = false; //HG17032022
+	//double Mult = FFT1DInfo.xStep;
+	double Mult = FFT1DInfo.xStep * FFT1DInfo.MultExtra;
 
-	if(FFT1DInfo.Dir > 0)
+	if (FFT1DInfo.Dir > 0) //HG17112021
 	{
-		//int flags = FFTW_ESTIMATE;
+		GPU_COND(pGpuUsage, 
+		{
+			int arN[] = { (int)Nx }; //OC14052020
+			if (DataToFFT != 0)
+			{
+				if (PlanLen != Nx) {
+					PlanLen = Nx;
+					if (Plan1DFFT_cu != NULL)
+					{
+						cufftDestroy(Plan1DFFT_cu);
+						Plan1DFFT_cu = NULL;
+					}
+					cufftPlanMany(&Plan1DFFT_cu, 1, arN, NULL, 1, Nx, NULL, 1, Nx, CUFFT_C2C, FFT1DInfo.HowMany);
+				}
+				if (Plan1DFFT_cu == 0) return ERROR_IN_FFT;
+				cufftExecC2C(Plan1DFFT_cu, (cufftComplex*)DataToFFT, (cufftComplex*)OutDataFFT, CUFFT_FORWARD);
+			}
+			else if (dDataToFFT != 0) //OC02022019
+			{
+				if (dPlanLen != Nx) {
+					if (dPlan1DFFT_cu != NULL)
+					{
+						cufftDestroy(dPlan1DFFT_cu);
+						dPlan1DFFT_cu = NULL;
+					}
+					dPlanLen = Nx;
+					cufftPlanMany(&dPlan1DFFT_cu, 1, arN, NULL, 1, Nx, NULL, 1, Nx, CUFFT_Z2Z, FFT1DInfo.HowMany);
+				}
+				if (dPlan1DFFT_cu == 0) return ERROR_IN_FFT;
+				cufftExecZ2Z(dPlan1DFFT_cu, (cufftDoubleComplex*)dDataToFFT, (cufftDoubleComplex*)dOutDataFFT, CUFFT_FORWARD);
+			}
+		})
+		else 
+		{
+			//int flags = FFTW_ESTIMATE;
 #ifdef _FFTW3 //OC28012019
 #ifdef _WITH_OMP
 		//Still needs to be tested!
-		if(DataToFFT != 0)
-		{
-			fftwf_init_threads(); //initialize threading support
-			int nthreads = omp_get_max_threads(); //detect number of OpenMP threads that are available
-			fftwf_plan_with_nthreads(nthreads);
-		}
-		else if(dDataToFFT != 0) //OC02022019
-		{
-			fftw_init_threads(); //initialize threading support
-			int nthreads = omp_get_max_threads(); //detect number of OpenMP threads that are available
-			fftw_plan_with_nthreads(nthreads);
-		}
+			if (DataToFFT != 0)
+			{
+				fftwf_init_threads(); //initialize threading support
+				int nthreads = omp_get_max_threads(); //detect number of OpenMP threads that are available
+				fftwf_plan_with_nthreads(nthreads);
+			}
+			else if (dDataToFFT != 0) //OC02022019
+			{
+				fftw_init_threads(); //initialize threading support
+				int nthreads = omp_get_max_threads(); //detect number of OpenMP threads that are available
+				fftw_plan_with_nthreads(nthreads);
+			}
 #endif //ifndef _WITH_OMP
-
-		int arN[] = {(int)Nx}; //OC14052020
-		//int arN[] = {Nx};
-		if(DataToFFT != 0)
-		{
-			//Plan1DFFT = fftwf_plan_many_dft(1, arN, FFT1DInfo.HowMany, DataToFFT, NULL, 1, Nx, pOutDataFFT, NULL, 1, Nx, FFTW_FORWARD, flags); 
-			Plan1DFFT = fftwf_plan_many_dft(1, arN, FFT1DInfo.HowMany, DataToFFT, NULL, 1, Nx, OutDataFFT, NULL, 1, Nx, FFTW_FORWARD, flags); //OC02022019
-			if(Plan1DFFT == 0) return ERROR_IN_FFT;
-			fftwf_execute(Plan1DFFT);
-		}
-		else if(dDataToFFT != 0) //OC02022019
-		{
-			dPlan1DFFT = fftw_plan_many_dft(1, arN, FFT1DInfo.HowMany, dDataToFFT, NULL, 1, Nx, dOutDataFFT, NULL, 1, Nx, FFTW_FORWARD, flags); 
-			if(dPlan1DFFT == 0) return ERROR_IN_FFT;
-			fftw_execute(dPlan1DFFT);
-		}
+			int arN[] = { (int)Nx }; //OC14052020
+			//int arN[] = {Nx};
+			if (DataToFFT != 0)
+			{
+				//Plan1DFFT = fftwf_plan_many_dft(1, arN, FFT1DInfo.HowMany, DataToFFT, NULL, 1, Nx, pOutDataFFT, NULL, 1, Nx, FFTW_FORWARD, flags); 
+				Plan1DFFT = fftwf_plan_many_dft(1, arN, FFT1DInfo.HowMany, DataToFFT, NULL, 1, Nx, OutDataFFT, NULL, 1, Nx, FFTW_FORWARD, flags); //OC02022019
+				if (Plan1DFFT == 0) return ERROR_IN_FFT;
+				fftwf_execute(Plan1DFFT);
+			}
+			else if (dDataToFFT != 0) //OC02022019
+			{
+				dPlan1DFFT = fftw_plan_many_dft(1, arN, FFT1DInfo.HowMany, dDataToFFT, NULL, 1, Nx, dOutDataFFT, NULL, 1, Nx, FFTW_FORWARD, flags);
+				if (dPlan1DFFT == 0) return ERROR_IN_FFT;
+				fftw_execute(dPlan1DFFT);
+			}
 
 #else //ifndef _FFTW3
-		if(DataToFFT == OutDataFFT)
-		{
-			flags |= FFTW_IN_PLACE;
-			pOutDataFFT = 0; //OC03092016 (see FFTW 2.1.5 doc clause above)
-		}
-		Plan1DFFT = fftw_create_plan(Nx, FFTW_FORWARD, flags);
-		if(Plan1DFFT == 0) return ERROR_IN_FFT;
+			if (DataToFFT == OutDataFFT)
+			{
+				flags |= FFTW_IN_PLACE;
+				pOutDataFFT = 0; //OC03092016 (see FFTW 2.1.5 doc clause above)
+			}
+			Plan1DFFT = fftw_create_plan(Nx, FFTW_FORWARD, flags);
+			if (Plan1DFFT == 0) return ERROR_IN_FFT;
 
-		//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
-		//srwlPrintTime("::Make1DFFT : fft create plan dir>0",&start);
+			//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
+			//srwlPrintTime("::Make1DFFT : fft create plan dir>0",&start);
 
 #ifndef _WITH_OMP //OC27102018
 		//fftw(Plan1DFFT, FFT1DInfo.HowMany, DataToFFT, 1, Nx, OutDataFFT, 1, Nx);
-		fftw(Plan1DFFT, FFT1DInfo.HowMany, DataToFFT, 1, Nx, pOutDataFFT, 1, Nx); //OC03092016
+			fftw(Plan1DFFT, FFT1DInfo.HowMany, DataToFFT, 1, Nx, pOutDataFFT, 1, Nx); //OC03092016
 #else //OC27102018
 		//SY: split one call into many (for OpenMP)
-		#pragma omp parallel for if (omp_get_num_threads()==1) // to avoid nested multi-threading (just in case)
-		for(int i=0; i<FFT1DInfo.HowMany; i++)
-		{
-			//SY: do not use OutDataFFT as scratch space if in-place
-			if(DataToFFT == OutDataFFT) fftw_one(Plan1DFFT, DataToFFT + i*Nx, 0);
-			else fftw_one(Plan1DFFT, DataToFFT + i*Nx, OutDataFFT + i*Nx);
+#pragma omp parallel for if (omp_get_num_threads()==1) // to avoid nested multi-threading (just in case)
+			for (int i = 0; i < FFT1DInfo.HowMany; i++)
+			{
+				//SY: do not use OutDataFFT as scratch space if in-place
+				if (DataToFFT == OutDataFFT) fftw_one(Plan1DFFT, DataToFFT + i * Nx, 0);
+				else fftw_one(Plan1DFFT, DataToFFT + i * Nx, OutDataFFT + i * Nx);
+			}
+#endif
+#endif
 		}
-#endif
-#endif
 		//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
 		//srwlPrintTime("::Make1DFFT : fft  dir>0",&start);
 
-		if(OutDataFFT != 0)
+		GPU_COND(pGpuUsage, 
 		{
-			RepairSignAfter1DFFT(OutDataFFT, FFT1DInfo.HowMany);
-			RotateDataAfter1DFFT(OutDataFFT, FFT1DInfo.HowMany);
+			if (OutDataFFT != 0)
+			{
+				RepairAndRotateDataAfter1DFFT_CUDA((float*)OutDataFFT, FFT1DInfo.HowMany, Nx, Mult);
+				//RepairSignAfter1DFFT_CUDA((float*)OutDataFFT, FFT1DInfo.HowMany, Nx);
+				//RotateDataAfter1DFFT_CUDA((float*)OutDataFFT, FFT1DInfo.HowMany, Nx);
+			}
+			else if (dOutDataFFT != 0)
+			{
+				RepairAndRotateDataAfter1DFFT_CUDA((double*)dOutDataFFT, FFT1DInfo.HowMany, Nx, Mult);
+				//RepairSignAfter1DFFT_CUDA((double*)dOutDataFFT, FFT1DInfo.HowMany, Nx);
+				//RotateDataAfter1DFFT_CUDA((double*)dOutDataFFT, FFT1DInfo.HowMany, Nx);
+			}
+			alreadyNormalized = true;
+		})
+		else 
+		{
+			if (OutDataFFT != 0)
+			{
+				RepairSignAfter1DFFT(OutDataFFT, FFT1DInfo.HowMany);
+				RotateDataAfter1DFFT(OutDataFFT, FFT1DInfo.HowMany);
+			}
+#ifdef _FFTW3 //OC27022019
+			else if (dOutDataFFT != 0)
+			{
+				RepairSignAfter1DFFT(dOutDataFFT, FFT1DInfo.HowMany);
+				RotateDataAfter1DFFT(dOutDataFFT, FFT1DInfo.HowMany);
+			}
+#endif
 		}
 
-#ifdef _FFTW3 //OC27022019
-		else if(dOutDataFFT != 0)
-		{
-			RepairSignAfter1DFFT(dOutDataFFT, FFT1DInfo.HowMany);
-			RotateDataAfter1DFFT(dOutDataFFT, FFT1DInfo.HowMany);
-		}
-#endif
 	}
 	else
 	{
 		//int flags = FFTW_ESTIMATE; //OC30012019 (commented-out)
+
+		GPU_COND(pGpuUsage, 
+		{
+			int arN[] = { (int)Nx }; //OC14052020
+			//int arN[] = {Nx};
+			if (DataToFFT != 0)
+			{
+				if (PlanLen != Nx) {
+					PlanLen = Nx;
+					HowMany = FFT1DInfo.HowMany;
+					if (Plan1DFFT_cu != NULL)
+					{
+						cufftDestroy(Plan1DFFT_cu);
+						Plan1DFFT_cu = NULL;
+					}
+					cufftPlanMany(&Plan1DFFT_cu, 1, arN, NULL, 1, Nx, NULL, 1, Nx, CUFFT_C2C, FFT1DInfo.HowMany);
+				}
+				if (Plan1DFFT_cu == 0) return ERROR_IN_FFT;
+
+				RotateDataAfter1DFFT_CUDA((float*)DataToFFT, FFT1DInfo.HowMany, Nx);
+				RepairSignAfter1DFFT_CUDA((float*)DataToFFT, FFT1DInfo.HowMany, Nx);
+				cufftExecC2C(Plan1DFFT_cu, (cufftComplex*)DataToFFT, (cufftComplex*)OutDataFFT, CUFFT_INVERSE);
+			}
+			else if (dDataToFFT != 0) //OC02022019
+			{
+				if (dPlanLen != Nx) 
+				{
+					dPlanLen = Nx;
+					dHowMany = FFT1DInfo.HowMany;
+					if (dPlan1DFFT_cu != NULL)
+					{
+						cufftDestroy(dPlan1DFFT_cu);
+						dPlan1DFFT_cu = NULL;
+					}
+					cufftPlanMany(&dPlan1DFFT_cu, 1, arN, NULL, 1, Nx, NULL, 1, Nx, CUFFT_Z2Z, FFT1DInfo.HowMany);
+				}
+				if (dPlan1DFFT_cu == 0) return ERROR_IN_FFT;
+
+				RotateDataAfter1DFFT_CUDA((double*)dDataToFFT, FFT1DInfo.HowMany, Nx);
+				RepairSignAfter1DFFT_CUDA((double*)dDataToFFT, FFT1DInfo.HowMany, Nx);
+				cufftExecZ2Z(dPlan1DFFT_cu, (cufftDoubleComplex*)dDataToFFT, (cufftDoubleComplex*)dOutDataFFT, CUFFT_INVERSE);
+			}
+		})
+		else 
+		{
 #ifdef _FFTW3 //OC28012019
 #ifdef _WITH_OMP
 
-		//Still needs to be tested!
-		if(DataToFFT != 0)
-		{
-			fftwf_init_threads(); //initialize threading support
-			int nthreads = omp_get_max_threads(); //detect number of OpenMP threads that are available
-			fftwf_plan_with_nthreads(nthreads);
-		}
-		else if(dDataToFFT != 0)
-		{
-			fftw_init_threads(); //initialize threading support
-			int nthreads = omp_get_max_threads(); //detect number of OpenMP threads that are available
-			fftw_plan_with_nthreads(nthreads);
-		}
+			//Still needs to be tested!
+			if (DataToFFT != 0)
+			{
+				fftwf_init_threads(); //initialize threading support
+				int nthreads = omp_get_max_threads(); //detect number of OpenMP threads that are available
+				fftwf_plan_with_nthreads(nthreads);
+			}
+			else if (dDataToFFT != 0)
+			{
+				fftw_init_threads(); //initialize threading support
+				int nthreads = omp_get_max_threads(); //detect number of OpenMP threads that are available
+				fftw_plan_with_nthreads(nthreads);
+			}
 
 #endif
+			int arN[] = { (int)Nx }; //OC14052020
+	//int arN[] = {Nx};
+			if (DataToFFT != 0)
+			{
+				//Plan1DFFT = fftwf_plan_many_dft(1, arN, FFT1DInfo.HowMany, DataToFFT, NULL, 1, Nx, pOutDataFFT, NULL, 1, Nx, FFTW_BACKWARD, flags); 
+				Plan1DFFT = fftwf_plan_many_dft(1, arN, FFT1DInfo.HowMany, DataToFFT, NULL, 1, Nx, OutDataFFT, NULL, 1, Nx, FFTW_BACKWARD, flags); //OC02022019
+				if (Plan1DFFT == 0) return ERROR_IN_FFT;
+				RotateDataAfter1DFFT(DataToFFT, FFT1DInfo.HowMany);
+				RepairSignAfter1DFFT(DataToFFT, FFT1DInfo.HowMany);
 
-		int arN[] = {(int)Nx}; //OC14052020
-		//int arN[] = {Nx};
-		if(DataToFFT != 0)
-		{
-			//Plan1DFFT = fftwf_plan_many_dft(1, arN, FFT1DInfo.HowMany, DataToFFT, NULL, 1, Nx, pOutDataFFT, NULL, 1, Nx, FFTW_BACKWARD, flags); 
-			Plan1DFFT = fftwf_plan_many_dft(1, arN, FFT1DInfo.HowMany, DataToFFT, NULL, 1, Nx, OutDataFFT, NULL, 1, Nx, FFTW_BACKWARD, flags); //OC02022019
-			if(Plan1DFFT == 0) return ERROR_IN_FFT;
+				fftwf_execute(Plan1DFFT);
+			}
+			else if (dDataToFFT != 0) //OC02022019
+			{
+				dPlan1DFFT = fftw_plan_many_dft(1, arN, FFT1DInfo.HowMany, dDataToFFT, NULL, 1, Nx, dOutDataFFT, NULL, 1, Nx, FFTW_BACKWARD, flags);
+				if (dPlan1DFFT == 0) return ERROR_IN_FFT;
+				RotateDataAfter1DFFT(dDataToFFT, FFT1DInfo.HowMany);
+				RepairSignAfter1DFFT(dDataToFFT, FFT1DInfo.HowMany);
+				fftw_execute(dPlan1DFFT);
+			}
+#else //ifndef _FFTW3
+			if (DataToFFT == OutDataFFT)
+			{
+				flags |= FFTW_IN_PLACE;
+				pOutDataFFT = 0; //OC03092016 (see FFTW 2.1.5 doc clause above)
+			}
+			Plan1DFFT = fftw_create_plan(Nx, FFTW_BACKWARD, flags);
+			if (Plan1DFFT == 0) return ERROR_IN_FFT;
+
+			//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
+			//srwlPrintTime("::Make1DFFT : fft create plan dir<0",&start);
 
 			RotateDataAfter1DFFT(DataToFFT, FFT1DInfo.HowMany);
+			//srwlPrintTime("::Make1DFFT : rotate dir<0",&start);
+
 			RepairSignAfter1DFFT(DataToFFT, FFT1DInfo.HowMany);
-
-			fftwf_execute(Plan1DFFT);
-		}
-		else if(dDataToFFT != 0) //OC02022019
-		{
-			dPlan1DFFT = fftw_plan_many_dft(1, arN, FFT1DInfo.HowMany, dDataToFFT, NULL, 1, Nx, dOutDataFFT, NULL, 1, Nx, FFTW_BACKWARD, flags);
-			if(dPlan1DFFT == 0) return ERROR_IN_FFT;
-
-			RotateDataAfter1DFFT(dDataToFFT, FFT1DInfo.HowMany);
-			RepairSignAfter1DFFT(dDataToFFT, FFT1DInfo.HowMany);
-
-			fftw_execute(dPlan1DFFT);
-		}
-
-#else //ifndef _FFTW3
-		if(DataToFFT == OutDataFFT)
-		{
-			flags |= FFTW_IN_PLACE;
-			pOutDataFFT = 0; //OC03092016 (see FFTW 2.1.5 doc clause above)
-		}
-		Plan1DFFT = fftw_create_plan(Nx, FFTW_BACKWARD, flags);
-		if(Plan1DFFT == 0) return ERROR_IN_FFT;
-
-		//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
-		//srwlPrintTime("::Make1DFFT : fft create plan dir<0",&start);
-
-		RotateDataAfter1DFFT(DataToFFT, FFT1DInfo.HowMany);
-		//srwlPrintTime("::Make1DFFT : rotate dir<0",&start);
-
-		RepairSignAfter1DFFT(DataToFFT, FFT1DInfo.HowMany);
-		//srwlPrintTime("::Make1DFFT : repair dir<0",&start);
+			//srwlPrintTime("::Make1DFFT : repair dir<0",&start);
 
 #ifndef _WITH_OMP //OC27102018
 		//fftw(Plan1DFFT, FFT1DInfo.HowMany, DataToFFT, 1, Nx, OutDataFFT, 1, Nx);
-		fftw(Plan1DFFT, FFT1DInfo.HowMany, DataToFFT, 1, Nx, pOutDataFFT, 1, Nx); //OC03092016
+			fftw(Plan1DFFT, FFT1DInfo.HowMany, DataToFFT, 1, Nx, pOutDataFFT, 1, Nx); //OC03092016
 #else //OC27102018
 		//SY: split one call into many (for OpenMP)
-		#pragma omp parallel for if (omp_get_num_threads()==1) // to avoid nested multi-threading (just in case)
-		for(int i=0; i<FFT1DInfo.HowMany; i++)
-		{
-			if(DataToFFT == OutDataFFT) fftw_one(Plan1DFFT, DataToFFT + i*Nx, 0);
-			else fftw_one(Plan1DFFT, DataToFFT + i*Nx, OutDataFFT + i*Nx);
-		}
+#pragma omp parallel for if (omp_get_num_threads()==1) // to avoid nested multi-threading (just in case)
+			for (int i = 0; i < FFT1DInfo.HowMany; i++)
+			{
+				if (DataToFFT == OutDataFFT) fftw_one(Plan1DFFT, DataToFFT + i * Nx, 0);
+				else fftw_one(Plan1DFFT, DataToFFT + i * Nx, OutDataFFT + i * Nx);
+			}
 #endif
 #endif //_FFTW3
+		}
 		//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
 		//srwlPrintTime("::Make1DFFT : fft  dir<0",&start);
 	}
-	//double Mult = FFT1DInfo.xStep;
-	double Mult = FFT1DInfo.xStep*FFT1DInfo.MultExtra;
 
-	if(OutDataFFT != 0) NormalizeDataAfter1DFFT(OutDataFFT, FFT1DInfo.HowMany, Mult);
-
-#ifdef _FFTW3 //OC27022019
-	else if(dOutDataFFT != 0) NormalizeDataAfter1DFFT(dOutDataFFT, FFT1DInfo.HowMany, Mult);
-#endif
-
+	if (!alreadyNormalized)
+	{
+		GPU_COND(pGpuUsage, 
+		{
+			if (OutDataFFT != 0) {
+				NormalizeDataAfter1DFFT_CUDA((float*)OutDataFFT, FFT1DInfo.HowMany, Nx, Mult);
+			}
+			else if (dOutDataFFT != 0)
+				NormalizeDataAfter1DFFT_CUDA((double*)dOutDataFFT, FFT1DInfo.HowMany, Nx, Mult);
+		})
+		else 
+		{
+			if (OutDataFFT != 0) NormalizeDataAfter1DFFT(OutDataFFT, FFT1DInfo.HowMany, Mult);
+	#ifdef _FFTW3 //OC27022019
+			else if (dOutDataFFT != 0) NormalizeDataAfter1DFFT(dOutDataFFT, FFT1DInfo.HowMany, Mult);
+	#endif
+		}
+	}
+	
 	//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
 	//srwlPrintTime("::Make1DFFT : NormalizeDataAfter1DFFT",&start);
 
-	if(NeedsShiftAfterX)
+	if (NeedsShiftAfterX)
 	{
-		//FillArrayShift(t0SignMult*x0_After, FFT1DInfo.xStepTr);
-		if(m_ArrayShiftX != 0) FillArrayShift(t0SignMult*x0_After, FFT1DInfo.xStepTr, m_ArrayShiftX); //OC02022019
-		else if(m_dArrayShiftX != 0) FillArrayShift(t0SignMult*x0_After, FFT1DInfo.xStepTr, m_dArrayShiftX);
+		GPU_COND(pGpuUsage, 
+		{
+			if (m_ArrayShiftX != 0) FillArrayShift_CUDA(t0SignMult * x0_After, FFT1DInfo.xStepTr, Nx, m_ArrayShiftX); //OC02022019
+			else if (m_dArrayShiftX != 0) FillArrayShift_CUDA(t0SignMult * x0_After, FFT1DInfo.xStepTr, Nx, m_dArrayShiftX);
 
-		if(OutDataFFT != 0) TreatShift(OutDataFFT, FFT1DInfo.HowMany);
+			if (OutDataFFT != 0) TreatShift_CUDA((float*)OutDataFFT, FFT1DInfo.HowMany, Nx, m_ArrayShiftX);
+			else if (dOutDataFFT != 0) TreatShift_CUDA((double*)dOutDataFFT, FFT1DInfo.HowMany, Nx, m_dArrayShiftX);
+		})
+		else 
+		{
+			//FillArrayShift(t0SignMult*x0_After, FFT1DInfo.xStepTr);
+			if (m_ArrayShiftX != 0) FillArrayShift(t0SignMult * x0_After, FFT1DInfo.xStepTr, m_ArrayShiftX); //OC02022019
+			else if (m_dArrayShiftX != 0) FillArrayShift(t0SignMult * x0_After, FFT1DInfo.xStepTr, m_dArrayShiftX);
 
+			if (OutDataFFT != 0) TreatShift(OutDataFFT, FFT1DInfo.HowMany);
 #ifdef _FFTW3 //OC27022019
-		else if(dOutDataFFT != 0) TreatShift(dOutDataFFT, FFT1DInfo.HowMany);
+			else if (dOutDataFFT != 0) TreatShift(dOutDataFFT, FFT1DInfo.HowMany);
 #endif
+		}
 	}
+
 
 	if(FFT1DInfo.TreatSharpEdges)
 	{
@@ -791,36 +1189,56 @@ int CGenMathFFT1D::Make1DFFT(CGenMathFFT1DInfo& FFT1DInfo)
 		if(result) return result;
 	}
 
-	//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
-	//srwlPrintTime("::Make1DFFT : ProcessSharpEdges",&start);
+	GPU_COND(pGpuUsage,
+	{
+		if (dPlan1DFFT_cu != NULL)
+		{
+			cufftDestroy(dPlan1DFFT_cu);
+			dPlan1DFFT_cu = NULL;
+		}
+		if (Plan1DFFT_cu != NULL)
+		{
+			cufftDestroy(Plan1DFFT_cu);
+			Plan1DFFT_cu = NULL;
+		}
+	})
+	else
+	{
+		//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
+		//srwlPrintTime("::Make1DFFT : ProcessSharpEdges",&start);
 
-	//OC_NERSC: to comment-out the following line for NERSC (to avoid crash with "python-mpi")
-	//OC27102018: thread safety issue?
+		//OC_NERSC: to comment-out the following line for NERSC (to avoid crash with "python-mpi")
+		//OC27102018: thread safety issue?
 #ifdef _FFTW3 //OC29012019
 
-	if(DataToFFT != 0) fftwf_destroy_plan(Plan1DFFT);
-	else if(dDataToFFT != 0) fftw_destroy_plan(dPlan1DFFT);
+		if(DataToFFT != 0) fftwf_destroy_plan(Plan1DFFT);
+		else if(dDataToFFT != 0) fftw_destroy_plan(dPlan1DFFT);
 
 #ifdef _WITH_OMP 
 
-	if(DataToFFT != 0) fftwf_cleanup_threads(); //??
-	else if(dDataToFFT != 0) fftw_cleanup_threads();
+		if(DataToFFT != 0) fftwf_cleanup_threads(); //??
+		else if(dDataToFFT != 0) fftw_cleanup_threads();
 
 #endif
 #else //ifndef _FFTW3
 
-	fftw_destroy_plan(Plan1DFFT);
+		fftw_destroy_plan(Plan1DFFT);
 
 #endif
+	}
 
-	if(m_ArrayShiftX != 0) 
+	if (m_ArrayShiftX != 0)
 	{
-		delete[] m_ArrayShiftX; m_ArrayShiftX = 0;
+		FREE_ARRAY(m_ArrayShiftX);
 	}
-	if(m_dArrayShiftX != 0) 
+	if (m_dArrayShiftX != 0)
 	{
-		delete[] m_dArrayShiftX; m_dArrayShiftX = 0;
+		FREE_ARRAY(m_dArrayShiftX);
 	}
+
+	GPU_COND(pGpuUsage, {
+		cudaDeviceSynchronize();
+	})
 
 	//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
 	//srwlPrintTime("::Make1DFFT : after fft ",&start);

@@ -60,6 +60,7 @@
 #define CALL
 #endif
 
+#include "utidev.h"
 /***************************************************************************/
 
 #ifdef __cplusplus  
@@ -862,7 +863,7 @@ EXP int CALL srwlCalcTransm(SRWLOptT* pOpTr, const double* pDelta, const double*
  * @return	integer error (>0) or warnig (<0) code
  * @see ...
  */
-EXP int CALL srwlUtiFFT(char* pcData, char typeData, double* arMesh, int nMesh, int dir);
+EXP int CALL srwlUtiFFT(char* pcData, char typeData, double* arMesh, int nMesh, int dir, gpuUsageArg_t *pGpuUsage=0);
 
 /** 
  * Convolves real data with 1D or 2D Gaussian (depending on arguments)
@@ -976,6 +977,42 @@ EXP int CALL srwlUtiUndFromMagFldTab(SRWLMagFldC* pUndCnt, SRWLMagFldC* pMagCnt,
  * @see ...
  */
 EXP int CALL srwlUtiUndFindMagFldInterpInds(int* arResInds, int* pnResInds, double* arGaps, double* arPhases, int nVals, double arPrecPar[5]);
+/**
+ * Checks if GPU offloading is available
+ * @return	true if available
+ * @see ...
+ */
+
+EXP bool CALL srwlUtiGPUAvailable();
+
+/**
+ * Checks if GPU offloading is enabled
+ * @return	true if enabled
+ * @see ...
+ */
+
+EXP bool CALL srwlUtiGPUEnabled();
+
+/**
+ * Enable/Disable GPU offloading
+ * @see ...
+ */
+
+EXP void CALL srwlUtiGPUSetStatus(bool enable);
+
+/**
+ * Initialize device offloading
+ * @see ...
+ */
+
+EXP void CALL srwlUtiDevInit();
+
+/**
+ * Finalize device offloading
+ * @see ...
+ */
+
+EXP void CALL srwlUtiDevFini();
 
 /**
  * These functions were added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP

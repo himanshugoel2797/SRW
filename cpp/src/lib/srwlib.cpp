@@ -28,6 +28,7 @@
 #include "srpowden.h"
 #include "srisosrc.h"
 #include "srmatsta.h"
+#include "utidev.h"
 
 //#include <time.h> //Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP
 
@@ -1054,7 +1055,7 @@ EXP int CALL srwlCalcTransm(SRWLOptT* pOpTr, const double* pDelta, const double*
 
 //-------------------------------------------------------------------------
 
-EXP int CALL srwlUtiFFT(char* pcData, char typeData, double* arMesh, int nMesh, int dir)
+EXP int CALL srwlUtiFFT(char* pcData, char typeData, double* arMesh, int nMesh, int dir, gpuUsageArg_t *pGpuUsage) //HG01032022
 {
 	if((pcData == 0) || (arMesh == 0) || ((typeData != 'f') && (typeData != 'd')) || (nMesh < 3) || (dir == 0)) return SRWL_INCORRECT_PARAM_FOR_FFT; //OC31012019
 
@@ -1099,7 +1100,7 @@ EXP int CALL srwlUtiFFT(char* pcData, char typeData, double* arMesh, int nMesh, 
 			FFT1DInfo.UseGivenStartTrValue = 0;
 
 			CGenMathFFT1D FFT1D;
-			if(locErNo = FFT1D.Make1DFFT(FFT1DInfo)) return locErNo;
+			if(locErNo = FFT1D.Make1DFFT(FFT1DInfo, pGpuUsage)) return locErNo;
 
 			arMesh[0] = FFT1DInfo.xStartTr;
 			arMesh[1] = FFT1DInfo.xStepTr;
@@ -1129,7 +1130,7 @@ EXP int CALL srwlUtiFFT(char* pcData, char typeData, double* arMesh, int nMesh, 
 			FFT2DInfo.UseGivenStartTrValues = 0;
 
 			CGenMathFFT2D FFT2D;
-			if(locErNo = FFT2D.Make2DFFT(FFT2DInfo)) return locErNo;
+			if(locErNo = FFT2D.Make2DFFT(FFT2DInfo, 0, 0, pGpuUsage)) return locErNo;
 
 			arMesh[0] = FFT2DInfo.xStartTr;
 			arMesh[1] = FFT2DInfo.xStepTr;
@@ -1543,6 +1544,41 @@ EXP int CALL srwlPropagRadMultiE(SRWLStokes* pStokes, SRWLWfr* pWfr0, SRWLOptC* 
 		return erNo;
 	}
 	return 0;
+}
+
+//-------------------------------------------------------------------------
+
+EXP bool CALL srwlUtiGPUAvailable() 
+{
+	return UtiDev::GPUAvailable();
+}
+
+//-------------------------------------------------------------------------
+
+EXP bool CALL srwlUtiGPUEnabled()
+{
+	return UtiDev::GPUEnabled(nullptr);
+}
+
+//-------------------------------------------------------------------------
+
+EXP void CALL srwlUtiGPUSetStatus(bool enable)
+{
+	UtiDev::SetGPUStatus(enable);
+}
+
+//-------------------------------------------------------------------------
+
+EXP void CALL srwlUtiDevInit()
+{
+	UtiDev::Init();
+}
+
+//-------------------------------------------------------------------------
+
+EXP void CALL srwlUtiDevFini()
+{
+	UtiDev::Fini();
 }
 
 //-------------------------------------------------------------------------

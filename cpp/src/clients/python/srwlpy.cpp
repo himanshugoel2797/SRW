@@ -172,6 +172,22 @@ char* GetPyArrayBuf(PyObject* obj, vector<Py_buffer>* pvBuf, Py_ssize_t* pSizeBu
 		if(pvBuf != 0) pvBuf->push_back(pb_tmp);
 		return (char*)pb_tmp.buf;
 	}
+	else if (PyObject_HasAttrString(obj, "data")) //HG23112021
+	{
+		PyObject* obj_data = PyObject_GetAttrString(obj, "data");
+		PyObject* obj_data_ptr = PyObject_GetAttrString(obj_data, "ptr");
+		PyObject* obj_len = PyObject_GetAttrString(obj, "size");
+		PyObject* obj_strides = PyObject_GetAttrString(obj, "strides");
+		PyObject* obj_itemsz = PyTuple_GetItem(obj_strides, 0);
+
+		Py_DECREF(obj_data);
+		Py_DECREF(obj_data_ptr);
+		Py_DECREF(obj_len);
+		Py_DECREF(obj_strides);
+
+		if(pSizeBuf != 0) *pSizeBuf = PyLong_AsLong(obj_len) * PyLong_AsLong(obj_itemsz);
+		return (char*)PyLong_AsLongLong(obj_data_ptr);
+	}
 #if PY_MAJOR_VERSION < 3
 	//else if(PyBuffer_Check(obj))
 	else
@@ -3312,6 +3328,28 @@ void ParseSructSmpObj3D(double**& arObjShapeDefs, int& nObj3D, PyObject* oListSh
 }
 
 /************************************************************************//**
+ * Configures device selection parameters.
+ ***************************************************************************/
+void ParseDeviceParam(PyObject* oDev, gpuUsageArg_t *pGpuUsage) //HG10202021
+{
+	if (oDev != 0) {
+		if (PyLong_Check(oDev)) {
+			*pGpuUsage = _PyLong_AsInt(oDev);
+			return;
+		}
+	}
+	*pGpuUsage = 0;
+}
+
+/************************************************************************//**
+ * Cleans up device selection parameters.
+ ***************************************************************************/
+void CleanDeviceParam() //HG10202021
+{
+	srwlUtiGPUSetStatus(false);
+}
+
+/************************************************************************//**
  * Updates Py List by numbers
  ***************************************************************************/
 template<class T> void UpdatePyListNum(PyObject* oList, const T* ar, int n) //OC03092016
@@ -5126,6 +5164,7 @@ static PyObject* srwlpy_UtiFFT(PyObject *self, PyObject *args)
 {
 	PyObject *oData=0, *oMesh=0, *oDir=0;
 	vector<Py_buffer> vBuf;
+	gpuUsageArg_t gpuArgs;
 
 	try
 	{
@@ -5165,7 +5204,10 @@ static PyObject* srwlpy_UtiFFT(PyObject *self, PyObject *args)
 		if(!PyNumber_Check(oDir)) throw strEr_BadArg_UtiFFT;
 		int dir = (int)PyLong_AsLong(oDir);
 
-		ProcRes(srwlUtiFFT(pcData, typeData, arMesh, nMesh, dir));
+		srwlUtiDevInit();
+		ParseDeviceParam(oDev, &gpuArgs);
+		ProcRes(srwlUtiFFT(pcData, typeData, arMesh, nMesh, dir, &gpuArgs));
+		srwlUtiDevFini();
 
 		if(meshArType == 'l') UpdatePyListNum(oMesh, arMesh, nMesh); //04092016
 	}
