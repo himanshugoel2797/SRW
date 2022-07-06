@@ -18,7 +18,7 @@ cp.cuda.set_allocator(cupy.cuda.memory.malloc_managed)
 #**********************Input Parameters:
 
 sig = 1
-gpuEn = True
+gpuEn = False
 xNp = 100
 xRange = 10
 xStart = -0.5*xRange
@@ -28,8 +28,9 @@ if gpuEn:
     #ar_b = srwl.managedbuffer(xNp*2)#array('f', [0]*(xNp*2))
     #ar = np.asarray(ar_b, dtype=np.float32)
     ar_cp = cp.array(array('f', [0]*(xNp*2)))
-    a_ptr = ctypes.cast(ar_cp.data.ptr, ctypes.POINTER(ctypes.c_float))
-    ar = np.ctypeslib.as_array(a_ptr, (2 * xNp,))
+    #a_ptr = ctypes.cast(ar_cp.data.ptr, ctypes.POINTER(ctypes.c_float))
+    #ar = np.ctypeslib.as_array(a_ptr, (2 * xNp,))
+    ar = ar_cp
 else:
     ar_cp = array('f', [0]*(xNp*2))
     ar = ar_cp

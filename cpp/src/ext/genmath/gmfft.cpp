@@ -723,7 +723,7 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 	})
 	else
 	{
-#elif _FFTW3 //OC28012019
+#if _FFTW3 //OC28012019
 		if (DataToFFT != 0)
 		{
 			if (pPrecreatedPlan2DFFT == 0) fftwf_destroy_plan(Plan2DFFT);

@@ -737,19 +737,6 @@ EXP int CALL srwlCalcIntFromElecField(char* pInt, SRWLWfr* pWfr, char pol, char 
 //EXP int CALL srwlCalcIntFromElecField(char* pInt, SRWLWfr* pWfr, char pol, char intType, char depType, double e, double x, double y, double* arMeth=0);
 //EXP int CALL srwlCalcIntFromElecField(char* pInt, SRWLWfr* pWfr, char pol, char intType, char depType, double e, double x, double y);
 
-/**
- * Setup Transmittance for an Optical Element with list of 3d shapes.
- * @param [in, out] Optical transmission object definition to populate
- * @param [in] pAttenLen number of entries in pShapeDefs
- * @param [in] pDelta number of entries in pShapeDefs
- * @param [in] pShapeDefs pointer to array of shape definitions
- * @param [in] ShapeDefCount number of entries in pShapeDefs
- * @param [in] pPrescParams list of precision parameters, currently unused
- * @return	integer error (>0) or warnig (<0) code
- * @see ...
- */
-EXP int CALL srwlCalcTransm(SRWLOptT* pOptElem, const double* pAttenLen, const double* pDelta, const double* pShapeDefs, int ShapeDefCount, void *pPrescParams);
-
 /** 
  * "Resizes" Electric Field Wavefront vs transverse positions / angles or photon energy / time
  * @param [in, out] pWfr pointer to pre-calculated Wavefront structure

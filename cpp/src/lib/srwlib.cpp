@@ -831,13 +831,6 @@ EXP int CALL srwlCalcIntFromElecField(char* pInt, SRWLWfr* pWfr, char polar, cha
 }
 
 //-------------------------------------------------------------------------
-//HG28122020
-EXP int CALL srwlCalcTransm(SRWLOptT *pOptElem, const double* pAttenLen, const double* pDelta, const double* pShapeDefs, int ShapeDefCount, void *pPrescParams)
-{
-	return srTGenTransmissionSample::CalcTransm(pOptElem, pAttenLen, pDelta, pShapeDefs, ShapeDefCount);
-}
-
-//-------------------------------------------------------------------------
 
 EXP int CALL srwlResizeElecField(SRWLWfr* pWfr, char type, double* par)
 {

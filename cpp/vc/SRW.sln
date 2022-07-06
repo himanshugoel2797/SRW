@@ -1,6 +1,6 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.29215.179
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31919.166
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SRWLIB", "SRWLIB.vcxproj", "{A7E707A6-D325-42AE-A0D0-3C97C38D36A6}"
 EndProject
@@ -27,8 +27,8 @@ Global
 		{A7E707A6-D325-42AE-A0D0-3C97C38D36A6}.Debug|Mixed Platforms.Build.0 = Debug|Win32
 		{A7E707A6-D325-42AE-A0D0-3C97C38D36A6}.Debug|Win32.ActiveCfg = Debug|Win32
 		{A7E707A6-D325-42AE-A0D0-3C97C38D36A6}.Debug|Win32.Build.0 = Debug|Win32
-		{A7E707A6-D325-42AE-A0D0-3C97C38D36A6}.Debug|x64.ActiveCfg = Debug|x64
-		{A7E707A6-D325-42AE-A0D0-3C97C38D36A6}.Debug|x64.Build.0 = Debug|x64
+		{A7E707A6-D325-42AE-A0D0-3C97C38D36A6}.Debug|x64.ActiveCfg = Debug_cuda|x64
+		{A7E707A6-D325-42AE-A0D0-3C97C38D36A6}.Debug|x64.Build.0 = Debug_cuda|x64
 		{A7E707A6-D325-42AE-A0D0-3C97C38D36A6}.Release|Mixed Platforms.ActiveCfg = Release|Win32
 		{A7E707A6-D325-42AE-A0D0-3C97C38D36A6}.Release|Mixed Platforms.Build.0 = Release|Win32
 		{A7E707A6-D325-42AE-A0D0-3C97C38D36A6}.Release|Win32.ActiveCfg = Release|Win32
