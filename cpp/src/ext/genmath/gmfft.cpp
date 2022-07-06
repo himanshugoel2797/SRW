@@ -803,15 +803,29 @@ int CGenMathFFT1D::Make1DFFT(CGenMathFFT1DInfo& FFT1DInfo, gpuUsageArg_t *pGpuUs
 	{
 		if ((FFT1DInfo.pInData != 0) && (FFT1DInfo.pOutData != 0))
 		{
-			DataToFFT = (fftwf_complex*)FFT1DInfo.pInData;
-			OutDataFFT = (fftwf_complex*)FFT1DInfo.pOutData;
-			cudaMemPrefetchAsync(DataToFFT, FFT1DInfo.Nx * FFT1DInfo.HowMany * 2 * sizeof(float), UtiDev::GetDevice(pGpuUsage), 0);
+			//DataToFFT = (fftwf_complex*)FFT1DInfo.pInData;
+			//OutDataFFT = (fftwf_complex*)FFT1DInfo.pOutData;
+			//cudaMemPrefetchAsync(DataToFFT, FFT1DInfo.Nx * FFT1DInfo.HowMany * 2 * sizeof(float), UtiDev::GetDevice(pGpuUsage), 0);
+			cudaMalloc(&DataToFFT, FFT1DInfo.Nx * FFT1DInfo.HowMany * 2 * sizeof(float));
+			if (FFT1DInfo.pInData != FFT1DInfo.pOutData)
+				cudaMalloc(&OutDataFFT, FFT1DInfo.Nx * FFT1DInfo.HowMany * 2 * sizeof(float));
+			else
+				OutDataFFT = DataToFFT;
+
+			cudaMemcpy(DataToFFT, FFT1DInfo.pInData, FFT1DInfo.Nx * FFT1DInfo.HowMany * 2 * sizeof(float), cudaMemcpyHostToDevice);
 		}
 		else if ((FFT1DInfo.pdInData != 0) && (FFT1DInfo.pdOutData != 0))
 		{
-			dDataToFFT = (fftw_complex*)FFT1DInfo.pdInData;
-			dOutDataFFT = (fftw_complex*)FFT1DInfo.pdOutData;
-			cudaMemPrefetchAsync(dDataToFFT, FFT1DInfo.Nx * FFT1DInfo.HowMany * 2 * sizeof(double), UtiDev::GetDevice(pGpuUsage), 0);
+			//dDataToFFT = (fftw_complex*)FFT1DInfo.pdInData;
+			//dOutDataFFT = (fftw_complex*)FFT1DInfo.pdOutData;
+			//cudaMemPrefetchAsync(dDataToFFT, FFT1DInfo.Nx * FFT1DInfo.HowMany * 2 * sizeof(double), UtiDev::GetDevice(pGpuUsage), 0);
+			cudaMalloc(&dDataToFFT, FFT1DInfo.Nx * FFT1DInfo.HowMany * 2 * sizeof(double));
+			if (FFT1DInfo.pdInData != FFT1DInfo.pdOutData)
+				cudaMalloc(&dOutDataFFT, FFT1DInfo.Nx * FFT1DInfo.HowMany * 2 * sizeof(double));
+			else
+				dOutDataFFT = dDataToFFT;
+
+			cudaMemcpy(dDataToFFT, FFT1DInfo.pdInData, FFT1DInfo.Nx * FFT1DInfo.HowMany * 2 * sizeof(double), cudaMemcpyHostToDevice);
 		}
 	})
 	else 
@@ -1236,8 +1250,21 @@ int CGenMathFFT1D::Make1DFFT(CGenMathFFT1DInfo& FFT1DInfo, gpuUsageArg_t *pGpuUs
 		FREE_ARRAY(m_dArrayShiftX);
 	}
 
-	GPU_COND(pGpuUsage, {
+	GPU_COND(pGpuUsage, 
+	{
 		cudaDeviceSynchronize();
+		if (OutDataFFT != 0)
+		{
+			cudaMemcpy(FFT1DInfo.pOutData, OutDataFFT, FFT1DInfo.Nx * FFT1DInfo.HowMany * 2 * sizeof(float), cudaMemcpyDeviceToHost);
+			cudaFree(OutDataFFT);
+		}
+		else if (dOutDataFFT != 0)
+		{
+			cudaMemcpy(FFT1DInfo.pdOutData, dOutDataFFT, FFT1DInfo.Nx * FFT1DInfo.HowMany * 2 * sizeof(double), cudaMemcpyDeviceToHost);
+			cudaFree(dOutDataFFT);
+		}
+		if (DataToFFT != 0 && DataToFFT != OutDataFFT) cudaFree(DataToFFT);
+		else if (dDataToFFT != 0 && dDataToFFT != dOutDataFFT) cudaFree(dDataToFFT);
 	})
 
 	//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
