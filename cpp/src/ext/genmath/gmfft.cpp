@@ -369,13 +369,17 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 	{
 		if (FFT2DInfo.pData != 0) 
 		{
-			DataToFFT = (fftwf_complex*)(FFT2DInfo.pData);
-			cudaMemPrefetchAsync(DataToFFT, FFT2DInfo.Nx * FFT2DInfo.Ny * FFT2DInfo.howMany * 2 * sizeof(float), UtiDev::GetDevice(pGpuUsage), 0);
+			//DataToFFT = (fftwf_complex*)(FFT2DInfo.pData);
+			//cudaMemPrefetchAsync(DataToFFT, FFT2DInfo.Nx * FFT2DInfo.Ny * FFT2DInfo.howMany * 2 * sizeof(float), UtiDev::GetDevice(pGpuUsage), 0);
+			cudaMalloc(&DataToFFT, FFT2DInfo.Nx * FFT2DInfo.Ny * FFT2DInfo.howMany * 2 * sizeof(float));
+			cudaMemcpy(DataToFFT, FFT2DInfo.pData, FFT2DInfo.Nx * FFT2DInfo.Ny * FFT2DInfo.howMany * 2 * sizeof(float), cudaMemcpyHostToDevice);
 		}
 		else if (FFT2DInfo.pdData != 0) 
 		{
-			dDataToFFT = (fftw_complex*)(FFT2DInfo.pdData); //OC02022019
-			cudaMemPrefetchAsync(dDataToFFT, FFT2DInfo.Nx * FFT2DInfo.Ny * FFT2DInfo.howMany * 2 * sizeof(double), UtiDev::GetDevice(pGpuUsage), 0);
+			//dDataToFFT = (fftw_complex*)(FFT2DInfo.pdData); //OC02022019
+			//cudaMemPrefetchAsync(dDataToFFT, FFT2DInfo.Nx * FFT2DInfo.Ny * FFT2DInfo.howMany * 2 * sizeof(double), UtiDev::GetDevice(pGpuUsage), 0);
+			cudaMalloc(&dDataToFFT, FFT2DInfo.Nx * FFT2DInfo.Ny * FFT2DInfo.howMany * 2 * sizeof(double));
+			cudaMemcpy(dDataToFFT, FFT2DInfo.pdData, FFT2DInfo.Nx * FFT2DInfo.Ny * FFT2DInfo.howMany * 2 * sizeof(double), cudaMemcpyHostToDevice);
 		}
 	})
 	else
@@ -668,10 +672,6 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 	//if(NeedsShiftAfterX) FillArrayShift('x', t0SignMult*x0_After, FFT2DInfo.xStepTr);
 	//if(NeedsShiftAfterY) FillArrayShift('y', t0SignMult*y0_After, FFT2DInfo.yStepTr);
 
-	GPU_COND(pGpuUsage, 
-	{
-		cudaDeviceSynchronize();
-	})
 	if (NeedsShiftAfterX)
 	{//OC02022019
 		if (m_ArrayShiftX != 0) FillArrayShift('x', t0SignMult * x0_After, FFT2DInfo.xStepTr, m_ArrayShiftX);
@@ -743,7 +743,22 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 	if (m_ArrayShiftY != 0) { FREE_ARRAY(m_ArrayShiftY);}
 	if (m_dArrayShiftX != 0) { FREE_ARRAY(m_dArrayShiftX);} //OC02022019
 	if (m_dArrayShiftY != 0) { FREE_ARRAY(m_dArrayShiftY);}
-
+	
+	GPU_COND(pGpuUsage, 
+	{
+		cudaDeviceSynchronize();
+		if (DataToFFT != 0)
+		{
+			cudaMemcpy(FFT2DInfo.pData, DataToFFT, FFT2DInfo.Nx * FFT2DInfo.Ny * FFT2DInfo.howMany * 2 * sizeof(float), cudaMemcpyDeviceToHost);
+			cudaFree(DataToFFT);
+		}
+		else if (dDataToFFT != 0)
+		{
+			cudaMemcpy(FFT2DInfo.pdData, dDataToFFT, FFT2DInfo.Nx * FFT2DInfo.Ny * FFT2DInfo.howMany * 2 * sizeof(double), cudaMemcpyDeviceToHost);
+			cudaFree(dDataToFFT);
+		}
+	})
+	
 	return 0;
 }
 
