@@ -299,6 +299,16 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 		//AuxDebug_TestFFT_Plans();
 		//end debug
 
+	GPU_COND(pGpuUsage,
+		{
+			printf("Using GPU\r\n");
+		})
+		else
+		{
+			printf("Not using GPU\r\n");
+		}
+
+
 	SetupLimitsTr(FFT2DInfo);
 
 	double xStepNx = FFT2DInfo.Nx*FFT2DInfo.xStep;
@@ -708,19 +718,7 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 	//OC27102018
 	//SY: adopted for OpenMP
 
-	GPU_COND(pGpuUsage, 
-	{
-		if (dPlan2DFFT_cu != NULL)
-		{
-			cufftDestroy(dPlan2DFFT_cu);
-			dPlan2DFFT_cu = NULL;
-		}
-		if (Plan2DFFT_cu != NULL)
-		{
-			cufftDestroy(Plan2DFFT_cu);
-			Plan2DFFT_cu = NULL;
-		}
-	})
+	GPU_COND(pGpuUsage, {})
 	else
 	{
 #if _FFTW3 //OC28012019
@@ -1218,19 +1216,7 @@ int CGenMathFFT1D::Make1DFFT(CGenMathFFT1DInfo& FFT1DInfo, gpuUsageArg_t *pGpuUs
 		if(result) return result;
 	}
 
-	GPU_COND(pGpuUsage,
-	{
-		if (dPlan1DFFT_cu != NULL)
-		{
-			cufftDestroy(dPlan1DFFT_cu);
-			dPlan1DFFT_cu = NULL;
-		}
-		if (Plan1DFFT_cu != NULL)
-		{
-			cufftDestroy(Plan1DFFT_cu);
-			Plan1DFFT_cu = NULL;
-		}
-	})
+	GPU_COND(pGpuUsage, {})
 	else
 	{
 		//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
