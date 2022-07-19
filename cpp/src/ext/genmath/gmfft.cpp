@@ -299,16 +299,6 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 		//AuxDebug_TestFFT_Plans();
 		//end debug
 
-	GPU_COND(pGpuUsage,
-		{
-			printf("Using GPU\r\n");
-		})
-		else
-		{
-			printf("Not using GPU\r\n");
-		}
-
-
 	SetupLimitsTr(FFT2DInfo);
 
 	double xStepNx = FFT2DInfo.Nx*FFT2DInfo.xStep;
