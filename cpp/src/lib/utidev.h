@@ -19,9 +19,13 @@
 
 #ifdef _OFFLOAD_GPU
 #include <cuda_runtime.h>
+#include <map>
 #endif
 
-typedef int gpuUsageArg_t;
+typedef struct
+{
+	int deviceIndex;
+} gpuUsageArg_t;
 
 #define ALLOC_ARRAY(type, size) (type *)UtiDev::malloc(sizeof(type)*(size))
 #define FREE_ARRAY(x) UtiDev::free(x); x=NULL
@@ -41,6 +45,7 @@ typedef int gpuUsageArg_t;
  //*************************************************************************
 class UtiDev
 {
+private:
 public:
 	static void Init();
 	static void Fini();
@@ -48,7 +53,9 @@ public:
 	static bool GPUEnabled(gpuUsageArg_t *arg);
 	static void SetGPUStatus(bool enabled);
 	static int GetDevice(gpuUsageArg_t* arg);
-	
+	static void* ToDevice(gpuUsageArg_t* arg, void* hostPtr, size_t size, bool dontCopy = false);
+	static void* ToHostAndFree(gpuUsageArg_t* arg, void* devicePtr, size_t size, bool dontCopy = false);
+	static void MarkUpdated(gpuUsageArg_t* arg, void* ptr, bool devToHost, bool hostToDev);
 	static inline void* malloc(size_t sz) {
 #ifdef _OFFLOAD_GPU
 			void *ptr;
@@ -63,7 +70,7 @@ public:
 
 	static inline void free(void* ptr) {
 #ifdef _OFFLOAD_GPU
-		cudaFree(ptr);
+		cudaFreeAsync(ptr, 0);
 #else
 		std::free(ptr);
 #endif

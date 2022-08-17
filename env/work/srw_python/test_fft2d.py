@@ -54,17 +54,18 @@ else:
 
 arFT_Re = array('f', [0]*(xNp*xNp))
 arFT_Im = array('f', [0]*(xNp*xNp))
-for i in range(xNp*xNp):
-    arFT_Re[i] = ar[2*i]
-    arFT_Im[i] = ar[2*i + 1]
-
-    print(arFT_Re[i], arFT_Im[i])
+#for i in range(xNp*xNp):
+#    arFT_Re[i] = ar[2*i]
+#    arFT_Im[i] = ar[2*i + 1]
+#
+#    print(arFT_Re[i], arFT_Im[i])
 
 #uti_plot1d(arFT_Re, [mesh[0], mesh[0] + mesh[1]*xNp, xNp],
 #           ['Qx', 'Re FT', 'Test FFT {}'.format( 'GPU' if gpuEn else 'CPU')])
 #uti_plot1d(arFT_Im, [mesh[0], mesh[0] + mesh[1]*xNp, xNp],
 #           ['Qx', 'Im FT', 'Test FFT {}'.format( 'GPU' if gpuEn else 'CPU')])
 
+print("Finished.")
 uti_plot2d(arFT_Re, [mesh[0], mesh[0] + mesh[1]*xNp, xNp], [mesh[3], mesh[3] + mesh[4]*xNp, xNp], ['Qx', 'Qy', 'Re FT'])
 uti_plot2d(arFT_Im, [mesh[0], mesh[0] + mesh[1]*xNp, xNp], [mesh[3], mesh[3] + mesh[4]*xNp, xNp], ['Qx', 'Qy', 'Im FT'])
 

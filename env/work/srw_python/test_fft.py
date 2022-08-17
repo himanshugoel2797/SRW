@@ -41,8 +41,8 @@ ar_Im = array('f', [0]*(xNp))
 for i in range(xNp):
     ar_Re[i] = ar[2*i]
     ar_Im[i] = ar[2*i + 1]
-uti_plot1d(ar_Re, [mesh[0], mesh[0] + mesh[1]*xNp, xNp],
-           ['Qx', 'Re FT', 'Input'])
+#uti_plot1d(ar_Re, [mesh[0], mesh[0] + mesh[1]*xNp, xNp],
+#           ['Qx', 'Re FT', 'Input'])
 #input('Waiting for enter.')
 
 if gpuEn:
@@ -56,7 +56,7 @@ for i in range(xNp):
     arFT_Re[i] = ar[2*i]
     arFT_Im[i] = ar[2*i + 1]
 
-    print(arFT_Re[i], arFT_Im[i])
+#    print(arFT_Re[i], arFT_Im[i])
 
 uti_plot1d(arFT_Re, [mesh[0], mesh[0] + mesh[1]*xNp, xNp],
            ['Qx', 'Re FT', 'Test FFT {}'.format( 'GPU' if gpuEn else 'CPU')])

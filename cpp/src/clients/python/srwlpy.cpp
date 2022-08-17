@@ -3333,11 +3333,11 @@ void ParseDeviceParam(PyObject* oDev, gpuUsageArg_t *pGpuUsage) //HG10202021
 {
 	if (oDev != 0) {
 		if (PyLong_Check(oDev)) {
-			*pGpuUsage = _PyLong_AsInt(oDev);
+			pGpuUsage->deviceIndex = _PyLong_AsInt(oDev);
 			return;
 		}
 	}
-	*pGpuUsage = 0;
+	pGpuUsage = NULL;
 }
 
 /************************************************************************//**
