@@ -47,7 +47,7 @@ public:
 		GenOptElemList.push_back(OptElemHndl);
 	}
 
-	int PropagateRadiation(srTSRWRadStructAccessData* pRadAccessData, srTParPrecWfrPropag& ParPrecWfrPropag, srTRadResizeVect& ResizeBeforeAndAfterVect)
+	int PropagateRadiation(srTSRWRadStructAccessData* pRadAccessData, srTParPrecWfrPropag& ParPrecWfrPropag, srTRadResizeVect& ResizeBeforeAndAfterVect, gpuUsageArg_t* pGpuUsage)
 	{
 		int AmOfElem = (int)GenOptElemList.size(); //OC110104
 		int ElemCount = 0; //OC110104
@@ -65,7 +65,7 @@ public:
 			}
 
 			//if(result = ((srTGenOptElem*)((*iter).rep))->PropagateRadiation(pRadAccessData, MethNo, ResizeBeforeAndAfterVect)) return result;
-			if(result = ((srTGenOptElem*)((*iter).rep))->PropagateRadiation(pRadAccessData, ParPrecWfrPropag, ResizeBeforeAndAfterVect)) return result;
+			if(result = ((srTGenOptElem*)((*iter).rep))->PropagateRadiation(pRadAccessData, ParPrecWfrPropag, ResizeBeforeAndAfterVect, pGpuUsage)) return result;
 		}
 		ParPrecWfrPropag.UseResAfter = GenUseResAfter; //OC110104
 		return 0;

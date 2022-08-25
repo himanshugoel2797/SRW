@@ -583,7 +583,7 @@ int srTDriftSpace::PropagateRadiationSimple_PropToWaistBeyondParax(srTSRWRadStru
 
 //int srTDriftSpace::PropagateRadiationSimple_PropFromWaist(srTSRWRadStructAccessData* pRadAccessData, srTDriftPropBufVars* pBufVars) //OC06092019
 //OC01102019 (restored)
-int srTDriftSpace::PropagateRadiationSimple_PropFromWaist(srTSRWRadStructAccessData* pRadAccessData)
+int srTDriftSpace::PropagateRadiationSimple_PropFromWaist(srTSRWRadStructAccessData* pRadAccessData, gpuUsageArg_t *pGpuUsage)
 {//Should be very similar to PropagateRadiationSimple_PropToWaist, consider merging
 	int result = 0;
 	

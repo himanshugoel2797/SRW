@@ -20,7 +20,12 @@
 #ifdef _OFFLOAD_GPU
 #include <cuda_runtime.h>
 #include <map>
+#if CUDART_VERSION < 11020
+#error CUDA version too low, need at least 11.2
 #endif
+#endif
+
+
 
 typedef struct
 {

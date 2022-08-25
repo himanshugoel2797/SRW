@@ -29,6 +29,7 @@
 #include "srinterf.h"
 #include "sropthck.h"
 #include "sroptgrat.h"
+#include "utidev.h"
 
 #ifdef _WITH_OMP //Pre-processor definition for compiling with OpenMP library
 #include "omp.h"
@@ -146,7 +147,7 @@ int srTGenOptElem::ExtraDataExpected(const char* sElemID) //OC01062020
 
 //*************************************************************************
 
-int srTGenOptElem::TraverseRadZXE(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars) //OC29082019
+int srTGenOptElem::TraverseRadZXE(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars, long pBufVarSz, gpuUsageArg_t* pGpuUsage) //OC29082019
 //int srTGenOptElem::TraverseRadZXE(srTSRWRadStructAccessData* pRadAccessData)
 {
 	float *pEx0 = pRadAccessData->pBaseRadX;
@@ -731,7 +732,7 @@ int srTGenOptElem::RemoveSliceConstE_FromGenRadStruct(srTSRWRadStructAccessData*
 
 //*************************************************************************
 
-int srTGenOptElem::SetupWfrEdgeCorrData(srTSRWRadStructAccessData* pRadAccessData, float* pDataEx, float* pDataEz, srTDataPtrsForWfrEdgeCorr& DataPtrsForWfrEdgeCorr)
+int srTGenOptElem::SetupWfrEdgeCorrData(srTSRWRadStructAccessData* pRadAccessData, float* pDataEx, float* pDataEz, srTDataPtrsForWfrEdgeCorr& DataPtrsForWfrEdgeCorr, gpuUsageArg_t *pGpuUsage)
 {
 	int result;
 
@@ -1015,7 +1016,7 @@ int srTGenOptElem::SetupWfrEdgeCorrData1D(srTRadSect1D* pRadSect1D, float* pData
 
 //*************************************************************************
 
-void srTGenOptElem::MakeWfrEdgeCorrection(srTSRWRadStructAccessData* pRadAccessData, float* pDataEx, float* pDataEz, srTDataPtrsForWfrEdgeCorr& DataPtrs)
+void srTGenOptElem::MakeWfrEdgeCorrection(srTSRWRadStructAccessData* pRadAccessData, float* pDataEx, float* pDataEz, srTDataPtrsForWfrEdgeCorr& DataPtrs, gpuUsageArg_t *pGpuUsage)
 {
 	float *tEx = pDataEx, *tEz = pDataEz;
 
@@ -2153,7 +2154,7 @@ void srTGenOptElem::FindMinMaxRatio(double* Arr1, double* Arr2, int n, double& M
 
 //*************************************************************************
 
-int srTGenOptElem::RadResizeGen(srTSRWRadStructAccessData& SRWRadStructAccessData, srTRadResize& RadResizeStruct)
+int srTGenOptElem::RadResizeGen(srTSRWRadStructAccessData& SRWRadStructAccessData, srTRadResize& RadResizeStruct, gpuUsageArg_t *pGpuUsage)
 {
 	//Added by SY (for profiling?) at parallelizing SRW via OpenMP:
 	//double start;
@@ -2790,7 +2791,7 @@ int srTGenOptElem::RadResizeGen(srTSRWRadStructAccessData& SRWRadStructAccessDat
 
 //*************************************************************************
 
-int srTGenOptElem::RadResizeCore(srTSRWRadStructAccessData& OldRadAccessData, srTSRWRadStructAccessData& NewRadAccessData, srTRadResize& RadResizeStruct, char PolComp)
+int srTGenOptElem::RadResizeCore(srTSRWRadStructAccessData& OldRadAccessData, srTSRWRadStructAccessData& NewRadAccessData, srTRadResize& RadResizeStruct, char PolComp, gpuUsageArg_t *pGpuUsage)
 {
 	//Added by SY (for profiling?) at parallelizing SRW via OpenMP:
 	//double start;
@@ -4474,7 +4475,7 @@ char srTGenOptElem::WaveFrontTermCanBeTreated(srTSRWRadStructAccessData& RadAcce
 
 //*************************************************************************
 
-void srTGenOptElem::TreatStronglyOscillatingTerm(srTSRWRadStructAccessData& RadAccessData, char AddOrRem, char PolComp, int ieOnly)
+void srTGenOptElem::TreatStronglyOscillatingTerm(srTSRWRadStructAccessData& RadAccessData, char AddOrRem, char PolComp, int ieOnly, gpuUsageArg_t* pGpuUsage)
 {
 	//Later treat X and Z coordinates separately here!!!
 
