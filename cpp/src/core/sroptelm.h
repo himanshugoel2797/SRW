@@ -124,7 +124,13 @@ public:
 #endif
 	}
 
-	virtual int PropagateRadiation(srTSRWRadStructAccessData*, srTParPrecWfrPropag&, srTRadResizeVect&, gpuUsageArg_t* =0) { return 0;}
+	virtual int PropagateRadiation(srTSRWRadStructAccessData*, srTParPrecWfrPropag&, srTRadResizeVect&, gpuUsageArg_t* =0)
+	{
+#if _DEBUG
+		printf("Using empty PropagateRadiation function, this is likely a bug!\r\n");
+#endif
+		return 0;
+	}
 
 	virtual int PropagateRadMoments(srTSRWRadStructAccessData*, srTMomentsRatios*) { return 0;}
 	virtual int PropagateWaveFrontRadius(srTSRWRadStructAccessData*) { return 0;}
@@ -133,12 +139,24 @@ public:
 
 	//virtual int PropagateRadiationSimple(srTSRWRadStructAccessData*, void* pBuf=0) { return 0;} //OC06092019
 	//OC01102019 (restored)
-	virtual int PropagateRadiationSimple(srTSRWRadStructAccessData*, gpuUsageArg_t* =0) { return 0;}
+	virtual int PropagateRadiationSimple(srTSRWRadStructAccessData*, gpuUsageArg_t* =0) 
+	{
+#if _DEBUG
+		printf("Using empty PropagateRadiationSimple function, this is likely a bug!\r\n");
+#endif
+		return 0;
+	}
 	virtual int PropagateRadiationSimple1D(srTRadSect1D*) { return 0;}
 	
 	//virtual int PropagateRadiationSingleE_Meth_0(srTSRWRadStructAccessData* pRadAccessData, srTSRWRadStructAccessData* pPrevRadData, void* pBuf=0) { return 0;} //OC06092019
 	//OC01102019 (restored)
-	virtual int PropagateRadiationSingleE_Meth_0(srTSRWRadStructAccessData* pRadAccessData, srTSRWRadStructAccessData* pPrevRadData, gpuUsageArg_t* pGpuUsage=0) { return 0;}
+	virtual int PropagateRadiationSingleE_Meth_0(srTSRWRadStructAccessData* pRadAccessData, srTSRWRadStructAccessData* pPrevRadData, gpuUsageArg_t* pGpuUsage=0)
+	{
+#if _DEBUG
+		printf("Using empty PropagateRadiationSingleE_Meth_0 function, this is likely a bug!\r\n");
+#endif
+		return 0;
+	}
 
 	virtual int RangeShouldBeAdjustedAtPropag() { return 1;}
 	virtual int ResolutionShouldBeAdjustedAtPropag() { return 1;}

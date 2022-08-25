@@ -3343,7 +3343,7 @@ void ParseDeviceParam(PyObject* oDev, gpuUsageArg_t *pGpuUsage) //HG10202021
 			return;
 		}
 	}
-	pGpuUsage = NULL;
+	pGpuUsage->deviceIndex = 0;
 }
 
 /************************************************************************//**

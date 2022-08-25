@@ -3113,18 +3113,18 @@ int srTSRWRadStructAccessData::SetupWfrEdgeCorrData(float* pDataEx, float* pData
 			if(dzSt != 0.)
 			{
 				long jzSt2 = (izWfrMinLower + 1) << 1;
-				DataPtrsForWfrEdgeCorr.fxFizSt[0] = *(DataPtrsForWfrEdgeCorr.FFTArrXFiEx + jzSt2);
-				DataPtrsForWfrEdgeCorr.fxFizSt[1] = *(DataPtrsForWfrEdgeCorr.FFTArrXFiEx + jzSt2 + 1);
-				DataPtrsForWfrEdgeCorr.fxFizSt[2] = *(DataPtrsForWfrEdgeCorr.FFTArrXFiEz + jzSt2);
-				DataPtrsForWfrEdgeCorr.fxFizSt[3] = *(DataPtrsForWfrEdgeCorr.FFTArrXFiEz + jzSt2 + 1);
+				DataPtrsForWfrEdgeCorr.fxFizSt[0] = (jzSt2);
+				DataPtrsForWfrEdgeCorr.fxFizSt[1] = (jzSt2 + 1);
+				DataPtrsForWfrEdgeCorr.fxFizSt[2] = (jzSt2);
+				DataPtrsForWfrEdgeCorr.fxFizSt[3] = (jzSt2 + 1);
 			}
 			if(dzFi != 0.)
 			{
 				long jzFi2 = izWfrMaxLower << 1;
-				DataPtrsForWfrEdgeCorr.fxFizFi[0] = *(DataPtrsForWfrEdgeCorr.FFTArrXFiEx + jzFi2);
-				DataPtrsForWfrEdgeCorr.fxFizFi[1] = *(DataPtrsForWfrEdgeCorr.FFTArrXFiEx + jzFi2 + 1);
-				DataPtrsForWfrEdgeCorr.fxFizFi[2] = *(DataPtrsForWfrEdgeCorr.FFTArrXFiEz + jzFi2);
-				DataPtrsForWfrEdgeCorr.fxFizFi[3] = *(DataPtrsForWfrEdgeCorr.FFTArrXFiEz + jzFi2 + 1);
+				DataPtrsForWfrEdgeCorr.fxFizFi[0] = (jzFi2);
+				DataPtrsForWfrEdgeCorr.fxFizFi[1] = (jzFi2 + 1);
+				DataPtrsForWfrEdgeCorr.fxFizFi[2] = (jzFi2);
+				DataPtrsForWfrEdgeCorr.fxFizFi[3] = (jzFi2 + 1);
 			}
 
 			FFT1DInfo.pInData = DataPtrsForWfrEdgeCorr.FFTArrXFiEx;

@@ -1050,6 +1050,7 @@ void srTGenOptElem::MakeWfrEdgeCorrection(srTSRWRadStructAccessData* pRadAccessD
 		double dxFi_dzSt = DataPtrs.dxFi*DataPtrs.dzSt;
 		double dxFi_dzFi = DataPtrs.dxFi*DataPtrs.dzFi;
 		long TwoNz = pRadAccessData->nz << 1;
+		long TwoNx = pRadAccessData->nx << 1;
 		long PerWfr = pRadAccessData->nx * pRadAccessData->nz * 2;
 
 		for(long iwfr=0; iwfr<pRadAccessData->nwfr; iwfr++)
@@ -1166,11 +1167,11 @@ void srTGenOptElem::MakeWfrEdgeCorrection(srTSRWRadStructAccessData* pRadAccessD
 					{
 						float ExpZStRe = DataPtrs.ExpArrZSt[Two_iz], ExpZStIm = DataPtrs.ExpArrZSt[Two_iz_p_1];
 
-						bRe = DataPtrs.FFTArrZStEx[Two_ix+TwoNz*iwfr]; bIm = DataPtrs.FFTArrZStEx[Two_ix_p_1+TwoNz*iwfr];
+						bRe = DataPtrs.FFTArrZStEx[Two_ix+TwoNx*iwfr]; bIm = DataPtrs.FFTArrZStEx[Two_ix_p_1+TwoNx*iwfr];
 						ExRe += (float)(DataPtrs.dzSt*(ExpZStRe*bRe - ExpZStIm*bIm));
 						ExIm += (float)(DataPtrs.dzSt*(ExpZStRe*bIm + ExpZStIm*bRe));
 
-						bRe = DataPtrs.FFTArrZStEz[Two_ix+TwoNz*iwfr]; bIm = DataPtrs.FFTArrZStEz[Two_ix_p_1+TwoNz*iwfr];
+						bRe = DataPtrs.FFTArrZStEz[Two_ix+TwoNx*iwfr]; bIm = DataPtrs.FFTArrZStEz[Two_ix_p_1+TwoNx*iwfr];
 						EzRe += (float)(DataPtrs.dzSt*(ExpZStRe*bRe - ExpZStIm*bIm));
 						EzIm += (float)(DataPtrs.dzSt*(ExpZStRe*bIm + ExpZStIm*bRe));
 					}
@@ -1178,11 +1179,11 @@ void srTGenOptElem::MakeWfrEdgeCorrection(srTSRWRadStructAccessData* pRadAccessD
 					{
 						float ExpZFiRe = DataPtrs.ExpArrZFi[Two_iz], ExpZFiIm = DataPtrs.ExpArrZFi[Two_iz_p_1];
 
-						bRe = DataPtrs.FFTArrZFiEx[Two_ix+TwoNz*iwfr]; bIm = DataPtrs.FFTArrZFiEx[Two_ix_p_1+TwoNz*iwfr];
+						bRe = DataPtrs.FFTArrZFiEx[Two_ix+TwoNx*iwfr]; bIm = DataPtrs.FFTArrZFiEx[Two_ix_p_1+TwoNx*iwfr];
 						ExRe -= (float)(DataPtrs.dzFi*(ExpZFiRe*bRe - ExpZFiIm*bIm));
 						ExIm -= (float)(DataPtrs.dzFi*(ExpZFiRe*bIm + ExpZFiIm*bRe));
 
-						bRe = DataPtrs.FFTArrZFiEz[Two_ix+TwoNz*iwfr]; bIm = DataPtrs.FFTArrZFiEz[Two_ix_p_1+TwoNz*iwfr];
+						bRe = DataPtrs.FFTArrZFiEz[Two_ix+TwoNx*iwfr]; bIm = DataPtrs.FFTArrZFiEz[Two_ix_p_1+TwoNx*iwfr];
 						EzRe -= (float)(DataPtrs.dzFi*(ExpZFiRe*bRe - ExpZFiIm*bIm));
 						EzIm -= (float)(DataPtrs.dzFi*(ExpZFiRe*bIm + ExpZFiIm*bRe));
 					}

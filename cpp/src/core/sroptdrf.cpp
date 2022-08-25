@@ -625,7 +625,7 @@ int srTDriftSpace::PropagateRadiationSimple_PropFromWaist(srTSRWRadStructAccessD
 	//OCTEST (commented-out "edge correction")
 	//OC01102019 (uncommented)
 	srTDataPtrsForWfrEdgeCorr DataPtrsForWfrEdgeCorr;
-	if(result = SetupWfrEdgeCorrData(pRadAccessData, pRadAccessData->pBaseRadX, pRadAccessData->pBaseRadZ, DataPtrsForWfrEdgeCorr)) return result;
+	if(result = SetupWfrEdgeCorrData(pRadAccessData, pRadAccessData->pBaseRadX, pRadAccessData->pBaseRadZ, DataPtrsForWfrEdgeCorr, pGpuUsage)) return result;
 
 	CGenMathFFT2D FFT2D;
 
