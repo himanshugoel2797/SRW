@@ -4,7 +4,7 @@
 #include <srradstr.h>
 #include <srstraux.h>
 
-void TreatStronglyOscillatingTerm_CUDA(srTSRWRadStructAccessData& RadAccessData, bool TreatPolCompX, bool TreatPolCompZ, int ieStart, int ieBefEnd, double ConstRx, double ConstRz);
+void TreatStronglyOscillatingTerm_GPU(srTSRWRadStructAccessData& RadAccessData, bool TreatPolCompX, bool TreatPolCompZ, int ieStart, int ieBefEnd, double ConstRx, double ConstRz);
 void MakeWfrEdgeCorrection_GPU(srTSRWRadStructAccessData& RadAccessData, float* pDataEx, float* pDataEz, srTDataPtrsForWfrEdgeCorr& DataPtrs);
 
 #ifdef __CUDACC__
@@ -20,7 +20,7 @@ template<class T> __global__ void RadPointModifierParallel_Kernel(srTSRWRadStruc
 		EXZ.z = RadAccessData.zStart + iz * RadAccessData.zStep;
 		EXZ.x = RadAccessData.xStart + ix * RadAccessData.xStep;
 
-		for (int iwfr = 0; iwfr < RadAccessData.nWfr; iwfr++)
+		for (int iwfr = 0; iwfr < RadAccessData.nwfr; iwfr++)
 			for (int ie = 0; ie < RadAccessData.ne; ie++) {
 				EXZ.e = RadAccessData.eStart + ie * RadAccessData.eStep;
 				EXZ.aux_offset = RadAccessData.ne * RadAccessData.nx * RadAccessData.nz * 2 * iwfr + RadAccessData.ne * RadAccessData.nx * 2 * iz + RadAccessData.ne * 2 * ix + ie * 2;

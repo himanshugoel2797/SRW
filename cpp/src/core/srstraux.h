@@ -1587,7 +1587,7 @@ struct srTInterpolAux01 {
 	double cAx2z0, cAx2z1, cAx2z2, cAx2z3, cAx3z0, cAx3z1, cAx3z2, cAx3z3;
 	double cLAx1z0, cLAx0z1, cLAx1z1;
 
-	srTInterpolAux01()
+	GPU_PORTABLE srTInterpolAux01()
 	{
 		cAx0z1 = 0.1666666667;
 		cAx0z2 = 0.5;

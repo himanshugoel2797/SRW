@@ -28,7 +28,7 @@ SRW_FLAGS += -std=c++11
 LDFLAGS += -L$(NVCOMPILERS)/$(NVARCH)/$(NVVERSION)/cuda/lib64 -lcudart_static -lcudadevrt -lcufft -lrt
 NVCFLAGS = -O3 -arch=sm_80 -dlto -rdc=true
 #CUDA_OBJ= gmfftgpu0.o srradmnpgpu.o srradstrgpu.o sroptelmgpu.o #srradintgpu.o
-CUDA_OBJ=gmfftgpu0.o
+CUDA_OBJ=gmfftgpu0.o srradstrgpu.o sroptelmgpu.o
 else
 ifeq ($(MODE), omp)
 SRW_SRC_DEF+= -D_WITH_OMP

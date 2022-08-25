@@ -261,6 +261,7 @@ struct SRWLStructWaveFront {
 	double Rx, Ry; /* instant wavefront radii */
 	double dRx, dRy; /* error of wavefront radii */
 	double xc, yc; /* instant transverse coordinates of wavefront instant "source center" */
+	long nwfr; /* number of wavefronts described */
 	//double xMin, xMax, yMin, yMax; /* exact wavefront boundaries (?) */
 	double avgPhotEn; /* averarage photon energy for time-domain simulations */
 

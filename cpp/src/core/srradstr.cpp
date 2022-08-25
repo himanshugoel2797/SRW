@@ -551,6 +551,7 @@ void srTSRWRadStructAccessData::InSRWRadPtrs(SRWLWfr& srwlWfr)
 	RobsX = srwlWfr.Rx; RobsZ = srwlWfr.Ry;
 	RobsXAbsErr = srwlWfr.dRx; RobsZAbsErr = srwlWfr.dRy;
 	xc = srwlWfr.xc; zc = srwlWfr.yc;
+	nwfr = srwlWfr.nwfr;
 
 	//xWfrMin = srwlWfr.xStart; xWfrMax = srwlWfr.xFin;
 	//zWfrMin = srwlWfr.yStart; zWfrMax = srwlWfr.yFin;
@@ -649,6 +650,7 @@ void srTSRWRadStructAccessData::OutSRWRadPtrs(srTSRWRadInData* p)
 	p->RobsX = RobsX; p->RobsZ = RobsZ;
 	p->RobsXAbsErr = RobsXAbsErr; p->RobsZAbsErr = RobsZAbsErr;
 	p->xc = xc; p->zc = zc;
+	p->nwfr = nwfr;
 	p->xWfrMin = xWfrMin; p->xWfrMax = xWfrMax;
 	p->zWfrMin = zWfrMin; p->zWfrMax = zWfrMax;
 
@@ -706,6 +708,7 @@ void srTSRWRadStructAccessData::OutSRWRadPtrs(SRWLWfr& srwlWfr)
 	srwlWfr.Rx = RobsX; srwlWfr.Ry = RobsZ;
 	srwlWfr.dRx = RobsXAbsErr; srwlWfr.dRy = RobsZAbsErr;
 	srwlWfr.xc = xc; srwlWfr.yc = zc;
+	srwlWfr.nwfr = nwfr;
 
 	//p->xWfrMin = xWfrMin; p->xWfrMax = xWfrMax;
 	//p->zWfrMin = zWfrMin; p->zWfrMax = zWfrMax;

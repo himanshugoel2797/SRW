@@ -264,7 +264,7 @@ public:
 	int RemoveSliceConstE_FromGenRadStruct(srTSRWRadStructAccessData*, long);
 
 	//int SetRadRepres(srTSRWRadStructAccessData*, char);
-	int SetRadRepres(srTSRWRadStructAccessData*, char, double* ar_xStartInSlicesE=0, double* ar_zStartInSlicesE=0);
+	int SetRadRepres(srTSRWRadStructAccessData*, char, double* ar_xStartInSlicesE=0, double* ar_zStartInSlicesE=0, gpuUsageArg_t* =0);
 	int SetRadRepres1D(srTRadSect1D*, char);
 
 	int SetupWfrEdgeCorrData(srTSRWRadStructAccessData*, float*, float*, srTDataPtrsForWfrEdgeCorr&, gpuUsageArg_t* =0);
@@ -283,6 +283,9 @@ public:
 	int RadResizeGen(srTSRWRadStructAccessData&, srTRadResize&, gpuUsageArg_t* =0);
 	int RadResizeGenE(srTSRWRadStructAccessData&, srTRadResize&);
 	int RadResizeCore(srTSRWRadStructAccessData&, srTSRWRadStructAccessData&, srTRadResize&, char =0, gpuUsageArg_t* =0);
+#ifdef _OFFLOAD_GPU
+	int RadResizeCore_GPU(srTSRWRadStructAccessData&, srTSRWRadStructAccessData&, char=0);
+#endif
 	int RadResizeCoreE(srTSRWRadStructAccessData&, srTSRWRadStructAccessData&, srTRadResize&, char =0);
 	int RadResizeCore_OnlyLargerRange(srTSRWRadStructAccessData& OldRadAccessData, srTSRWRadStructAccessData& NewRadAccessData, srTRadResize& RadResizeStruct, char PolComp);
 	int RadResizeCore_OnlyLargerRangeE(srTSRWRadStructAccessData& OldRadAccessData, srTSRWRadStructAccessData& NewRadAccessData, srTRadResize& RadResizeStruct, char PolComp);

@@ -41,7 +41,7 @@ struct srTSRWRadInData {
 	waveHndl wRad, wRadX, wRadZ;
 	int hStateRadX, hStateRadZ;
 	double eStep, eStart, xStep, xStart, zStep, zStart;
-	long ne, nx, nz;
+	long ne, nx, nz, nwfr;
 	//long long ne, nx, nz; //OC26042019
 
 	//double xStartTr, zStartTr;

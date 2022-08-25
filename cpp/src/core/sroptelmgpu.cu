@@ -54,7 +54,7 @@ __global__ void TreatStronglyOscillatingTerm_Kernel(srTSRWRadStructAccessData Ra
         float* pEX_StartForWfr = RadAccessData.pBaseRadX + offset;
         float* pEZ_StartForWfr = RadAccessData.pBaseRadZ + offset;
 
-        for (int iwfr = 0; iwfr < RadAccessData.nWfr; iwfr++)
+        for (int iwfr = 0; iwfr < RadAccessData.nwfr; iwfr++)
         {
             long long iwfrPerWfr = iwfr * PerWfr;
 
@@ -78,7 +78,7 @@ __global__ void TreatStronglyOscillatingTerm_Kernel(srTSRWRadStructAccessData Ra
     }
 }
 
-void TreatStronglyOscillatingTerm_CUDA(srTSRWRadStructAccessData& RadAccessData, bool TreatPolCompX, bool TreatPolCompZ, int ieStart, int ieBefEnd, double ConstRx, double ConstRz)
+void TreatStronglyOscillatingTerm_GPU(srTSRWRadStructAccessData& RadAccessData, bool TreatPolCompX, bool TreatPolCompZ, int ieStart, int ieBefEnd, double ConstRx, double ConstRz)
 {
     const int bs = 256;
     dim3 blocks(RadAccessData.nx / bs + ((RadAccessData.nx & (bs - 1)) != 0), RadAccessData.nz, ieBefEnd - ieStart);
@@ -98,7 +98,7 @@ __global__ void MakeWfrEdgeCorrection_Kernel(srTSRWRadStructAccessData RadAccess
     int iz = (blockIdx.y * blockDim.y + threadIdx.y); //nz range
     int iwfr = (blockIdx.z * blockDim.z + threadIdx.z); //nwfr range
 
-    if (ix < RadAccessData.nx && iz < RadAccessData.nz && iwfr < RadAccessData.nWfr)
+    if (ix < RadAccessData.nx && iz < RadAccessData.nz && iwfr < RadAccessData.nwfr)
     {
 		//float dxSt = (float)DataPtrs.dxSt;
 		//float dxFi = (float)DataPtrs.dxFi;
@@ -245,7 +245,7 @@ __global__ void MakeWfrEdgeCorrection_Kernel(srTSRWRadStructAccessData RadAccess
 void MakeWfrEdgeCorrection_GPU(srTSRWRadStructAccessData& RadAccessData, float* pDataEx, float* pDataEz, srTDataPtrsForWfrEdgeCorr& DataPtrs)
 {
 	const int bs = 256;
-	dim3 blocks(RadAccessData.nx / bs + ((RadAccessData.nx & (bs - 1)) != 0), RadAccessData.nz, RadAccessData.nWfr);
+	dim3 blocks(RadAccessData.nx / bs + ((RadAccessData.nx & (bs - 1)) != 0), RadAccessData.nz, RadAccessData.nwfr);
 	dim3 threads(bs, 1);
 	MakeWfrEdgeCorrection_Kernel << <blocks, threads >> > (RadAccessData, pDataEx, pDataEz, DataPtrs, (float)DataPtrs.dxSt, (float)DataPtrs.dxFi, (float)DataPtrs.dzSt, (float)DataPtrs.dzFi);
 
@@ -463,14 +463,14 @@ template<bool TreatPolCompX, bool TreatPolCompZ> __global__ void RadResizeCore_K
 	}
 }
 
-int srTGenOptElem::RadResizeCoreParallel(srTSRWRadStructAccessData& OldRadAccessData, srTSRWRadStructAccessData& NewRadAccessData, char PolComp)
+int srTGenOptElem::RadResizeCore_GPU(srTSRWRadStructAccessData& OldRadAccessData, srTSRWRadStructAccessData& NewRadAccessData, char PolComp)
 {
 	char TreatPolCompX = ((PolComp == 0) || (PolComp == 'x'));
 	char TreatPolCompZ = ((PolComp == 0) || (PolComp == 'z'));
 
 	int nx = NewRadAccessData.AuxLong2 - NewRadAccessData.AuxLong1 + 1;
 	int nz = NewRadAccessData.AuxLong4 - NewRadAccessData.AuxLong3 + 1;
-	int nWfr = NewRadAccessData.nWfr;
+	int nWfr = NewRadAccessData.nwfr;
 	int ne = NewRadAccessData.ne;
 
 	const int bs = 32;

@@ -618,6 +618,7 @@ int srTDriftSpace::PropagateRadiationSimple_PropFromWaist(srTSRWRadStructAccessD
 	FFT2DInfo.yStart = pRadAccessData->zStart;
 	FFT2DInfo.Nx = pRadAccessData->nx;
 	FFT2DInfo.Ny = pRadAccessData->nz;
+	FFT2DInfo.howMany = pRadAccessData->nwfr;
 	FFT2DInfo.Dir = 1;
 	FFT2DInfo.UseGivenStartTrValues = 0;
 
@@ -652,16 +653,16 @@ int srTDriftSpace::PropagateRadiationSimple_PropFromWaist(srTSRWRadStructAccessD
 	//}
 #else
 	FFT2DInfo.pData = pRadAccessData->pBaseRadX;
-	if(result = FFT2D.Make2DFFT(FFT2DInfo)) return result;
+	if(result = FFT2D.Make2DFFT(FFT2DInfo, 0, 0, pGpuUsage)) return result;
 	FFT2DInfo.pData = pRadAccessData->pBaseRadZ;
-	if(result = FFT2D.Make2DFFT(FFT2DInfo)) return result;
+	if(result = FFT2D.Make2DFFT(FFT2DInfo, 0, 0, pGpuUsage)) return result;
 #endif
 
 	//OCTEST (commented-out "edge correction")
 	//OC01102019 (uncommented)
 	if(DataPtrsForWfrEdgeCorr.WasSetup)
 	{
-		MakeWfrEdgeCorrection(pRadAccessData, pRadAccessData->pBaseRadX, pRadAccessData->pBaseRadZ, DataPtrsForWfrEdgeCorr);
+		MakeWfrEdgeCorrection(pRadAccessData, pRadAccessData->pBaseRadX, pRadAccessData->pBaseRadZ, DataPtrsForWfrEdgeCorr, pGpuUsage);
 		DataPtrsForWfrEdgeCorr.DisposeData();
 	}
 
@@ -675,7 +676,7 @@ int srTDriftSpace::PropagateRadiationSimple_PropFromWaist(srTSRWRadStructAccessD
 	//if(result = TraverseRadZXE(pRadAccessData)) return result;
 	//OC01102019 (restored)
 	BufVars.PassNo = 2;
-	if(result = TraverseRadZXE(pRadAccessData, &BufVars)) return result;
+	if(result = TraverseRadZXE(pRadAccessData, &BufVars, sizeof(srTDriftPropBufVars), pGpuUsage)) return result;
 	//OC06092019
 	//pBufVars->PassNo = 2;
 	//if(result = TraverseRadZXE(pRadAccessData, pBufVars)) return result;

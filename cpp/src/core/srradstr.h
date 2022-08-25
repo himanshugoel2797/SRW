@@ -26,6 +26,9 @@
 //#endif
 //#endif
 
+#include "utidev.h"
+#include "srradstrgpu.h"
+
 #ifdef __IGOR_PRO__
 #include "XOPStandardHeaders.h"			// Include ANSI headers, Mac headers, IgorXOP.h, XOP.h and XOPSupport.h
 #else
@@ -72,7 +75,7 @@ public:
 	waveHndl wRad, wRadX, wRadZ;
 	int hStateRadX, hStateRadZ;
 	double eStep, eStart, xStep, xStart, zStep, zStart;
-	long ne, nx, nz;
+	long ne, nx, nz, nwfr;
 	//long long ne, nx, nz; //OC26042019
 
 	double xStartTr, zStartTr;
@@ -491,45 +494,55 @@ public:
 		}
 	}
 
-	void MultiplyElFieldByPhaseLin(double xMult, double zMult)
+	void MultiplyElFieldByPhaseLin(double xMult, double zMult, gpuUsageArg_t* pGpuUsage =0)
 	{
 		bool RadXisDefined = (pBaseRadX != 0);
 		bool RadZisDefined = (pBaseRadZ != 0);
 		if((!RadXisDefined) && (!RadZisDefined)) return;
 
-		float *tEx = pBaseRadX;
-		float *tEz = pBaseRadZ;
-		
-		double z = zStart;	
-		for(int iz=0; iz<nz; iz++)
+		GPU_COND(pGpuUsage,
 		{
-			double dPhZ = zMult*z;
-			double x = xStart;
-			for(int ix=0; ix<nx; ix++)
+			MultiplyElFieldByPhaseLin_GPU(xMult, zMult, pBaseRadX, pBaseRadZ, nwfr, nz, nx, ne, zStart, zStep, xStart, xStep);
+		})
+		else
+		{
+			float *tEx = pBaseRadX;
+			float *tEz = pBaseRadZ;
+			
+			for(int iwfr=0; iwfr<nwfr; iwfr++)
 			{
-				double dPh = dPhZ + xMult*x;
-				double cosPh = cos(dPh), sinPh = sin(dPh);
-				
-				for(int ie=0; ie<ne; ie++)
+				double z = zStart;	
+				for(int iz=0; iz<nz; iz++)
 				{
-					if(RadXisDefined) 
+					double dPhZ = zMult*z;
+					double x = xStart;
+					for(int ix=0; ix<nx; ix++)
 					{
-						//*(tEx++) *= a; *(tEx++) *= a;
-						double newReEx = (*tEx)*cosPh - (*(tEx + 1))*sinPh;
-						double newImEx = (*tEx)*sinPh + (*(tEx + 1))*cosPh;
-						*(tEx++) = (float)newReEx; *(tEx++) = (float)newImEx;
+						double dPh = dPhZ + xMult*x;
+						double cosPh = cos(dPh), sinPh = sin(dPh);
+						
+						for(int ie=0; ie<ne; ie++)
+						{
+							if(RadXisDefined) 
+							{
+								//*(tEx++) *= a; *(tEx++) *= a;
+								double newReEx = (*tEx)*cosPh - (*(tEx + 1))*sinPh;
+								double newImEx = (*tEx)*sinPh + (*(tEx + 1))*cosPh;
+								*(tEx++) = (float)newReEx; *(tEx++) = (float)newImEx;
+							}
+							if(RadZisDefined) 
+							{
+								//*(tEz++) *= a; *(tEz++) *= a;
+								double newReEz = (*tEz)*cosPh - (*(tEz + 1))*sinPh;
+								double newImEz = (*tEz)*sinPh + (*(tEz + 1))*cosPh;
+								*(tEz++) = (float)newReEz; *(tEz++) = (float)newImEz;
+							}
+						}
+						x += xStep;
 					}
-					if(RadZisDefined) 
-					{
-						//*(tEz++) *= a; *(tEz++) *= a;
-						double newReEz = (*tEz)*cosPh - (*(tEz + 1))*sinPh;
-						double newImEz = (*tEz)*sinPh + (*(tEz + 1))*cosPh;
-						*(tEz++) = (float)newReEz; *(tEz++) = (float)newImEz;
-					}
+					z += zStep;
 				}
-				x += xStep;
 			}
-			z += zStep;
 		}
 	}
 	

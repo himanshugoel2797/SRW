@@ -133,7 +133,7 @@ template <typename T> __global__ void TreatShift_Kernel(T* pData, long HowMany, 
     }
 }
 
-void RepairSignAfter1DFFT_CUDA(float* pAfterFFT, long HowMany, long Nx) 
+void RepairSignAfter1DFFT_GPU(float* pAfterFFT, long HowMany, long Nx) 
 {
     const int bs = 256;
     dim3 blocks(Nx / bs + ((Nx & (bs - 1)) != 0));
@@ -147,7 +147,7 @@ void RepairSignAfter1DFFT_CUDA(float* pAfterFFT, long HowMany, long Nx)
 #endif
 }
 
-void RotateDataAfter1DFFT_CUDA(float* pAfterFFT, long HowMany, long Nx) 
+void RotateDataAfter1DFFT_GPU(float* pAfterFFT, long HowMany, long Nx) 
 {
     const int bs = 256;
     dim3 blocks(Nx / (2 * bs) + ((Nx / 2 & (bs - 1)) != 0));
@@ -161,7 +161,7 @@ void RotateDataAfter1DFFT_CUDA(float* pAfterFFT, long HowMany, long Nx)
 #endif
 }
 
-void RepairAndRotateDataAfter1DFFT_CUDA(float* pAfterFFT, long HowMany, long Nx, float Mult) 
+void RepairAndRotateDataAfter1DFFT_GPU(float* pAfterFFT, long HowMany, long Nx, float Mult) 
 {
 
 #ifdef _DEBUG
@@ -182,7 +182,7 @@ void RepairAndRotateDataAfter1DFFT_CUDA(float* pAfterFFT, long HowMany, long Nx,
 #endif
 }
 
-void NormalizeDataAfter1DFFT_CUDA(float* pAfterFFT, long HowMany, long Nx, double Mult) 
+void NormalizeDataAfter1DFFT_GPU(float* pAfterFFT, long HowMany, long Nx, double Mult) 
 {
     const int bs = 256;
     dim3 blocks(Nx / bs + ((Nx & (bs - 1)) != 0), 1);
@@ -196,7 +196,7 @@ void NormalizeDataAfter1DFFT_CUDA(float* pAfterFFT, long HowMany, long Nx, doubl
 #endif
 }
 
-void FillArrayShift_CUDA(double t0, double tStep, long Nx, float* tShiftX) 
+void FillArrayShift_GPU(double t0, double tStep, long Nx, float* tShiftX) 
 {
     const int bs = 256;
     dim3 blocks(Nx / (2 * bs) + ((Nx / 2 & (bs - 1)) != 0), 1);
@@ -210,7 +210,7 @@ void FillArrayShift_CUDA(double t0, double tStep, long Nx, float* tShiftX)
 #endif
 }
 
-void TreatShift_CUDA(float* pData, long HowMany, long Nx, float* tShiftX) 
+void TreatShift_GPU(float* pData, long HowMany, long Nx, float* tShiftX) 
 {
     const int bs = 256;
     dim3 blocks(Nx / bs + ((Nx & (bs - 1)) != 0));
@@ -224,7 +224,7 @@ void TreatShift_CUDA(float* pData, long HowMany, long Nx, float* tShiftX)
 #endif
 }
 
-void RepairSignAfter1DFFT_CUDA(double* pAfterFFT, long HowMany, long Nx) 
+void RepairSignAfter1DFFT_GPU(double* pAfterFFT, long HowMany, long Nx) 
 {
     const int bs = 256;
     dim3 blocks(Nx / bs + ((Nx & (bs - 1)) != 0));
@@ -238,7 +238,7 @@ void RepairSignAfter1DFFT_CUDA(double* pAfterFFT, long HowMany, long Nx)
 #endif
 }
 
-void RotateDataAfter1DFFT_CUDA(double* pAfterFFT, long HowMany, long Nx) 
+void RotateDataAfter1DFFT_GPU(double* pAfterFFT, long HowMany, long Nx) 
 {
     const int bs = 256;
     dim3 blocks(Nx / (2 * bs) + ((Nx & (2 * bs - 1)) != 0));
@@ -252,7 +252,7 @@ void RotateDataAfter1DFFT_CUDA(double* pAfterFFT, long HowMany, long Nx)
 #endif
 }
 
-void RepairAndRotateDataAfter1DFFT_CUDA(double* pAfterFFT, long HowMany, long Nx, double Mult) 
+void RepairAndRotateDataAfter1DFFT_GPU(double* pAfterFFT, long HowMany, long Nx, double Mult) 
 {
     const int bs = 256;
     dim3 blocks(Nx / (2 * bs) + (((Nx / 2) & (bs - 1)) != 0), 1);
@@ -266,7 +266,7 @@ void RepairAndRotateDataAfter1DFFT_CUDA(double* pAfterFFT, long HowMany, long Nx
 #endif
 }
 
-void NormalizeDataAfter1DFFT_CUDA(double* pAfterFFT, long HowMany, long Nx, double Mult) 
+void NormalizeDataAfter1DFFT_GPU(double* pAfterFFT, long HowMany, long Nx, double Mult) 
 {
     const int bs = 256;
     dim3 blocks(Nx / bs + ((Nx & (bs - 1)) != 0));
@@ -280,7 +280,7 @@ void NormalizeDataAfter1DFFT_CUDA(double* pAfterFFT, long HowMany, long Nx, doub
 #endif
 }
 
-void FillArrayShift_CUDA(double t0, double tStep, long Nx, double* tShiftX) 
+void FillArrayShift_GPU(double t0, double tStep, long Nx, double* tShiftX) 
 {
     const int bs = 256;
     dim3 blocks(Nx / (2 * bs) + ((Nx & (2 * bs - 1)) != 0), 1);
@@ -294,7 +294,7 @@ void FillArrayShift_CUDA(double t0, double tStep, long Nx, double* tShiftX)
 #endif
 }
 
-void TreatShift_CUDA(double* pData, long HowMany, long Nx, double* tShiftX) 
+void TreatShift_GPU(double* pData, long HowMany, long Nx, double* tShiftX) 
 {
     const int bs = 256;
     dim3 blocks(Nx / bs + ((Nx & (bs - 1)) != 0));
@@ -480,7 +480,7 @@ template <typename T, bool NeedsShiftX, bool NeedsShiftY> __global__ void TreatS
     }
 }
 
-void RepairSignAfter2DFFT_CUDA(float* pAfterFFT, long Nx, long Ny, long howMany)
+void RepairSignAfter2DFFT_GPU(float* pAfterFFT, long Nx, long Ny, long howMany)
 {
     const int bs = 256;
     dim3 blocks(Nx / bs + ((Nx & (bs - 1)) != 0), Ny);
@@ -488,7 +488,7 @@ void RepairSignAfter2DFFT_CUDA(float* pAfterFFT, long Nx, long Ny, long howMany)
     RepairSignAfter2DFFT_Kernel<float> << <blocks, threads >> > (pAfterFFT, Nx, Ny, Nx * Ny * 2, howMany);
 }
 
-void RotateDataAfter2DFFT_CUDA(float* pAfterFFT, long Nx, long Ny, long howMany)
+void RotateDataAfter2DFFT_GPU(float* pAfterFFT, long Nx, long Ny, long howMany)
 {
     const int bs = 256;
     dim3 blocks(Nx / (2 * bs) + ((Nx / 2 & (bs - 1)) != 0), Ny);
@@ -496,7 +496,7 @@ void RotateDataAfter2DFFT_CUDA(float* pAfterFFT, long Nx, long Ny, long howMany)
     RotateDataAfter2DFFT_Kernel<float> << <blocks, threads >> > (pAfterFFT, Nx / 2, Nx, Ny / 2, Ny, Nx * Ny * 2, howMany);
 }
 
-void RepairSignAndRotateDataAfter2DFFT_CUDA(float* pAfterFFT, long Nx, long Ny, long howMany, float Mult)
+void RepairSignAndRotateDataAfter2DFFT_GPU(float* pAfterFFT, long Nx, long Ny, long howMany, float Mult)
 {
     const int bs = 256;
     dim3 blocks(Nx / (2 * bs) + ((Nx / 2 & (bs - 1)) != 0), Ny/2);
@@ -504,7 +504,7 @@ void RepairSignAndRotateDataAfter2DFFT_CUDA(float* pAfterFFT, long Nx, long Ny, 
     RepairSignAndRotateDataAfter2DFFT_Kernel<float2, float> << <blocks, threads >> > ((float2*)pAfterFFT, Nx / 2, Nx, Ny / 2, Ny, Nx * Ny, howMany, Mult);
 }
 
-void NormalizeDataAfter2DFFT_CUDA(float* pAfterFFT, long Nx, long Ny, long howMany, double Mult)
+void NormalizeDataAfter2DFFT_GPU(float* pAfterFFT, long Nx, long Ny, long howMany, double Mult)
 {
     const int bs = 256;
     dim3 blocks((Nx * Ny) / bs + (((Nx * Ny) & (bs - 1)) != 0), 1);
@@ -512,7 +512,7 @@ void NormalizeDataAfter2DFFT_CUDA(float* pAfterFFT, long Nx, long Ny, long howMa
     NormalizeDataAfter2DFFT_Kernel<float> << <blocks, threads >> > (pAfterFFT, Nx * Ny * 2, howMany,1, Mult);
 }
 
-void TreatShifts2D_CUDA(float* pData, long Nx, long Ny, long howMany, bool NeedsShiftX, bool NeedsShiftY, float* m_ArrayShiftX, float* m_ArrayShiftY)
+void TreatShifts2D_GPU(float* pData, long Nx, long Ny, long howMany, bool NeedsShiftX, bool NeedsShiftY, float* m_ArrayShiftX, float* m_ArrayShiftY)
 {
     const int bs = 256;
     dim3 blocks((Nx) / bs + (((Nx) & (bs - 1)) != 0), Ny);
@@ -523,7 +523,7 @@ void TreatShifts2D_CUDA(float* pData, long Nx, long Ny, long howMany, bool Needs
     else if (NeedsShiftY) TreatShift2D_Kernel<float, false, true> << <blocks, threads >> > (pData, howMany, Nx * 2, Ny, m_ArrayShiftX, m_ArrayShiftY);
 }
 
-void RepairSignAfter2DFFT_CUDA(double* pAfterFFT, long Nx, long Ny, long howMany)
+void RepairSignAfter2DFFT_GPU(double* pAfterFFT, long Nx, long Ny, long howMany)
 {
     const int bs = 256;
     dim3 blocks(Nx / bs + ((Nx & (bs - 1)) != 0), Ny);
@@ -531,7 +531,7 @@ void RepairSignAfter2DFFT_CUDA(double* pAfterFFT, long Nx, long Ny, long howMany
     RepairSignAfter2DFFT_Kernel<double> << <blocks, threads >> > (pAfterFFT, Nx, Ny, Nx * Ny * 2, howMany);
 }
 
-void RotateDataAfter2DFFT_CUDA(double* pAfterFFT, long Nx, long Ny, long howMany)
+void RotateDataAfter2DFFT_GPU(double* pAfterFFT, long Nx, long Ny, long howMany)
 {
     const int bs = 256;
     dim3 blocks(Nx / (2 * bs) + ((Nx / 2 & (bs - 1)) != 0), Ny);
@@ -539,7 +539,7 @@ void RotateDataAfter2DFFT_CUDA(double* pAfterFFT, long Nx, long Ny, long howMany
     RotateDataAfter2DFFT_Kernel<double> << <blocks, threads >> > (pAfterFFT, Nx / 2, Nx, Ny / 2, Ny, Nx * Ny * 2, howMany);
 }
 
-void RepairSignAndRotateDataAfter2DFFT_CUDA(double* pAfterFFT, long Nx, long Ny, long howMany, double Mult)
+void RepairSignAndRotateDataAfter2DFFT_GPU(double* pAfterFFT, long Nx, long Ny, long howMany, double Mult)
 {
     const int bs = 256;
     dim3 blocks(Nx / (2 * bs) + ((Nx / 2 & (bs - 1)) != 0), Ny/2);
@@ -547,7 +547,7 @@ void RepairSignAndRotateDataAfter2DFFT_CUDA(double* pAfterFFT, long Nx, long Ny,
     RepairSignAndRotateDataAfter2DFFT_Kernel<double2, double> << <blocks, threads >> > ((double2*)pAfterFFT, Nx / 2, Nx, Ny / 2, Ny, Nx * Ny, howMany, Mult);
 }
 
-void NormalizeDataAfter2DFFT_CUDA(double* pAfterFFT, long Nx, long Ny, long howMany, double Mult)
+void NormalizeDataAfter2DFFT_GPU(double* pAfterFFT, long Nx, long Ny, long howMany, double Mult)
 {
     const int bs = 256;
     dim3 blocks((Nx * Ny) / bs + (((Nx * Ny) & (bs - 1)) != 0), 1);
@@ -555,7 +555,7 @@ void NormalizeDataAfter2DFFT_CUDA(double* pAfterFFT, long Nx, long Ny, long howM
     NormalizeDataAfter2DFFT_Kernel<double> << <blocks, threads >> > (pAfterFFT, Nx * Ny * 2, howMany,1, Mult);
 }
 
-void TreatShifts2D_CUDA(double* pData, long Nx, long Ny, long howMany, bool NeedsShiftX, bool NeedsShiftY, double* m_ArrayShiftX, double* m_ArrayShiftY)
+void TreatShifts2D_GPU(double* pData, long Nx, long Ny, long howMany, bool NeedsShiftX, bool NeedsShiftY, double* m_ArrayShiftX, double* m_ArrayShiftY)
 {
     const int bs = 256;
     dim3 blocks((Nx) / bs + (((Nx) & (bs - 1)) != 0), Ny);

@@ -408,10 +408,10 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 	{
 		GPU_COND(pGpuUsage, {
 			if (DataToFFT != 0) {
-				TreatShifts2D_CUDA((float*)DataToFFT, Nx, Ny, FFT2DInfo.howMany, NeedsShiftBeforeX, NeedsShiftBeforeY, m_ArrayShiftX, m_ArrayShiftY);
+				TreatShifts2D_GPU((float*)DataToFFT, Nx, Ny, FFT2DInfo.howMany, NeedsShiftBeforeX, NeedsShiftBeforeY, m_ArrayShiftX, m_ArrayShiftY);
 			}
 			else if (dDataToFFT != 0) {
-				TreatShifts2D_CUDA((double*)dDataToFFT, Nx, Ny, FFT2DInfo.howMany, NeedsShiftBeforeX, NeedsShiftBeforeY, m_dArrayShiftX, m_dArrayShiftY);
+				TreatShifts2D_GPU((double*)dDataToFFT, Nx, Ny, FFT2DInfo.howMany, NeedsShiftBeforeX, NeedsShiftBeforeY, m_dArrayShiftX, m_dArrayShiftY);
 			}
 		})
 		else {
@@ -524,15 +524,15 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 		{
 			if (DataToFFT != 0)
 			{
-				//RepairSignAfter2DFFT_CUDA((float*)DataToFFT, Nx, Ny, FFT2DInfo.howMany);
-				//RotateDataAfter2DFFT_CUDA((float*)DataToFFT, Nx, Ny, FFT2DInfo.howMany);
-				RepairSignAndRotateDataAfter2DFFT_CUDA((float*)DataToFFT, Nx, Ny, FFT2DInfo.howMany, Mult);
+				//RepairSignAfter2DFFT_GPU((float*)DataToFFT, Nx, Ny, FFT2DInfo.howMany);
+				//RotateDataAfter2DFFT_GPU((float*)DataToFFT, Nx, Ny, FFT2DInfo.howMany);
+				RepairSignAndRotateDataAfter2DFFT_GPU((float*)DataToFFT, Nx, Ny, FFT2DInfo.howMany, Mult);
 			}
 			else if (dDataToFFT != 0)
 			{
-				//RepairSignAfter2DFFT_CUDA((double*)dDataToFFT, Nx, Ny, FFT2DInfo.howMany);
-				//RotateDataAfter2DFFT_CUDA((double*)dDataToFFT, Nx, Ny, FFT2DInfo.howMany);
-				RepairSignAndRotateDataAfter2DFFT_CUDA((double*)dDataToFFT, Nx, Ny, FFT2DInfo.howMany, Mult);
+				//RepairSignAfter2DFFT_GPU((double*)dDataToFFT, Nx, Ny, FFT2DInfo.howMany);
+				//RotateDataAfter2DFFT_GPU((double*)dDataToFFT, Nx, Ny, FFT2DInfo.howMany);
+				RepairSignAndRotateDataAfter2DFFT_GPU((double*)dDataToFFT, Nx, Ny, FFT2DInfo.howMany, Mult);
 			}
 			alreadyNormalized = true;
 		})
@@ -578,8 +578,8 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 				else Plan2DFFT_cu = *(cufftHandle*)pPrecreatedPlan2DFFT;
 				if (Plan2DFFT_cu == 0) return ERROR_IN_FFT;
 
-				RotateDataAfter2DFFT_CUDA((float*)DataToFFT, Nx, Ny, FFT2DInfo.howMany);
-				RepairSignAfter2DFFT_CUDA((float*)DataToFFT, Nx, Ny, FFT2DInfo.howMany);
+				RotateDataAfter2DFFT_GPU((float*)DataToFFT, Nx, Ny, FFT2DInfo.howMany);
+				RepairSignAfter2DFFT_GPU((float*)DataToFFT, Nx, Ny, FFT2DInfo.howMany);
 				cufftExecC2C(Plan2DFFT_cu, (cufftComplex*)DataToFFT, (cufftComplex*)DataToFFT, CUFFT_INVERSE);
 			}
 			else if (dDataToFFT != 0)
@@ -603,8 +603,8 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 				else dPlan2DFFT_cu = *(cufftHandle*)pdPrecreatedPlan2DFFT;
 				if (dPlan2DFFT_cu == 0) return ERROR_IN_FFT;
 
-				RotateDataAfter2DFFT_CUDA((double*)dDataToFFT, Nx, Ny, FFT2DInfo.howMany);
-				RepairSignAfter2DFFT_CUDA((double*)dDataToFFT, Nx, Ny, FFT2DInfo.howMany);
+				RotateDataAfter2DFFT_GPU((double*)dDataToFFT, Nx, Ny, FFT2DInfo.howMany);
+				RepairSignAfter2DFFT_GPU((double*)dDataToFFT, Nx, Ny, FFT2DInfo.howMany);
 				cufftExecZ2Z(dPlan2DFFT_cu, (cufftDoubleComplex*)dDataToFFT, (cufftDoubleComplex*)dDataToFFT, CUFFT_INVERSE);
 			}
 		})
@@ -651,9 +651,9 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 		GPU_COND(pGpuUsage, 
 		{
 			if (DataToFFT != 0)
-				NormalizeDataAfter2DFFT_CUDA((float*)DataToFFT, Nx, Ny, FFT2DInfo.howMany, Mult);
+				NormalizeDataAfter2DFFT_GPU((float*)DataToFFT, Nx, Ny, FFT2DInfo.howMany, Mult);
 			else if (dDataToFFT != 0)
-				NormalizeDataAfter2DFFT_CUDA((double*)dDataToFFT, Nx, Ny, FFT2DInfo.howMany, Mult);
+				NormalizeDataAfter2DFFT_GPU((double*)dDataToFFT, Nx, Ny, FFT2DInfo.howMany, Mult);
 		})
 		else 
 		{
@@ -683,10 +683,10 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 		GPU_COND(pGpuUsage, 
 		{
 			if (DataToFFT != 0) {
-				TreatShifts2D_CUDA((float*)DataToFFT, Nx, Ny, FFT2DInfo.howMany, NeedsShiftAfterX, NeedsShiftAfterY, m_ArrayShiftX, m_ArrayShiftY);
+				TreatShifts2D_GPU((float*)DataToFFT, Nx, Ny, FFT2DInfo.howMany, NeedsShiftAfterX, NeedsShiftAfterY, m_ArrayShiftX, m_ArrayShiftY);
 			}
 			else if (dDataToFFT != 0) {
-				TreatShifts2D_CUDA((double*)dDataToFFT, Nx, Ny, FFT2DInfo.howMany, NeedsShiftAfterX, NeedsShiftAfterY, m_dArrayShiftX, m_dArrayShiftY);
+				TreatShifts2D_GPU((double*)dDataToFFT, Nx, Ny, FFT2DInfo.howMany, NeedsShiftAfterX, NeedsShiftAfterY, m_dArrayShiftX, m_dArrayShiftY);
 			}
 		})
 		else 
@@ -840,11 +840,11 @@ int CGenMathFFT1D::Make1DFFT(CGenMathFFT1DInfo& FFT1DInfo, gpuUsageArg_t *pGpuUs
 	{
 		GPU_COND(pGpuUsage, //HG20012022
 		{
-			if (m_ArrayShiftX != 0) FillArrayShift_CUDA(t0SignMult * x0_Before, FFT1DInfo.xStep, Nx, m_ArrayShiftX);
-			else if (m_dArrayShiftX != 0) FillArrayShift_CUDA(t0SignMult * x0_Before, FFT1DInfo.xStep, Nx, m_dArrayShiftX);
+			if (m_ArrayShiftX != 0) FillArrayShift_GPU(t0SignMult * x0_Before, FFT1DInfo.xStep, Nx, m_ArrayShiftX);
+			else if (m_dArrayShiftX != 0) FillArrayShift_GPU(t0SignMult * x0_Before, FFT1DInfo.xStep, Nx, m_dArrayShiftX);
 
-			if (DataToFFT != 0) TreatShift_CUDA((float*)DataToFFT, FFT1DInfo.HowMany, Nx, m_ArrayShiftX);
-			else if (dDataToFFT != 0) TreatShift_CUDA((double*)dDataToFFT, FFT1DInfo.HowMany, Nx, m_dArrayShiftX);
+			if (DataToFFT != 0) TreatShift_GPU((float*)DataToFFT, FFT1DInfo.HowMany, Nx, m_ArrayShiftX);
+			else if (dDataToFFT != 0) TreatShift_GPU((double*)dDataToFFT, FFT1DInfo.HowMany, Nx, m_dArrayShiftX);
 		})
 		else 
 		{
@@ -971,15 +971,15 @@ int CGenMathFFT1D::Make1DFFT(CGenMathFFT1DInfo& FFT1DInfo, gpuUsageArg_t *pGpuUs
 		{
 			if (OutDataFFT != 0)
 			{
-				RepairAndRotateDataAfter1DFFT_CUDA((float*)OutDataFFT, FFT1DInfo.HowMany, Nx, Mult);
-				//RepairSignAfter1DFFT_CUDA((float*)OutDataFFT, FFT1DInfo.HowMany, Nx);
-				//RotateDataAfter1DFFT_CUDA((float*)OutDataFFT, FFT1DInfo.HowMany, Nx);
+				RepairAndRotateDataAfter1DFFT_GPU((float*)OutDataFFT, FFT1DInfo.HowMany, Nx, Mult);
+				//RepairSignAfter1DFFT_GPU((float*)OutDataFFT, FFT1DInfo.HowMany, Nx);
+				//RotateDataAfter1DFFT_GPU((float*)OutDataFFT, FFT1DInfo.HowMany, Nx);
 			}
 			else if (dOutDataFFT != 0)
 			{
-				RepairAndRotateDataAfter1DFFT_CUDA((double*)dOutDataFFT, FFT1DInfo.HowMany, Nx, Mult);
-				//RepairSignAfter1DFFT_CUDA((double*)dOutDataFFT, FFT1DInfo.HowMany, Nx);
-				//RotateDataAfter1DFFT_CUDA((double*)dOutDataFFT, FFT1DInfo.HowMany, Nx);
+				RepairAndRotateDataAfter1DFFT_GPU((double*)dOutDataFFT, FFT1DInfo.HowMany, Nx, Mult);
+				//RepairSignAfter1DFFT_GPU((double*)dOutDataFFT, FFT1DInfo.HowMany, Nx);
+				//RotateDataAfter1DFFT_GPU((double*)dOutDataFFT, FFT1DInfo.HowMany, Nx);
 			}
 			alreadyNormalized = true;
 		})
@@ -1022,8 +1022,8 @@ int CGenMathFFT1D::Make1DFFT(CGenMathFFT1DInfo& FFT1DInfo, gpuUsageArg_t *pGpuUs
 				}
 				if (Plan1DFFT_cu == 0) return ERROR_IN_FFT;
 
-				RotateDataAfter1DFFT_CUDA((float*)DataToFFT, FFT1DInfo.HowMany, Nx);
-				RepairSignAfter1DFFT_CUDA((float*)DataToFFT, FFT1DInfo.HowMany, Nx);
+				RotateDataAfter1DFFT_GPU((float*)DataToFFT, FFT1DInfo.HowMany, Nx);
+				RepairSignAfter1DFFT_GPU((float*)DataToFFT, FFT1DInfo.HowMany, Nx);
 				cufftExecC2C(Plan1DFFT_cu, (cufftComplex*)DataToFFT, (cufftComplex*)OutDataFFT, CUFFT_INVERSE);
 			}
 			else if (dDataToFFT != 0) //OC02022019
@@ -1041,8 +1041,8 @@ int CGenMathFFT1D::Make1DFFT(CGenMathFFT1DInfo& FFT1DInfo, gpuUsageArg_t *pGpuUs
 				}
 				if (dPlan1DFFT_cu == 0) return ERROR_IN_FFT;
 
-				RotateDataAfter1DFFT_CUDA((double*)dDataToFFT, FFT1DInfo.HowMany, Nx);
-				RepairSignAfter1DFFT_CUDA((double*)dDataToFFT, FFT1DInfo.HowMany, Nx);
+				RotateDataAfter1DFFT_GPU((double*)dDataToFFT, FFT1DInfo.HowMany, Nx);
+				RepairSignAfter1DFFT_GPU((double*)dDataToFFT, FFT1DInfo.HowMany, Nx);
 				cufftExecZ2Z(dPlan1DFFT_cu, (cufftDoubleComplex*)dDataToFFT, (cufftDoubleComplex*)dOutDataFFT, CUFFT_INVERSE);
 			}
 		})
@@ -1127,10 +1127,10 @@ int CGenMathFFT1D::Make1DFFT(CGenMathFFT1DInfo& FFT1DInfo, gpuUsageArg_t *pGpuUs
 		GPU_COND(pGpuUsage, 
 		{
 			if (OutDataFFT != 0) {
-				NormalizeDataAfter1DFFT_CUDA((float*)OutDataFFT, FFT1DInfo.HowMany, Nx, Mult);
+				NormalizeDataAfter1DFFT_GPU((float*)OutDataFFT, FFT1DInfo.HowMany, Nx, Mult);
 			}
 			else if (dOutDataFFT != 0)
-				NormalizeDataAfter1DFFT_CUDA((double*)dOutDataFFT, FFT1DInfo.HowMany, Nx, Mult);
+				NormalizeDataAfter1DFFT_GPU((double*)dOutDataFFT, FFT1DInfo.HowMany, Nx, Mult);
 		})
 		else 
 		{
@@ -1148,11 +1148,11 @@ int CGenMathFFT1D::Make1DFFT(CGenMathFFT1DInfo& FFT1DInfo, gpuUsageArg_t *pGpuUs
 	{
 		GPU_COND(pGpuUsage, 
 		{
-			if (m_ArrayShiftX != 0) FillArrayShift_CUDA(t0SignMult * x0_After, FFT1DInfo.xStepTr, Nx, m_ArrayShiftX); //OC02022019
-			else if (m_dArrayShiftX != 0) FillArrayShift_CUDA(t0SignMult * x0_After, FFT1DInfo.xStepTr, Nx, m_dArrayShiftX);
+			if (m_ArrayShiftX != 0) FillArrayShift_GPU(t0SignMult * x0_After, FFT1DInfo.xStepTr, Nx, m_ArrayShiftX); //OC02022019
+			else if (m_dArrayShiftX != 0) FillArrayShift_GPU(t0SignMult * x0_After, FFT1DInfo.xStepTr, Nx, m_dArrayShiftX);
 
-			if (OutDataFFT != 0) TreatShift_CUDA((float*)OutDataFFT, FFT1DInfo.HowMany, Nx, m_ArrayShiftX);
-			else if (dOutDataFFT != 0) TreatShift_CUDA((double*)dOutDataFFT, FFT1DInfo.HowMany, Nx, m_dArrayShiftX);
+			if (OutDataFFT != 0) TreatShift_GPU((float*)OutDataFFT, FFT1DInfo.HowMany, Nx, m_ArrayShiftX);
+			else if (dOutDataFFT != 0) TreatShift_GPU((double*)dOutDataFFT, FFT1DInfo.HowMany, Nx, m_dArrayShiftX);
 		})
 		else 
 		{
