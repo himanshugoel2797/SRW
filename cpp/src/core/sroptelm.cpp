@@ -2942,7 +2942,7 @@ int srTGenOptElem::RadResizeCore(srTSRWRadStructAccessData& OldRadAccessData, sr
 #ifdef _WITH_OMP //OC31102018: added by SY at parallelizing SRW via OpenMP
 		#pragma omp parallel for
 #endif
-		for(int iwfr=0; iwfr=OldRadAccessData.nwfr; iwfr++)
+		for(int iwfr=0; iwfr<OldRadAccessData.nwfr; iwfr++)
 		{
 			if(TreatPolCompX) pEX0_New = NewRadAccessData.pBaseRadX + iwfr * PerWfr_New;
 			if(TreatPolCompZ) pEZ0_New = NewRadAccessData.pBaseRadZ + iwfr * PerWfr_New;

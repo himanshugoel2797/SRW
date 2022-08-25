@@ -8,5 +8,5 @@
 #include <chrono>
 #include "sroptdrf.h"
 
-int srTDriftSpace::TraverseRadZXE_GPU(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars, long pBufVarsSz) { return RadPointModifierParallelImpl<srTDriftSpace>(pRadAccessData, pBufVars, pBufVarsSz, this); } //HG03092022
+//int srTDriftSpace::TraverseRadZXE_GPU(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars, long pBufVarsSz) { return RadPointModifierParallelImpl<srTDriftSpace>(pRadAccessData, pBufVars, pBufVarsSz, this); } //HG03092022
 #endif

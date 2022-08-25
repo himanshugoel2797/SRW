@@ -1268,6 +1268,8 @@
     <ClCompile Include="..\src\lib\utidev.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\src\core\sroptelmgpu.h" />
+    <ClInclude Include="..\src\core\srradstrgpu.h" />
     <ClInclude Include="..\src\ext\auxparse\auxparse.h" />
     <ClInclude Include="..\src\ext\genmath\cmplxd.h" />
     <ClInclude Include="..\src\ext\genmath\gmercode.h" />
@@ -1344,6 +1346,9 @@
     <ClInclude Include="..\src\lib\utidev.h" />
   </ItemGroup>
   <ItemGroup>
+    <CudaCompile Include="..\src\core\sroptdrfgpu.cu" />
+    <CudaCompile Include="..\src\core\sroptelmgpu.cu" />
+    <CudaCompile Include="..\src\core\srradstrgpu.cu" />
     <CudaCompile Include="..\src\ext\genmath\gmfftgpu0.cu" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

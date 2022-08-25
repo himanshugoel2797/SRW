@@ -449,7 +449,7 @@ void srTSRWRadStructAccessData::InSRWRadPtrs(srTSRWRadInData* p, bool DataShould
 	eStep = p->eStep; eStart = p->eStart; 
 	xStep = p->xStep; xStart = p->xStart; 
 	zStep = p->zStep; zStart = p->zStart;
-	ne = p->ne; nx = p->nx; nz = p->nz;
+	ne = p->ne; nx = p->nx; nz = p->nz; nwfr = p->nwfr;
 
 	RobsX = p->RobsX; RobsZ = p->RobsZ;
 	RobsXAbsErr = p->RobsXAbsErr; RobsZAbsErr = p->RobsZAbsErr;
