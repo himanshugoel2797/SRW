@@ -1041,7 +1041,7 @@ void srTGenOptElem::MakeWfrEdgeCorrection(srTSRWRadStructAccessData* pRadAccessD
 {
 	GPU_COND(pGpuUsage,
 	{
-		MakeWfrEdgeCorrection_GPU(*pRadAccessData, pDataEx, pDataEz, DataPtrs);
+		MakeWfrEdgeCorrection_GPU(*pRadAccessData, pDataEx, pDataEz, DataPtrs, pGpuUsage);
 	})
 	else
 	{
@@ -2935,7 +2935,7 @@ int srTGenOptElem::RadResizeCore(srTSRWRadStructAccessData& OldRadAccessData, sr
 
 	GPU_COND(pGpuUsage,
 	{
-		RadResizeCore_GPU(OldRadAccessData, NewRadAccessData, PolComp);
+		RadResizeCore_GPU(OldRadAccessData, NewRadAccessData, pGpuUsage, PolComp);
 	})
 	else
 	{
@@ -4679,7 +4679,7 @@ void srTGenOptElem::TreatStronglyOscillatingTerm(srTSRWRadStructAccessData& RadA
 
 	GPU_COND(pGpuUsage,
 	{
-		TreatStronglyOscillatingTerm_GPU(RadAccessData, TreatPolCompX, TreatPolCompZ, ieStart, ieBefEnd, ConstRx, ConstRz);
+		TreatStronglyOscillatingTerm_GPU(RadAccessData, TreatPolCompX, TreatPolCompZ, ieStart, ieBefEnd, ConstRx, ConstRz, pGpuUsage);
 	})
 	else
 	{

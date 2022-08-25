@@ -4958,7 +4958,7 @@ static PyObject* srwlpy_SetRepresElecField(PyObject *self, PyObject *args)
 static PyObject* srwlpy_PropagElecField(PyObject *self, PyObject *args)
 {
 	//PyObject *oWfr=0, *oOptCnt=0;
-	PyObject *oWfr=0, *oOptCnt=0, *oInt=0; //OC14082018
+	PyObject *oWfr=0, *oOptCnt=0, *oInt=0, *oDev=0; //OC14082018
 
 	vector<Py_buffer> vBuf;
 	SRWLWfr wfr;
@@ -4970,11 +4970,13 @@ static PyObject* srwlpy_PropagElecField(PyObject *self, PyObject *args)
 	SRWLRadMesh *arIntMesh=0;
 	//float **arInts=0;
 	char **arInts=0;
+	gpuUsageArg_t gpuArgs;
 
+	srwlUtiDevInit();
 	try
 	{
 		//if(!PyArg_ParseTuple(args, "OO:PropagElecField", &oWfr, &oOptCnt)) throw strEr_BadArg_PropagElecField;
-		if(!PyArg_ParseTuple(args, "OO|O:PropagElecField", &oWfr, &oOptCnt, &oInt)) throw strEr_BadArg_PropagElecField; //OC14082018
+		if(!PyArg_ParseTuple(args, "OO|OO:PropagElecField", &oWfr, &oOptCnt, &oInt, &oDev)) throw strEr_BadArg_PropagElecField; //OC14082018
 		if((oWfr == 0) || (oOptCnt == 0)) throw strEr_BadArg_PropagElecField;
 
 		//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
@@ -5006,8 +5008,12 @@ static PyObject* srwlpy_PropagElecField(PyObject *self, PyObject *args)
 			}
 		}
 
+		ParseDeviceParam(oDev, &gpuArgs);
+
 		//ProcRes(srwlPropagElecField(&wfr, &optCnt));
-		ProcRes(srwlPropagElecField(&wfr, &optCnt, nInt, arIntDescr, arIntMesh, arInts)); //OC15082018
+		ProcRes(srwlPropagElecField(&wfr, &optCnt, nInt, arIntDescr, arIntMesh, arInts, &gpuArgs)); //OC15082018
+
+		CleanDeviceParam();
 
 		//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
 		//srwlPrintTime(":srwlpy_PropagElecField :srwlPropagElecField", &start);
@@ -5032,6 +5038,7 @@ static PyObject* srwlpy_PropagElecField(PyObject *self, PyObject *args)
 	DeallocOptCntArrays(&optCnt);
 	ReleasePyBuffers(vBuf);
 	EraseElementFromMap(&wfr, gmWfrPyPtr);
+	srwlUtiDevFini();
 
 	for(int i=0; i<4; i++) if(arIntDescr[i] != 0) delete[] arIntDescr[i];
 	if(arIntMesh != 0) delete[] arIntMesh;

@@ -59,6 +59,7 @@ public:
 	static void SetGPUStatus(bool enabled);
 	static int GetDevice(gpuUsageArg_t* arg);
 	static void* ToDevice(gpuUsageArg_t* arg, void* hostPtr, size_t size, bool dontCopy = false);
+	static void* GetHostPtr(gpuUsageArg_t* arg, void* devicePtr);
 	static void* ToHostAndFree(gpuUsageArg_t* arg, void* devicePtr, size_t size, bool dontCopy = false);
 	static void MarkUpdated(gpuUsageArg_t* arg, void* ptr, bool devToHost, bool hostToDev);
 	static inline void* malloc(size_t sz) {

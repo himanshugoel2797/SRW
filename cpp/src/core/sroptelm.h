@@ -277,14 +277,11 @@ public:
 
 	int ComputeRadMoments(srTSRWRadStructAccessData*);
 
-#ifdef _OFFLOAD_GPU
-	int RadResizeCoreParallel(srTSRWRadStructAccessData&, srTSRWRadStructAccessData&, char=0);
-#endif
 	int RadResizeGen(srTSRWRadStructAccessData&, srTRadResize&, gpuUsageArg_t* =0);
 	int RadResizeGenE(srTSRWRadStructAccessData&, srTRadResize&);
 	int RadResizeCore(srTSRWRadStructAccessData&, srTSRWRadStructAccessData&, srTRadResize&, char =0, gpuUsageArg_t* =0);
 #ifdef _OFFLOAD_GPU
-	int RadResizeCore_GPU(srTSRWRadStructAccessData&, srTSRWRadStructAccessData&, char=0);
+	int RadResizeCore_GPU(srTSRWRadStructAccessData&, srTSRWRadStructAccessData&, gpuUsageArg_t*, char=0);
 #endif
 	int RadResizeCoreE(srTSRWRadStructAccessData&, srTSRWRadStructAccessData&, srTRadResize&, char =0);
 	int RadResizeCore_OnlyLargerRange(srTSRWRadStructAccessData& OldRadAccessData, srTSRWRadStructAccessData& NewRadAccessData, srTRadResize& RadResizeStruct, char PolComp);

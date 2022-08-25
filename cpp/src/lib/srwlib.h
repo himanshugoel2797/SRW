@@ -804,7 +804,7 @@ EXP int CALL srwlSetRepresElecField(SRWLWfr* pWfr, char repr);
  * @return	integer error (>0) or warnig (<0) code
  * @see ...
  */
-EXP int CALL srwlPropagElecField(SRWLWfr* pWfr, SRWLOptC* pOpt, int nInt=0, char** arID=0, SRWLRadMesh* arIM=0, char** arI=0); //OC15082018
+EXP int CALL srwlPropagElecField(SRWLWfr* pWfr, SRWLOptC* pOpt, int nInt=0, char** arID=0, SRWLRadMesh* arIM=0, char** arI=0, gpuUsageArg_t* pGpuUsage =0); //OC15082018
 //EXP int CALL srwlPropagElecField(SRWLWfr* pWfr, SRWLOptC* pOpt);
 
 /** TEST

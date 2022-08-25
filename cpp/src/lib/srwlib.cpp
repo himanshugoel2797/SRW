@@ -995,7 +995,7 @@ EXP int CALL srwlSetRepresElecField(SRWLWfr* pWfr, char repr)
 
 //-------------------------------------------------------------------------
 
-EXP int CALL srwlPropagElecField(SRWLWfr* pWfr, SRWLOptC* pOpt, int nInt, char** arID, SRWLRadMesh* arIM, char** arI) //OC15082018
+EXP int CALL srwlPropagElecField(SRWLWfr* pWfr, SRWLOptC* pOpt, int nInt, char** arID, SRWLRadMesh* arIM, char** arI, gpuUsageArg_t* pGpuUsage) //OC15082018
 //EXP int CALL srwlPropagElecField(SRWLWfr* pWfr, SRWLOptC* pOpt)
 {
 	if((pWfr == 0) || (pOpt == 0)) return SRWL_INCORRECT_PARAM_FOR_WFR_PROP;
@@ -1015,7 +1015,7 @@ EXP int CALL srwlPropagElecField(SRWLWfr* pWfr, SRWLOptC* pOpt, int nInt, char**
 		//srwlPrintTime("srwlPropagElecField: CheckRadStructForPropagation",&start);
 
 		//if(locErNo = optCont.PropagateRadiationGuided(wfr)) return locErNo;
-		if(locErNo = optCont.PropagateRadiationGuided(wfr, nInt, arID, arIM, arI)) return locErNo; //OC15082018
+		if(locErNo = optCont.PropagateRadiationGuided(wfr, nInt, arID, arIM, arI, pGpuUsage)) return locErNo; //OC15082018
 
 		//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
 		//srwlPrintTime("srwlPropagElecField: PropagateRadiationGuided",&start);

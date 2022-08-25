@@ -113,6 +113,7 @@ void* UtiDev::ToDevice(gpuUsageArg_t* arg, void* hostPtr, size_t size, bool dont
 		if (gpuMap[devPtr].HostToDevUpdated && !dontCopy)
 			cudaMemcpy(devPtr, hostPtr, size, cudaMemcpyHostToDevice);
 		gpuMap[devPtr].HostToDevUpdated = false;
+		return devPtr;
 	}
 
 	void *devicePtr = NULL;
@@ -130,6 +131,27 @@ void* UtiDev::ToDevice(gpuUsageArg_t* arg, void* hostPtr, size_t size, bool dont
 	return devicePtr;
 #else
 	return hostPtr;
+#endif
+}
+
+void* UtiDev::GetHostPtr(gpuUsageArg_t* arg, void* devicePtr)
+{
+#ifdef _OFFLOAD_GPU
+	if (arg == NULL)
+		return devicePtr;
+	if (arg->deviceIndex == 0)
+		return devicePtr;
+	if (devicePtr == NULL)
+		return NULL;
+	if (!GPUEnabled(arg))
+		return devicePtr;
+	memAllocInfo_t info;
+	if (gpuMap.find(devicePtr) == gpuMap.end())
+		return NULL;
+	info = gpuMap[devicePtr];
+	return info.hostPtr;
+#else
+	return devicePtr;
 #endif
 }
 

@@ -34,7 +34,7 @@ public:
 	srTCompositeOptElem() {}
 
 	int PropagateRadiationTest(srTSRWRadStructAccessData*, srTSRWRadStructAccessData*);
-	int PropagateRadiationGuided(srTSRWRadStructAccessData& wfr, int nInt=0, char** arID=0, SRWLRadMesh* arIM=0, char** arI=0); //OC15082018
+	int PropagateRadiationGuided(srTSRWRadStructAccessData& wfr, int nInt=0, char** arID=0, SRWLRadMesh* arIM=0, char** arI=0, gpuUsageArg_t* pGpuUsage =0); //OC15082018
 	//int PropagateRadiationGuided(srTSRWRadStructAccessData& wfr);
 	int ExtractPropagatedIntensity(srTSRWRadStructAccessData& wfr, int nInt, char** arID, SRWLRadMesh* arIM, char** arI, int elCnt, int indIntSartSearch=0); //27082018
 
