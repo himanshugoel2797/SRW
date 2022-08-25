@@ -3071,18 +3071,18 @@ int srTSRWRadStructAccessData::SetupWfrEdgeCorrData(float* pDataEx, float* pData
 			if(dzSt != 0.)
 			{
 				long jzSt2 = (izWfrMinLower + 1) << 1;
-				DataPtrsForWfrEdgeCorr.fxStzSt[0] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEx + jzSt2);
-				DataPtrsForWfrEdgeCorr.fxStzSt[1] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEx + jzSt2 + 1);
-				DataPtrsForWfrEdgeCorr.fxStzSt[2] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEz + jzSt2);
-				DataPtrsForWfrEdgeCorr.fxStzSt[3] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEz + jzSt2 + 1);
+				DataPtrsForWfrEdgeCorr.fxStzSt[0] = (jzSt2);
+				DataPtrsForWfrEdgeCorr.fxStzSt[1] = (jzSt2 + 1);
+				DataPtrsForWfrEdgeCorr.fxStzSt[2] = (jzSt2);
+				DataPtrsForWfrEdgeCorr.fxStzSt[3] = (jzSt2 + 1);
 			}
 			if(dzFi != 0.)
 			{
 				long jzFi2 = izWfrMaxLower << 1;
-				DataPtrsForWfrEdgeCorr.fxStzFi[0] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEx + jzFi2);
-				DataPtrsForWfrEdgeCorr.fxStzFi[1] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEx + jzFi2 + 1);
-				DataPtrsForWfrEdgeCorr.fxStzFi[2] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEz + jzFi2);
-				DataPtrsForWfrEdgeCorr.fxStzFi[3] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEz + jzFi2 + 1);
+				DataPtrsForWfrEdgeCorr.fxStzFi[0] = (jzFi2);
+				DataPtrsForWfrEdgeCorr.fxStzFi[1] = (jzFi2 + 1);
+				DataPtrsForWfrEdgeCorr.fxStzFi[2] = (jzFi2);
+				DataPtrsForWfrEdgeCorr.fxStzFi[3] = (jzFi2 + 1);
 			}
 
 			FFT1DInfo.pInData = DataPtrsForWfrEdgeCorr.FFTArrXStEx;
@@ -3192,10 +3192,27 @@ void srTSRWRadStructAccessData::MakeWfrEdgeCorrection(float* pDataEx, float* pDa
 	double dxSt_dzFi = DataPtrs.dxSt*DataPtrs.dzFi;
 	double dxFi_dzSt = DataPtrs.dxFi*DataPtrs.dzSt;
 	double dxFi_dzFi = DataPtrs.dxFi*DataPtrs.dzFi;
-	float fSSExRe = DataPtrs.fxStzSt[0], fSSExIm = DataPtrs.fxStzSt[1], fSSEzRe = DataPtrs.fxStzSt[2], fSSEzIm = DataPtrs.fxStzSt[3];
-	float fFSExRe = DataPtrs.fxFizSt[0], fFSExIm = DataPtrs.fxFizSt[1], fFSEzRe = DataPtrs.fxFizSt[2], fFSEzIm = DataPtrs.fxFizSt[3];
-	float fSFExRe = DataPtrs.fxStzFi[0], fSFExIm = DataPtrs.fxStzFi[1], fSFEzRe = DataPtrs.fxStzFi[2], fSFEzIm = DataPtrs.fxStzFi[3];
-	float fFFExRe = DataPtrs.fxFizFi[0], fFFExIm = DataPtrs.fxFizFi[1], fFFEzRe = DataPtrs.fxFizFi[2], fFFEzIm = DataPtrs.fxFizFi[3];
+#define DATAPTR_CHECK(x, a) ((x >= 0) ? a[x] : 0.)
+	float fSSExRe = DATAPTR_CHECK(DataPtrs.fxStzSt[0], DataPtrs.FFTArrXStEx);
+	float fSSExIm = DATAPTR_CHECK(DataPtrs.fxStzSt[1], DataPtrs.FFTArrXStEx);
+	float fSSEzRe = DATAPTR_CHECK(DataPtrs.fxStzSt[2], DataPtrs.FFTArrXStEz);
+	float fSSEzIm = DATAPTR_CHECK(DataPtrs.fxStzSt[3], DataPtrs.FFTArrXStEz);
+	
+	float fFSExRe = DATAPTR_CHECK(DataPtrs.fxFizSt[0], DataPtrs.FFTArrXFiEx);
+	float fFSExIm = DATAPTR_CHECK(DataPtrs.fxFizSt[1], DataPtrs.FFTArrXFiEx);
+	float fFSEzRe = DATAPTR_CHECK(DataPtrs.fxFizSt[2], DataPtrs.FFTArrXFiEz);
+	float fFSEzIm = DATAPTR_CHECK(DataPtrs.fxFizSt[3], DataPtrs.FFTArrXFiEz);
+	
+	float fSFExRe = DATAPTR_CHECK(DataPtrs.fxStzFi[0], DataPtrs.FFTArrXStEx);
+	float fSFExIm = DATAPTR_CHECK(DataPtrs.fxStzFi[1], DataPtrs.FFTArrXStEx);
+	float fSFEzRe = DATAPTR_CHECK(DataPtrs.fxStzFi[2], DataPtrs.FFTArrXStEz);
+	float fSFEzIm = DATAPTR_CHECK(DataPtrs.fxStzFi[3], DataPtrs.FFTArrXStEz);
+	
+	float fFFExRe = DATAPTR_CHECK(DataPtrs.fxFizFi[0], DataPtrs.FFTArrXFiEx);
+	float fFFExIm = DATAPTR_CHECK(DataPtrs.fxFizFi[1], DataPtrs.FFTArrXFiEx);
+	float fFFEzRe = DATAPTR_CHECK(DataPtrs.fxFizFi[2], DataPtrs.FFTArrXFiEz);
+	float fFFEzIm = DATAPTR_CHECK(DataPtrs.fxFizFi[3], DataPtrs.FFTArrXFiEz);
+
 
 	float bRe, bIm, cRe, cIm;
 	for(long iz=0; iz<nz; iz++)

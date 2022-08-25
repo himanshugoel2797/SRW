@@ -830,18 +830,18 @@ int srTGenOptElem::SetupWfrEdgeCorrData(srTSRWRadStructAccessData* pRadAccessDat
 			if(dzSt != 0.)
 			{
 				long jzSt2 = (izWfrMinLower + 1) << 1;
-				DataPtrsForWfrEdgeCorr.fxStzSt[0] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEx + jzSt2);
-				DataPtrsForWfrEdgeCorr.fxStzSt[1] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEx + jzSt2 + 1);
-				DataPtrsForWfrEdgeCorr.fxStzSt[2] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEz + jzSt2);
-				DataPtrsForWfrEdgeCorr.fxStzSt[3] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEz + jzSt2 + 1);
+				DataPtrsForWfrEdgeCorr.fxStzSt[0] = (jzSt2);
+				DataPtrsForWfrEdgeCorr.fxStzSt[1] = (jzSt2 + 1);
+				DataPtrsForWfrEdgeCorr.fxStzSt[2] = (jzSt2);
+				DataPtrsForWfrEdgeCorr.fxStzSt[3] = (jzSt2 + 1);
 			}
 			if(dzFi != 0.)
 			{
 				long jzFi2 = izWfrMaxLower << 1;
-				DataPtrsForWfrEdgeCorr.fxStzFi[0] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEx + jzFi2);
-				DataPtrsForWfrEdgeCorr.fxStzFi[1] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEx + jzFi2 + 1);
-				DataPtrsForWfrEdgeCorr.fxStzFi[2] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEz + jzFi2);
-				DataPtrsForWfrEdgeCorr.fxStzFi[3] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEz + jzFi2 + 1);
+				DataPtrsForWfrEdgeCorr.fxStzFi[0] = (jzFi2);
+				DataPtrsForWfrEdgeCorr.fxStzFi[1] = (jzFi2 + 1);
+				DataPtrsForWfrEdgeCorr.fxStzFi[2] = (jzFi2);
+				DataPtrsForWfrEdgeCorr.fxStzFi[3] = (jzFi2 + 1);
 			}
 
 			FFT1DInfo.pInData = DataPtrsForWfrEdgeCorr.FFTArrXStEx;
@@ -1018,132 +1018,160 @@ int srTGenOptElem::SetupWfrEdgeCorrData1D(srTRadSect1D* pRadSect1D, float* pData
 
 void srTGenOptElem::MakeWfrEdgeCorrection(srTSRWRadStructAccessData* pRadAccessData, float* pDataEx, float* pDataEz, srTDataPtrsForWfrEdgeCorr& DataPtrs, gpuUsageArg_t *pGpuUsage)
 {
-	float *tEx = pDataEx, *tEz = pDataEz;
-
-	double dxSt_dzSt = DataPtrs.dxSt*DataPtrs.dzSt;
-	double dxSt_dzFi = DataPtrs.dxSt*DataPtrs.dzFi;
-	double dxFi_dzSt = DataPtrs.dxFi*DataPtrs.dzSt;
-	double dxFi_dzFi = DataPtrs.dxFi*DataPtrs.dzFi;
-
-	float fSSExRe = DataPtrs.fxStzSt[0], fSSExIm = DataPtrs.fxStzSt[1], fSSEzRe = DataPtrs.fxStzSt[2], fSSEzIm = DataPtrs.fxStzSt[3];
-	float fFSExRe = DataPtrs.fxFizSt[0], fFSExIm = DataPtrs.fxFizSt[1], fFSEzRe = DataPtrs.fxFizSt[2], fFSEzIm = DataPtrs.fxFizSt[3];
-	float fSFExRe = DataPtrs.fxStzFi[0], fSFExIm = DataPtrs.fxStzFi[1], fSFEzRe = DataPtrs.fxStzFi[2], fSFEzIm = DataPtrs.fxStzFi[3];
-	float fFFExRe = DataPtrs.fxFizFi[0], fFFExIm = DataPtrs.fxFizFi[1], fFFEzRe = DataPtrs.fxFizFi[2], fFFEzIm = DataPtrs.fxFizFi[3];
-
-	float bRe, bIm, cRe, cIm;
-
-	for(long iz=0; iz<pRadAccessData->nz; iz++)
+	GPU_COND(pGpuUsage,
 	{
-		//long Two_iz = iz << 1;
-		//long Two_iz_p_1 = Two_iz + 1;
-		long long Two_iz = iz << 1;
-		long long Two_iz_p_1 = Two_iz + 1;
+		MakeWfrEdgeCorrection_GPU(*pRadAccessData, pDataEx, pDataEz, DataPtrs);
+	})
+	else
+	{
+		double dxSt_dzSt = DataPtrs.dxSt*DataPtrs.dzSt;
+		double dxSt_dzFi = DataPtrs.dxSt*DataPtrs.dzFi;
+		double dxFi_dzSt = DataPtrs.dxFi*DataPtrs.dzSt;
+		double dxFi_dzFi = DataPtrs.dxFi*DataPtrs.dzFi;
+		long TwoNz = pRadAccessData->nz << 1;
+		long PerWfr = pRadAccessData->nx * pRadAccessData->nz * 2;
 
-		for(long ix=0; ix<pRadAccessData->nx; ix++)
+		for(long iwfr=0; iwfr<pRadAccessData->nwfr; iwfr++)
 		{
-			//long Two_ix = ix << 1;
-			//long Two_ix_p_1 = Two_ix + 1;
-			long long Two_ix = ix << 1;
-			long long Two_ix_p_1 = Two_ix + 1;
+			float *tEx = pDataEx+iwfr*PerWfr, *tEz = pDataEz+iwfr*PerWfr;
 
-			float ExRe = *tEx, ExIm = *(tEx+1);
-			float EzRe = *tEz, EzIm = *(tEz+1);
+#define DATAPTR_CHECK(x, a) ((x >= 0) ? a[x+TwoNz*iwfr] : 0.)
+			float fSSExRe = DATAPTR_CHECK(DataPtrs.fxStzSt[0], DataPtrs.FFTArrXStEx);
+			float fSSExIm = DATAPTR_CHECK(DataPtrs.fxStzSt[1], DataPtrs.FFTArrXStEx);
+			float fSSEzRe = DATAPTR_CHECK(DataPtrs.fxStzSt[2], DataPtrs.FFTArrXStEz);
+			float fSSEzIm = DATAPTR_CHECK(DataPtrs.fxStzSt[3], DataPtrs.FFTArrXStEz);
+			
+			float fFSExRe = DATAPTR_CHECK(DataPtrs.fxFizSt[0], DataPtrs.FFTArrXFiEx);
+			float fFSExIm = DATAPTR_CHECK(DataPtrs.fxFizSt[1], DataPtrs.FFTArrXFiEx);
+			float fFSEzRe = DATAPTR_CHECK(DataPtrs.fxFizSt[2], DataPtrs.FFTArrXFiEz);
+			float fFSEzIm = DATAPTR_CHECK(DataPtrs.fxFizSt[3], DataPtrs.FFTArrXFiEz);
+			
+			float fSFExRe = DATAPTR_CHECK(DataPtrs.fxStzFi[0], DataPtrs.FFTArrXStEx);
+			float fSFExIm = DATAPTR_CHECK(DataPtrs.fxStzFi[1], DataPtrs.FFTArrXStEx);
+			float fSFEzRe = DATAPTR_CHECK(DataPtrs.fxStzFi[2], DataPtrs.FFTArrXStEz);
+			float fSFEzIm = DATAPTR_CHECK(DataPtrs.fxStzFi[3], DataPtrs.FFTArrXStEz);
+			
+			float fFFExRe = DATAPTR_CHECK(DataPtrs.fxFizFi[0], DataPtrs.FFTArrXFiEx);
+			float fFFExIm = DATAPTR_CHECK(DataPtrs.fxFizFi[1], DataPtrs.FFTArrXFiEx);
+			float fFFEzRe = DATAPTR_CHECK(DataPtrs.fxFizFi[2], DataPtrs.FFTArrXFiEz);
+			float fFFEzIm = DATAPTR_CHECK(DataPtrs.fxFizFi[3], DataPtrs.FFTArrXFiEz);
 
-			if(DataPtrs.dxSt != 0.)
+			float bRe, bIm, cRe, cIm;
+
+			for(long iz=0; iz<pRadAccessData->nz; iz++)
 			{
-				float ExpXStRe = DataPtrs.ExpArrXSt[Two_ix], ExpXStIm = DataPtrs.ExpArrXSt[Two_ix_p_1];
+				//long Two_iz = iz << 1;
+				//long Two_iz_p_1 = Two_iz + 1;
+				long long Two_iz = iz << 1;
+				long long Two_iz_p_1 = Two_iz + 1;
 
-				bRe = DataPtrs.FFTArrXStEx[Two_iz]; bIm = DataPtrs.FFTArrXStEx[Two_iz_p_1];
-				ExRe += (float)(DataPtrs.dxSt*(ExpXStRe*bRe - ExpXStIm*bIm));
-				ExIm += (float)(DataPtrs.dxSt*(ExpXStRe*bIm + ExpXStIm*bRe));
-
-				bRe = DataPtrs.FFTArrXStEz[Two_iz]; bIm = DataPtrs.FFTArrXStEz[Two_iz_p_1];
-				EzRe += (float)(DataPtrs.dxSt*(ExpXStRe*bRe - ExpXStIm*bIm));
-				EzIm += (float)(DataPtrs.dxSt*(ExpXStRe*bIm + ExpXStIm*bRe));
-
-				if(DataPtrs.dzSt != 0.)
+				for(long ix=0; ix<pRadAccessData->nx; ix++)
 				{
-					bRe = DataPtrs.ExpArrZSt[Two_iz], bIm = DataPtrs.ExpArrZSt[Two_iz_p_1];
-					cRe = ExpXStRe*bRe - ExpXStIm*bIm; cIm = ExpXStRe*bIm + ExpXStIm*bRe;
+					//long Two_ix = ix << 1;
+					//long Two_ix_p_1 = Two_ix + 1;
+					long long Two_ix = ix << 1;
+					long long Two_ix_p_1 = Two_ix + 1;
 
-					ExRe += (float)(dxSt_dzSt*(fSSExRe*cRe - fSSExIm*cIm));
-					ExIm += (float)(dxSt_dzSt*(fSSExRe*cIm + fSSExIm*cRe));
-					EzRe += (float)(dxSt_dzSt*(fSSEzRe*cRe - fSSEzIm*cIm));
-					EzIm += (float)(dxSt_dzSt*(fSSEzRe*cIm + fSSEzIm*cRe));
-				}
-				if(DataPtrs.dzFi != 0.)
-				{
-					bRe = DataPtrs.ExpArrZFi[Two_iz], bIm = DataPtrs.ExpArrZFi[Two_iz_p_1];
-					cRe = ExpXStRe*bRe - ExpXStIm*bIm; cIm = ExpXStRe*bIm + ExpXStIm*bRe;
+					float ExRe = *tEx, ExIm = *(tEx+1);
+					float EzRe = *tEz, EzIm = *(tEz+1);
 
-					ExRe -= (float)(dxSt_dzFi*(fSFExRe*cRe - fSFExIm*cIm));
-					ExIm -= (float)(dxSt_dzFi*(fSFExRe*cIm + fSFExIm*cRe));
-					EzRe -= (float)(dxSt_dzFi*(fSFEzRe*cRe - fSFEzIm*cIm));
-					EzIm -= (float)(dxSt_dzFi*(fSFEzRe*cIm + fSFEzIm*cRe));
+					if(DataPtrs.dxSt != 0.)
+					{
+						float ExpXStRe = DataPtrs.ExpArrXSt[Two_ix], ExpXStIm = DataPtrs.ExpArrXSt[Two_ix_p_1];
+
+						bRe = DataPtrs.FFTArrXStEx[Two_iz+TwoNz*iwfr]; bIm = DataPtrs.FFTArrXStEx[Two_iz_p_1+TwoNz*iwfr];
+						ExRe += (float)(DataPtrs.dxSt*(ExpXStRe*bRe - ExpXStIm*bIm));
+						ExIm += (float)(DataPtrs.dxSt*(ExpXStRe*bIm + ExpXStIm*bRe));
+
+						bRe = DataPtrs.FFTArrXStEz[Two_iz+TwoNz*iwfr]; bIm = DataPtrs.FFTArrXStEz[Two_iz_p_1+TwoNz*iwfr];
+						EzRe += (float)(DataPtrs.dxSt*(ExpXStRe*bRe - ExpXStIm*bIm));
+						EzIm += (float)(DataPtrs.dxSt*(ExpXStRe*bIm + ExpXStIm*bRe));
+
+						if(DataPtrs.dzSt != 0.)
+						{
+							bRe = DataPtrs.ExpArrZSt[Two_iz], bIm = DataPtrs.ExpArrZSt[Two_iz_p_1];
+							cRe = ExpXStRe*bRe - ExpXStIm*bIm; cIm = ExpXStRe*bIm + ExpXStIm*bRe;
+
+							ExRe += (float)(dxSt_dzSt*(fSSExRe*cRe - fSSExIm*cIm));
+							ExIm += (float)(dxSt_dzSt*(fSSExRe*cIm + fSSExIm*cRe));
+							EzRe += (float)(dxSt_dzSt*(fSSEzRe*cRe - fSSEzIm*cIm));
+							EzIm += (float)(dxSt_dzSt*(fSSEzRe*cIm + fSSEzIm*cRe));
+						}
+						if(DataPtrs.dzFi != 0.)
+						{
+							bRe = DataPtrs.ExpArrZFi[Two_iz], bIm = DataPtrs.ExpArrZFi[Two_iz_p_1];
+							cRe = ExpXStRe*bRe - ExpXStIm*bIm; cIm = ExpXStRe*bIm + ExpXStIm*bRe;
+
+							ExRe -= (float)(dxSt_dzFi*(fSFExRe*cRe - fSFExIm*cIm));
+							ExIm -= (float)(dxSt_dzFi*(fSFExRe*cIm + fSFExIm*cRe));
+							EzRe -= (float)(dxSt_dzFi*(fSFEzRe*cRe - fSFEzIm*cIm));
+							EzIm -= (float)(dxSt_dzFi*(fSFEzRe*cIm + fSFEzIm*cRe));
+						}
+					}
+					if(DataPtrs.dxFi != 0.)
+					{
+						float ExpXFiRe = DataPtrs.ExpArrXFi[Two_ix], ExpXFiIm = DataPtrs.ExpArrXFi[Two_ix_p_1];
+
+						bRe = DataPtrs.FFTArrXFiEx[Two_iz+TwoNz*iwfr]; bIm = DataPtrs.FFTArrXFiEx[Two_iz_p_1+TwoNz*iwfr];
+						ExRe -= (float)(DataPtrs.dxFi*(ExpXFiRe*bRe - ExpXFiIm*bIm));
+						ExIm -= (float)(DataPtrs.dxFi*(ExpXFiRe*bIm + ExpXFiIm*bRe));
+
+						bRe = DataPtrs.FFTArrXFiEz[Two_iz+TwoNz*iwfr]; bIm = DataPtrs.FFTArrXFiEz[Two_iz_p_1+TwoNz*iwfr];
+						EzRe -= (float)(DataPtrs.dxFi*(ExpXFiRe*bRe - ExpXFiIm*bIm));
+						EzIm -= (float)(DataPtrs.dxFi*(ExpXFiRe*bIm + ExpXFiIm*bRe));
+
+						if(DataPtrs.dzSt != 0.)
+						{
+							bRe = DataPtrs.ExpArrZSt[Two_iz], bIm = DataPtrs.ExpArrZSt[Two_iz_p_1];
+							cRe = ExpXFiRe*bRe - ExpXFiIm*bIm; cIm = ExpXFiRe*bIm + ExpXFiIm*bRe;
+
+							ExRe -= (float)(dxFi_dzSt*(fFSExRe*cRe - fFSExIm*cIm));
+							ExIm -= (float)(dxFi_dzSt*(fFSExRe*cIm + fFSExIm*cRe));
+							EzRe -= (float)(dxFi_dzSt*(fFSEzRe*cRe - fFSEzIm*cIm));
+							EzIm -= (float)(dxFi_dzSt*(fFSEzRe*cIm + fFSEzIm*cRe));
+						}
+						if(DataPtrs.dzFi != 0.)
+						{
+							bRe = DataPtrs.ExpArrZFi[Two_iz], bIm = DataPtrs.ExpArrZFi[Two_iz_p_1];
+							cRe = ExpXFiRe*bRe - ExpXFiIm*bIm; cIm = ExpXFiRe*bIm + ExpXFiIm*bRe;
+
+							ExRe += (float)(dxFi_dzFi*(fFFExRe*cRe - fFFExIm*cIm));
+							ExIm += (float)(dxFi_dzFi*(fFFExRe*cIm + fFFExIm*cRe));
+							EzRe += (float)(dxFi_dzFi*(fFFEzRe*cRe - fFFEzIm*cIm));
+							EzIm += (float)(dxFi_dzFi*(fFFEzRe*cIm + fFFEzIm*cRe));
+						}
+					}
+					if(DataPtrs.dzSt != 0.)
+					{
+						float ExpZStRe = DataPtrs.ExpArrZSt[Two_iz], ExpZStIm = DataPtrs.ExpArrZSt[Two_iz_p_1];
+
+						bRe = DataPtrs.FFTArrZStEx[Two_ix+TwoNz*iwfr]; bIm = DataPtrs.FFTArrZStEx[Two_ix_p_1+TwoNz*iwfr];
+						ExRe += (float)(DataPtrs.dzSt*(ExpZStRe*bRe - ExpZStIm*bIm));
+						ExIm += (float)(DataPtrs.dzSt*(ExpZStRe*bIm + ExpZStIm*bRe));
+
+						bRe = DataPtrs.FFTArrZStEz[Two_ix+TwoNz*iwfr]; bIm = DataPtrs.FFTArrZStEz[Two_ix_p_1+TwoNz*iwfr];
+						EzRe += (float)(DataPtrs.dzSt*(ExpZStRe*bRe - ExpZStIm*bIm));
+						EzIm += (float)(DataPtrs.dzSt*(ExpZStRe*bIm + ExpZStIm*bRe));
+					}
+					if(DataPtrs.dzFi != 0.)
+					{
+						float ExpZFiRe = DataPtrs.ExpArrZFi[Two_iz], ExpZFiIm = DataPtrs.ExpArrZFi[Two_iz_p_1];
+
+						bRe = DataPtrs.FFTArrZFiEx[Two_ix+TwoNz*iwfr]; bIm = DataPtrs.FFTArrZFiEx[Two_ix_p_1+TwoNz*iwfr];
+						ExRe -= (float)(DataPtrs.dzFi*(ExpZFiRe*bRe - ExpZFiIm*bIm));
+						ExIm -= (float)(DataPtrs.dzFi*(ExpZFiRe*bIm + ExpZFiIm*bRe));
+
+						bRe = DataPtrs.FFTArrZFiEz[Two_ix+TwoNz*iwfr]; bIm = DataPtrs.FFTArrZFiEz[Two_ix_p_1+TwoNz*iwfr];
+						EzRe -= (float)(DataPtrs.dzFi*(ExpZFiRe*bRe - ExpZFiIm*bIm));
+						EzIm -= (float)(DataPtrs.dzFi*(ExpZFiRe*bIm + ExpZFiIm*bRe));
+					}
+
+					*tEx = ExRe; *(tEx+1) = ExIm;
+					*tEz = EzRe; *(tEz+1) = EzIm;
+
+					tEx += 2; tEz += 2;
 				}
 			}
-			if(DataPtrs.dxFi != 0.)
-			{
-				float ExpXFiRe = DataPtrs.ExpArrXFi[Two_ix], ExpXFiIm = DataPtrs.ExpArrXFi[Two_ix_p_1];
-
-				bRe = DataPtrs.FFTArrXFiEx[Two_iz]; bIm = DataPtrs.FFTArrXFiEx[Two_iz_p_1];
-				ExRe -= (float)(DataPtrs.dxFi*(ExpXFiRe*bRe - ExpXFiIm*bIm));
-				ExIm -= (float)(DataPtrs.dxFi*(ExpXFiRe*bIm + ExpXFiIm*bRe));
-
-				bRe = DataPtrs.FFTArrXFiEz[Two_iz]; bIm = DataPtrs.FFTArrXFiEz[Two_iz_p_1];
-				EzRe -= (float)(DataPtrs.dxFi*(ExpXFiRe*bRe - ExpXFiIm*bIm));
-				EzIm -= (float)(DataPtrs.dxFi*(ExpXFiRe*bIm + ExpXFiIm*bRe));
-
-				if(DataPtrs.dzSt != 0.)
-				{
-					bRe = DataPtrs.ExpArrZSt[Two_iz], bIm = DataPtrs.ExpArrZSt[Two_iz_p_1];
-					cRe = ExpXFiRe*bRe - ExpXFiIm*bIm; cIm = ExpXFiRe*bIm + ExpXFiIm*bRe;
-
-					ExRe -= (float)(dxFi_dzSt*(fFSExRe*cRe - fFSExIm*cIm));
-					ExIm -= (float)(dxFi_dzSt*(fFSExRe*cIm + fFSExIm*cRe));
-					EzRe -= (float)(dxFi_dzSt*(fFSEzRe*cRe - fFSEzIm*cIm));
-					EzIm -= (float)(dxFi_dzSt*(fFSEzRe*cIm + fFSEzIm*cRe));
-				}
-				if(DataPtrs.dzFi != 0.)
-				{
-					bRe = DataPtrs.ExpArrZFi[Two_iz], bIm = DataPtrs.ExpArrZFi[Two_iz_p_1];
-					cRe = ExpXFiRe*bRe - ExpXFiIm*bIm; cIm = ExpXFiRe*bIm + ExpXFiIm*bRe;
-
-					ExRe += (float)(dxFi_dzFi*(fFFExRe*cRe - fFFExIm*cIm));
-					ExIm += (float)(dxFi_dzFi*(fFFExRe*cIm + fFFExIm*cRe));
-					EzRe += (float)(dxFi_dzFi*(fFFEzRe*cRe - fFFEzIm*cIm));
-					EzIm += (float)(dxFi_dzFi*(fFFEzRe*cIm + fFFEzIm*cRe));
-				}
-			}
-			if(DataPtrs.dzSt != 0.)
-			{
-				float ExpZStRe = DataPtrs.ExpArrZSt[Two_iz], ExpZStIm = DataPtrs.ExpArrZSt[Two_iz_p_1];
-
-				bRe = DataPtrs.FFTArrZStEx[Two_ix]; bIm = DataPtrs.FFTArrZStEx[Two_ix_p_1];
-				ExRe += (float)(DataPtrs.dzSt*(ExpZStRe*bRe - ExpZStIm*bIm));
-				ExIm += (float)(DataPtrs.dzSt*(ExpZStRe*bIm + ExpZStIm*bRe));
-
-				bRe = DataPtrs.FFTArrZStEz[Two_ix]; bIm = DataPtrs.FFTArrZStEz[Two_ix_p_1];
-				EzRe += (float)(DataPtrs.dzSt*(ExpZStRe*bRe - ExpZStIm*bIm));
-				EzIm += (float)(DataPtrs.dzSt*(ExpZStRe*bIm + ExpZStIm*bRe));
-			}
-			if(DataPtrs.dzFi != 0.)
-			{
-				float ExpZFiRe = DataPtrs.ExpArrZFi[Two_iz], ExpZFiIm = DataPtrs.ExpArrZFi[Two_iz_p_1];
-
-				bRe = DataPtrs.FFTArrZFiEx[Two_ix]; bIm = DataPtrs.FFTArrZFiEx[Two_ix_p_1];
-				ExRe -= (float)(DataPtrs.dzFi*(ExpZFiRe*bRe - ExpZFiIm*bIm));
-				ExIm -= (float)(DataPtrs.dzFi*(ExpZFiRe*bIm + ExpZFiIm*bRe));
-
-				bRe = DataPtrs.FFTArrZFiEz[Two_ix]; bIm = DataPtrs.FFTArrZFiEz[Two_ix_p_1];
-				EzRe -= (float)(DataPtrs.dzFi*(ExpZFiRe*bRe - ExpZFiIm*bIm));
-				EzIm -= (float)(DataPtrs.dzFi*(ExpZFiRe*bIm + ExpZFiIm*bRe));
-			}
-
-			*tEx = ExRe; *(tEx+1) = ExIm;
-			*tEz = EzRe; *(tEz+1) = EzIm;
-
-			tEx += 2; tEz += 2;
 		}
 	}
 }

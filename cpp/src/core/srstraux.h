@@ -1718,7 +1718,7 @@ struct srTDataPtrsForWfrEdgeCorr {
 	float *FFTArrXStEz, *FFTArrXFiEz;
 	float *FFTArrZStEz, *FFTArrZFiEz;
 
-	float fxStzSt[4], fxFizSt[4], fxStzFi[4], fxFizFi[4];
+	long fxStzSt[4], fxFizSt[4], fxStzFi[4], fxFizFi[4];
 
 	double dxSt, dxFi, dzSt, dzFi, dx, dz;
 	char WasSetup;
@@ -1742,7 +1742,7 @@ struct srTDataPtrsForWfrEdgeCorr {
 
 		for(int i=0; i<4; i++)
 		{
-			fxStzSt[i] = 0.; fxFizSt[i] = 0.; fxStzFi[i] = 0.; fxFizFi[i] = 0.;
+			fxStzSt[i] = -1; fxFizSt[i] = -1; fxStzFi[i] = -1; fxFizFi[i] = -1;
 		}
 		WasSetup = 0;
 	}

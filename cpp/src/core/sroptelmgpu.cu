@@ -114,23 +114,26 @@ __global__ void MakeWfrEdgeCorrection_Kernel(srTSRWRadStructAccessData RadAccess
 		long PerZ = PerX * RadAccessData.nx;
 		long PerWfr = RadAccessData.nz * PerZ;
 
-#define DATAPTR_CHECK(x, a) ((x >= 0) ? a[x + TwoNz * iwfr] : 0.f)
-		float fSSExRe = DATAPTR_CHECK(DataPtrs.fxStzSt_[0], DataPtrs.FFTArrXStEx);
-		float fSSExIm = DATAPTR_CHECK(DataPtrs.fxStzSt_[1], DataPtrs.FFTArrXStEx);
-		float fSSEzRe = DATAPTR_CHECK(DataPtrs.fxStzSt_[2], DataPtrs.FFTArrXStEz);
-		float fSSEzIm = DATAPTR_CHECK(DataPtrs.fxStzSt_[3], DataPtrs.FFTArrXStEz);
-		float fFSExRe = DATAPTR_CHECK(DataPtrs.fxFizSt_[0], DataPtrs.FFTArrXStEx);
-		float fFSExIm = DATAPTR_CHECK(DataPtrs.fxFizSt_[1], DataPtrs.FFTArrXStEx);
-		float fFSEzRe = DATAPTR_CHECK(DataPtrs.fxFizSt_[2], DataPtrs.FFTArrXStEz);
-		float fFSEzIm = DATAPTR_CHECK(DataPtrs.fxFizSt_[3], DataPtrs.FFTArrXStEz);
-		float fSFExRe = DATAPTR_CHECK(DataPtrs.fxStzFi_[0], DataPtrs.FFTArrXFiEx);
-		float fSFExIm = DATAPTR_CHECK(DataPtrs.fxStzFi_[1], DataPtrs.FFTArrXFiEx);
-		float fSFEzRe = DATAPTR_CHECK(DataPtrs.fxStzFi_[2], DataPtrs.FFTArrXFiEz);
-		float fSFEzIm = DATAPTR_CHECK(DataPtrs.fxStzFi_[3], DataPtrs.FFTArrXFiEz);
-		float fFFExRe = DATAPTR_CHECK(DataPtrs.fxFizFi_[0], DataPtrs.FFTArrXFiEx);
-		float fFFExIm = DATAPTR_CHECK(DataPtrs.fxFizFi_[1], DataPtrs.FFTArrXFiEx);
-		float fFFEzRe = DATAPTR_CHECK(DataPtrs.fxFizFi_[2], DataPtrs.FFTArrXFiEz);
-		float fFFEzIm = DATAPTR_CHECK(DataPtrs.fxFizFi_[3], DataPtrs.FFTArrXFiEz);
+#define DATAPTR_CHECK(x, a) ((x >= 0) ? a[x + TwoNz * iwfr] : 0.)
+        float fSSExRe = DATAPTR_CHECK(DataPtrs.fxStzSt[0], DataPtrs.FFTArrXStEx);
+        float fSSExIm = DATAPTR_CHECK(DataPtrs.fxStzSt[1], DataPtrs.FFTArrXStEx);
+        float fSSEzRe = DATAPTR_CHECK(DataPtrs.fxStzSt[2], DataPtrs.FFTArrXStEz);
+        float fSSEzIm = DATAPTR_CHECK(DataPtrs.fxStzSt[3], DataPtrs.FFTArrXStEz);
+        
+        float fFSExRe = DATAPTR_CHECK(DataPtrs.fxFizSt[0], DataPtrs.FFTArrXFiEx);
+        float fFSExIm = DATAPTR_CHECK(DataPtrs.fxFizSt[1], DataPtrs.FFTArrXFiEx);
+        float fFSEzRe = DATAPTR_CHECK(DataPtrs.fxFizSt[2], DataPtrs.FFTArrXFiEz);
+        float fFSEzIm = DATAPTR_CHECK(DataPtrs.fxFizSt[3], DataPtrs.FFTArrXFiEz);
+        
+        float fSFExRe = DATAPTR_CHECK(DataPtrs.fxStzFi[0], DataPtrs.FFTArrXStEx);
+        float fSFExIm = DATAPTR_CHECK(DataPtrs.fxStzFi[1], DataPtrs.FFTArrXStEx);
+        float fSFEzRe = DATAPTR_CHECK(DataPtrs.fxStzFi[2], DataPtrs.FFTArrXStEz);
+        float fSFEzIm = DATAPTR_CHECK(DataPtrs.fxStzFi[3], DataPtrs.FFTArrXStEz);
+        
+        float fFFExRe = DATAPTR_CHECK(DataPtrs.fxFizFi[0], DataPtrs.FFTArrXFiEx);
+        float fFFExIm = DATAPTR_CHECK(DataPtrs.fxFizFi[1], DataPtrs.FFTArrXFiEx);
+        float fFFEzRe = DATAPTR_CHECK(DataPtrs.fxFizFi[2], DataPtrs.FFTArrXFiEz);
+        float fFFEzIm = DATAPTR_CHECK(DataPtrs.fxFizFi[3], DataPtrs.FFTArrXFiEz);
 
 		float bRe, bIm, cRe, cIm;
 
@@ -239,7 +242,7 @@ __global__ void MakeWfrEdgeCorrection_Kernel(srTSRWRadStructAccessData RadAccess
     }
 }
 
-void MakeWfrEdgeCorrection_CUDA(srTSRWRadStructAccessData& RadAccessData, float* pDataEx, float* pDataEz, srTDataPtrsForWfrEdgeCorr& DataPtrs)
+void MakeWfrEdgeCorrection_GPU(srTSRWRadStructAccessData& RadAccessData, float* pDataEx, float* pDataEz, srTDataPtrsForWfrEdgeCorr& DataPtrs)
 {
 	const int bs = 256;
 	dim3 blocks(RadAccessData.nx / bs + ((RadAccessData.nx & (bs - 1)) != 0), RadAccessData.nz, RadAccessData.nWfr);
