@@ -326,7 +326,7 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 		//srwlPrintTime("Iteration: precParWfrPropag",&start);
 
 		srTRadResizeVect auxResizeVect;
-		if(res = ((srTGenOptElem*)(it->rep))->PropagateRadiation(&wfr, precParWfrPropag, auxResizeVect)) return res;
+		if(res = ((srTGenOptElem*)(it->rep))->PropagateRadiation(&wfr, precParWfrPropag, auxResizeVect, pGpuUsage)) return res;
 		//maybe to use "PropagateRadiationGuided" for srTCompositeOptElem?
 
 		//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:

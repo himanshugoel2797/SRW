@@ -50,28 +50,36 @@ template<class T> __global__ void RadPointModifierParallel_Kernel(srTSRWRadStruc
 	}
 }
 
-template<class T> int RadPointModifierParallelImpl(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars, long pBufVarsSz, T* tgt_obj)
+template<class T> int RadPointModifierParallelImpl(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars, long pBufVarsSz, T* tgt_obj, gpuUsageArg_t *pGpuUsage)
 {
 	const int bs = 256;
 	dim3 blocks(pRadAccessData->nx / bs + ((pRadAccessData->nx & (bs - 1)) != 0), pRadAccessData->nz);
 	dim3 threads(bs, 1);
+	
+	if (pRadAccessData->pBaseRadX != NULL)
+		pRadAccessData->pBaseRadX = (float*)UtiDev::ToDevice(pGpuUsage, pRadAccessData->pBaseRadX, 2*pRadAccessData->ne*pRadAccessData->nx*pRadAccessData->nz*pRadAccessData->nwfr*sizeof(float));
+	if (pRadAccessData->pBaseRadZ != NULL)
+		pRadAccessData->pBaseRadZ = (float*)UtiDev::ToDevice(pGpuUsage, pRadAccessData->pBaseRadZ, 2*pRadAccessData->ne*pRadAccessData->nx*pRadAccessData->nz*pRadAccessData->nwfr*sizeof(float));
 
-    //printf("RadPointModifierParallelImpl on GPU\n");
-
-    T* local_copy = NULL;
-    cudaMalloc(&local_copy, sizeof(T));
-    cudaMemcpy(local_copy, tgt_obj, sizeof(T), cudaMemcpyHostToDevice);
+    T* local_copy = (T*)UtiDev::ToDevice(pGpuUsage, tgt_obj, sizeof(T));
+    //cudaMalloc(&local_copy, sizeof(T));
+    //cudaMemcpy(local_copy, tgt_obj, sizeof(T), cudaMemcpyHostToDevice);
 	
 	void* pBufVars_dev = NULL;
 	if (pBufVarsSz > 0)
-	{
-    	cudaMalloc(&pBufVars_dev, pBufVarsSz);
-    	cudaMemcpy(pBufVars_dev, pBufVars, pBufVarsSz, cudaMemcpyHostToDevice);
-	}
+		pBufVars_dev = UtiDev::ToDevice(pGpuUsage, pBufVars, pBufVarsSz);
 	RadPointModifierParallel_Kernel<T> << <blocks, threads >> > (*pRadAccessData, pBufVars_dev, local_copy);
     //cudaDeviceSynchronize();
-    cudaFreeAsync(local_copy, 0);
-	if (pBufVarsSz > 0) cudaFreeAsync(pBufVars_dev, 0);
+    //cudaFreeAsync(local_copy, 0);
+	if (pBufVarsSz > 0) UtiDev::ToHostAndFree(pGpuUsage, pBufVars_dev, pBufVarsSz, true);
+	UtiDev::ToHostAndFree(pGpuUsage, local_copy, sizeof(T), true);
+
+	UtiDev::MarkUpdated(pGpuUsage, pRadAccessData->pBaseRadX, true, false);
+	UtiDev::MarkUpdated(pGpuUsage, pRadAccessData->pBaseRadZ, true, false);
+	if (pRadAccessData->pBaseRadX != NULL)
+		pRadAccessData->pBaseRadX = (float*)UtiDev::GetHostPtr(pGpuUsage, pRadAccessData->pBaseRadX);
+	if (pRadAccessData->pBaseRadZ != NULL)
+		pRadAccessData->pBaseRadZ = (float*)UtiDev::GetHostPtr(pGpuUsage, pRadAccessData->pBaseRadZ);
 
 #ifdef _DEBUG
 	cudaStreamSynchronize(0);

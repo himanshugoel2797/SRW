@@ -33,9 +33,9 @@ typedef struct
 } gpuUsageArg_t;
 
 #define ALLOC_ARRAY(type, size) (type *)UtiDev::malloc(sizeof(type)*(size))
-#define FREE_ARRAY(x) UtiDev::free(x); x=NULL
+#define FREE_ARRAY(x) UtiDev::FreeHost(x); x=NULL
 #define ALLOC_STRUCT(type) (type *)UtiDev::malloc(sizeof(type))
-#define FREE_STRUCT(x) UtiDev::free(x); x=NULL
+#define FREE_STRUCT(x) UtiDev::FreeHost(x); x=NULL
 
 #ifdef _OFFLOAD_GPU
 #define GPU_ENABLED(arg) UtiDev::GPUEnabled(arg)
@@ -61,25 +61,26 @@ public:
 	static void* ToDevice(gpuUsageArg_t* arg, void* hostPtr, size_t size, bool dontCopy = false);
 	static void* GetHostPtr(gpuUsageArg_t* arg, void* devicePtr);
 	static void* ToHostAndFree(gpuUsageArg_t* arg, void* devicePtr, size_t size, bool dontCopy = false);
+	static void FreeHost(void* ptr);
 	static void MarkUpdated(gpuUsageArg_t* arg, void* ptr, bool devToHost, bool hostToDev);
 	static inline void* malloc(size_t sz) {
-#ifdef _OFFLOAD_GPU
+/*#ifdef _OFFLOAD_GPU
 			void *ptr;
 			auto err = cudaMallocManaged(&ptr, sz);
 			if (err != cudaSuccess)
 				printf("Allocation Failure\r\n");
 			return ptr;
-#else
+#else*/
 			return std::malloc(sz);
-#endif
+//#endif
 	}
 
 	static inline void free(void* ptr) {
-#ifdef _OFFLOAD_GPU
-		cudaFreeAsync(ptr, 0);
-#else
+//#ifdef _OFFLOAD_GPU
+//		FreeHost(ptr);
+//#else
 		std::free(ptr);
-#endif
+//#endif
 	}
 };
 

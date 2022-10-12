@@ -81,8 +81,10 @@ __global__ void TreatStronglyOscillatingTerm_Kernel(srTSRWRadStructAccessData Ra
 
 void TreatStronglyOscillatingTerm_GPU(srTSRWRadStructAccessData& RadAccessData, bool TreatPolCompX, bool TreatPolCompZ, int ieStart, int ieBefEnd, double ConstRx, double ConstRz, gpuUsageArg_t* pGpuUsage)
 {
-	RadAccessData.pBaseRadX = (float*)UtiDev::ToDevice(pGpuUsage, RadAccessData.pBaseRadX, 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz*RadAccessData.nwfr*sizeof(float));
-	RadAccessData.pBaseRadZ = (float*)UtiDev::ToDevice(pGpuUsage, RadAccessData.pBaseRadZ, 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz*RadAccessData.nwfr*sizeof(float));
+	if (RadAccessData.pBaseRadX != NULL)
+		RadAccessData.pBaseRadX = (float*)UtiDev::ToDevice(pGpuUsage, RadAccessData.pBaseRadX, 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz*RadAccessData.nwfr*sizeof(float));
+	if (RadAccessData.pBaseRadZ != NULL)
+		RadAccessData.pBaseRadZ = (float*)UtiDev::ToDevice(pGpuUsage, RadAccessData.pBaseRadZ, 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz*RadAccessData.nwfr*sizeof(float));
 
     const int bs = 256;
     dim3 blocks(RadAccessData.nx / bs + ((RadAccessData.nx & (bs - 1)) != 0), RadAccessData.nz, ieBefEnd - ieStart);
@@ -91,8 +93,10 @@ void TreatStronglyOscillatingTerm_GPU(srTSRWRadStructAccessData& RadAccessData, 
 	
 	UtiDev::MarkUpdated(pGpuUsage, RadAccessData.pBaseRadX, true, false);
 	UtiDev::MarkUpdated(pGpuUsage, RadAccessData.pBaseRadZ, true, false);
-	RadAccessData.pBaseRadX = (float*)UtiDev::GetHostPtr(pGpuUsage, RadAccessData.pBaseRadX);
-	RadAccessData.pBaseRadZ = (float*)UtiDev::GetHostPtr(pGpuUsage, RadAccessData.pBaseRadZ);
+	if (RadAccessData.pBaseRadX != NULL)
+		RadAccessData.pBaseRadX = (float*)UtiDev::GetHostPtr(pGpuUsage, RadAccessData.pBaseRadX);
+	if (RadAccessData.pBaseRadZ != NULL)
+		RadAccessData.pBaseRadZ = (float*)UtiDev::GetHostPtr(pGpuUsage, RadAccessData.pBaseRadZ);
 
 #ifdef _DEBUG
 	cudaStreamSynchronize(0);

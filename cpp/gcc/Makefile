@@ -16,7 +16,7 @@ CXX = c++
 NVCC = nvcc
 NVCXX = nvc++
 
-SRW_SRC_DEF=	-D_GNU_SOURCE -D__USE_XOPEN2K8 -DFFTW_ENABLE_FLOAT -D_GM_WITHOUT_BASE -DSRWLIB_STATIC -DNO_TIMER -DANSI_DECLARATORS -DTRILIBRARY -DLINUX
+SRW_SRC_DEF=	-D_GNU_SOURCE -D__USE_XOPEN2K8 -DFFTW_ENABLE_FLOAT -D_GM_WITHOUT_BASE -DSRWLIB_STATIC -DNO_TIMER -DANSI_DECLARATORS -DTRILIBRARY -DLINUX -D_DEBUG
 SRW_INCLUDES= -I$(SRW_SRC_GEN_DIR) -I$(SRW_SRC_LIB_DIR) -I$(SH_SRC_PARSE_DIR) -I$(SH_SRC_GEN_MATH_DIR)
 SRW_FLAGS=-fPIC -mavx2
 LDFLAGS=-L$(LIB_DIR) -lm 
@@ -28,7 +28,7 @@ SRW_FLAGS += -std=c++11
 LDFLAGS += -L$(NVCOMPILERS)/$(NVARCH)/$(NVVERSION)/cuda/lib64 -lcudart_static -lcudadevrt -lcufft -lrt
 NVCFLAGS = -O3 -arch=sm_80 -dlto -rdc=true
 #CUDA_OBJ= gmfftgpu0.o srradmnpgpu.o srradstrgpu.o sroptelmgpu.o #srradintgpu.o
-CUDA_OBJ=gmfftgpu0.o srradstrgpu.o sroptelmgpu.o
+CUDA_OBJ=gmfftgpu0.o srradstrgpu.o sroptelmgpu.o sroptdrfgpu.o sroptgtrgpu.o
 else
 ifeq ($(MODE), omp)
 SRW_SRC_DEF+= -D_WITH_OMP

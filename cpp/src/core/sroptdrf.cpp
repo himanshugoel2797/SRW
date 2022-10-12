@@ -373,7 +373,7 @@ int srTDriftSpace::PropagateRadiationSimple_PropToWaist(srTSRWRadStructAccessDat
 	//PropBufVars.PassNo = 1;
 	//if(result = TraverseRadZXE(pRadAccessData, pBufVars)) return result; //OC06092019
 	//OC01102019 (restored)
-	if(result = TraverseRadZXE(pRadAccessData, &BufVars)) return result; //OC29082019
+	if(result = TraverseRadZXE(pRadAccessData, &BufVars, sizeof(srTDriftPropBufVars))) return result; //OC29082019
 	//if(result = TraverseRadZXE(pRadAccessData)) return result;
 
 	//OC240114 (commented-out)
@@ -455,7 +455,7 @@ int srTDriftSpace::PropagateRadiationSimple_PropToWaist(srTSRWRadStructAccessDat
 	//PropBufVars.PassNo = 2;
 	//if(result = TraverseRadZXE(pRadAccessData, pBufVars)) return result; //OC06092019
 	//OC01102019 (restored)
-	if(result = TraverseRadZXE(pRadAccessData, &BufVars)) return result; //OC30082019
+	if(result = TraverseRadZXE(pRadAccessData, &BufVars, sizeof(srTDriftPropBufVars))) return result; //OC30082019
 	//if(result = TraverseRadZXE(pRadAccessData)) return result;
 
 	pRadAccessData->UnderSamplingX = 1; // Assuming successful propagation to waist
@@ -602,7 +602,7 @@ int srTDriftSpace::PropagateRadiationSimple_PropFromWaist(srTSRWRadStructAccessD
 	//if(result = TraverseRadZXE(pRadAccessData)) return result;
 	//OC01102019 (restored)
 	BufVars.PassNo = 1;
-	if(result = TraverseRadZXE(pRadAccessData, &BufVars)) return result;
+	if(result = TraverseRadZXE(pRadAccessData, &BufVars, sizeof(srTDriftPropBufVars), pGpuUsage)) return result;
 	//OC06092019
 	//pBufVars->PassNo = 1;
 	//if(result = TraverseRadZXE(pRadAccessData, pBufVars)) return result;

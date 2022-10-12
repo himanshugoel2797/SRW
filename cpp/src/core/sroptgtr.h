@@ -131,10 +131,16 @@ public:
 		return TraverseRad1D(pSect1D);
 	}
 
-	void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf=0); //OC29082019
+	void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf=0) //OC29082019
+	{
+		RadPointModifierPortable(EXZ, EPtrs, pBuf);
+	}
+	GPU_PORTABLE void RadPointModifierPortable(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf=0);
 	//void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs);
   	void RadPointModifier1D(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf=0); //OC06092019
   	//void RadPointModifier1D(srTEXZ& EXZ, srTEFieldPtrs& EPtrs);
+
+	int RadPointModifierParallel(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars=0, long pBufVarsSz=0, gpuUsageArg_t* pGpuUsage=0) override;
 
 	int EstimateMinNpToResolveOptElem(srTSRWRadStructAccessData* pRadAccessData, double& MinNx, double& MinNz);
 

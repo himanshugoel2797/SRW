@@ -365,6 +365,8 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 	fftw_complex* dDataToFFT = 0;
 #endif
 
+	if (pGpuUsage != NULL)
+		printf ("GPU: Make2DFFT\n");
 	GPU_COND(pGpuUsage, //HG02112021
 	{
 		if (FFT2DInfo.pData != 0) 
@@ -396,22 +398,34 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 	//if(NeedsShiftBeforeY) FillArrayShift('y', t0SignMult*y0_Before, FFT2DInfo.yStep);
 	if(NeedsShiftBeforeX) 
 	{//OC02022019
-		if(m_ArrayShiftX != 0) FillArrayShift('x', t0SignMult*x0_Before, FFT2DInfo.xStep, m_ArrayShiftX); 
-		else if(m_dArrayShiftX != 0) FillArrayShift('x', t0SignMult*x0_Before, FFT2DInfo.xStep, m_dArrayShiftX);
+		if(m_ArrayShiftX != 0)
+			FillArrayShift('x', t0SignMult*x0_Before, FFT2DInfo.xStep, m_ArrayShiftX); 
+		else if(m_dArrayShiftX != 0)
+			FillArrayShift('x', t0SignMult*x0_Before, FFT2DInfo.xStep, m_dArrayShiftX);
 	}
 	if(NeedsShiftBeforeY) 
 	{//OC02022019
-		if(m_ArrayShiftY != 0) FillArrayShift('y', t0SignMult*y0_Before, FFT2DInfo.yStep, m_ArrayShiftY);
-		else if(m_dArrayShiftY != 0) FillArrayShift('y', t0SignMult*y0_Before, FFT2DInfo.yStep, m_dArrayShiftY);
+		if(m_ArrayShiftY != 0)
+			FillArrayShift('y', t0SignMult*y0_Before, FFT2DInfo.yStep, m_ArrayShiftY);
+		else if(m_dArrayShiftY != 0)
+			FillArrayShift('y', t0SignMult*y0_Before, FFT2DInfo.yStep, m_dArrayShiftY);
 	}
 	if (NeedsShiftBeforeX || NeedsShiftBeforeY) //HG02112021
 	{
 		GPU_COND(pGpuUsage, {
 			if (DataToFFT != 0) {
+				m_ArrayShiftX = (float*)UtiDev::ToDevice(pGpuUsage, m_ArrayShiftX, (Nx << 1) * sizeof(float), false);
+				m_ArrayShiftY = (float*)UtiDev::ToDevice(pGpuUsage, m_ArrayShiftY, (Ny << 1) * sizeof(float), false);	
 				TreatShifts2D_GPU((float*)DataToFFT, Nx, Ny, FFT2DInfo.howMany, NeedsShiftBeforeX, NeedsShiftBeforeY, m_ArrayShiftX, m_ArrayShiftY);
+				m_ArrayShiftX = (float*)UtiDev::ToHostAndFree(pGpuUsage, m_ArrayShiftX, (Nx << 1) * sizeof(float), true);
+				m_ArrayShiftY = (float*)UtiDev::ToHostAndFree(pGpuUsage, m_ArrayShiftY, (Ny << 1) * sizeof(float), true);
 			}
 			else if (dDataToFFT != 0) {
+				m_dArrayShiftX = (double*)UtiDev::ToDevice(pGpuUsage, m_dArrayShiftX, (Nx << 1) * sizeof(double), false);	
+				m_dArrayShiftY = (double*)UtiDev::ToDevice(pGpuUsage, m_dArrayShiftY, (Ny << 1) * sizeof(double), false);	
 				TreatShifts2D_GPU((double*)dDataToFFT, Nx, Ny, FFT2DInfo.howMany, NeedsShiftBeforeX, NeedsShiftBeforeY, m_dArrayShiftX, m_dArrayShiftY);
+				m_dArrayShiftX = (double*)UtiDev::ToHostAndFree(pGpuUsage, m_dArrayShiftX, (Nx << 1) * sizeof(double), true);
+				m_dArrayShiftY = (double*)UtiDev::ToHostAndFree(pGpuUsage, m_dArrayShiftY, (Ny << 1) * sizeof(double), true);
 			}
 		})
 		else {
@@ -683,10 +697,18 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 		GPU_COND(pGpuUsage, 
 		{
 			if (DataToFFT != 0) {
+				m_ArrayShiftX = (float*)UtiDev::ToDevice(pGpuUsage, m_ArrayShiftX, (Nx << 1) * sizeof(float), false);
+				m_ArrayShiftY = (float*)UtiDev::ToDevice(pGpuUsage, m_ArrayShiftY, (Ny << 1) * sizeof(float), false);	
 				TreatShifts2D_GPU((float*)DataToFFT, Nx, Ny, FFT2DInfo.howMany, NeedsShiftAfterX, NeedsShiftAfterY, m_ArrayShiftX, m_ArrayShiftY);
+				m_ArrayShiftX = (float*)UtiDev::ToHostAndFree(pGpuUsage, m_ArrayShiftX, (Nx << 1) * sizeof(float), true);
+				m_ArrayShiftY = (float*)UtiDev::ToHostAndFree(pGpuUsage, m_ArrayShiftY, (Ny << 1) * sizeof(float), true);
 			}
 			else if (dDataToFFT != 0) {
+				m_dArrayShiftX = (double*)UtiDev::ToDevice(pGpuUsage, m_dArrayShiftX, (Nx << 1) * sizeof(double), false);	
+				m_dArrayShiftY = (double*)UtiDev::ToDevice(pGpuUsage, m_dArrayShiftY, (Ny << 1) * sizeof(double), false);
 				TreatShifts2D_GPU((double*)dDataToFFT, Nx, Ny, FFT2DInfo.howMany, NeedsShiftAfterX, NeedsShiftAfterY, m_dArrayShiftX, m_dArrayShiftY);
+				m_dArrayShiftX = (double*)UtiDev::ToHostAndFree(pGpuUsage, m_dArrayShiftX, (Nx << 1) * sizeof(double), true);
+				m_dArrayShiftY = (double*)UtiDev::ToHostAndFree(pGpuUsage, m_dArrayShiftY, (Ny << 1) * sizeof(double), true);
 			}
 		})
 		else 
@@ -766,11 +788,13 @@ int CGenMathFFT1D::Make1DFFT(CGenMathFFT1DInfo& FFT1DInfo, gpuUsageArg_t *pGpuUs
 		{
 			m_ArrayShiftX = ALLOC_ARRAY(float, Nx << 1);
 			if (m_ArrayShiftX == 0) return MEMORY_ALLOCATION_FAILURE;
+			m_ArrayShiftX = (float*)UtiDev::ToDevice(pGpuUsage, m_ArrayShiftX, (Nx << 1) * sizeof(float), true);
 		}
 		else if (FFT1DInfo.pdInData != 0)
 		{
 			m_dArrayShiftX = ALLOC_ARRAY(double, Nx << 1);
 			if (m_dArrayShiftX == 0) return MEMORY_ALLOCATION_FAILURE;
+			m_dArrayShiftX = (double*)UtiDev::ToDevice(pGpuUsage, m_dArrayShiftX, (Nx << 1) * sizeof(double), true);
 		}
 	}
 
@@ -783,7 +807,7 @@ int CGenMathFFT1D::Make1DFFT(CGenMathFFT1DInfo& FFT1DInfo, gpuUsageArg_t *pGpuUs
 #endif
 
 	if (pGpuUsage != NULL)
-		printf ("pGpuUsage is not NULL\r\n");
+		printf ("GPU: Make1DFFT\n");
 	GPU_COND(pGpuUsage, //HG20012022
 	{
 		if ((FFT1DInfo.pInData != 0) && (FFT1DInfo.pOutData != 0))

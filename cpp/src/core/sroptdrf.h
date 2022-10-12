@@ -554,6 +554,10 @@ public:
 	void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf=0) //OC29082019
 	//void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs)
 	{
+		RadPointModifierPortable(EXZ, EPtrs, pBuf);
+	}
+	GPU_PORTABLE void RadPointModifierPortable(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf=0)
+	{
 		srTDriftPropBufVars* pBufVars = (srTDriftPropBufVars*)pBuf;
 		//char LocalPropMode = pBufVars->LocalPropMode;
 		//OC01102019 (commented-out)
@@ -567,8 +571,9 @@ public:
 		else if(LocalPropMode == 3) { RadPointModifier_AnalytTreatQuadPhaseTerm(EXZ, EPtrs, pBufVars); return;} //OC06092019
 		//else if(LocalPropMode == 3) { RadPointModifier_AnalytTreatQuadPhaseTerm(EXZ, EPtrs); return;}
 	}
+	int RadPointModifierParallel(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars=0, long pBufVarsSz=0, gpuUsageArg_t* pGpuUsage=0) override;
 
-	void RadPointModifier_AngRepres(srTEXZ& EXZ, srTEFieldPtrs& EPtrs)
+	GPU_PORTABLE void RadPointModifier_AngRepres(srTEXZ& EXZ, srTEFieldPtrs& EPtrs)
 	{// e in eV; Length in m !!!
 	 // Operates on Angles side !!!
 		//double Lambda_m = 1.239854e-06/EXZ.e;
@@ -599,7 +604,7 @@ public:
 		*(EPtrs.pEzRe) = NewEzRe; *(EPtrs.pEzIm) = NewEzIm; 
 	}
 
-	void RadPointModifier_PropToWaist(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, srTDriftPropBufVars* pBufVars) //OC29082019
+	GPU_PORTABLE void RadPointModifier_PropToWaist(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, srTDriftPropBufVars* pBufVars) //OC29082019
 	//void RadPointModifier_PropToWaist(srTEXZ& EXZ, srTEFieldPtrs& EPtrs)
 	{
 		double rx = EXZ.x, rz = EXZ.z;
@@ -661,7 +666,7 @@ public:
 		}
 	}
 
-	void RadPointModifier_PropToWaistBeyondParax(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, srTDriftPropBufVars* pBufVars) //OC10112019
+	GPU_PORTABLE void RadPointModifier_PropToWaistBeyondParax(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, srTDriftPropBufVars* pBufVars) //OC10112019
 	{
 		double rx = EXZ.x, rz = EXZ.z;
 		double PhaseShift = -((pBufVars->Pi_MultLambdaM_Rx)*rx*rx + (pBufVars->Pi_MultLambdaM_Rz)*rz*rz)/EXZ.e;
@@ -695,7 +700,7 @@ public:
 		*(EPtrs.pEzRe) = NewEzRe; *(EPtrs.pEzIm) = NewEzIm; 
 	}
 
-	void RadPointModifier_PropFromWaist(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, srTDriftPropBufVars* pBufVars) //OC30082019
+	GPU_PORTABLE void RadPointModifier_PropFromWaist(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, srTDriftPropBufVars* pBufVars) //OC30082019
 	//void RadPointModifier_PropFromWaist(srTEXZ& EXZ, srTEFieldPtrs& EPtrs)
 	{
 		double rx = EXZ.x, rz = EXZ.z;
@@ -742,7 +747,7 @@ public:
 		}
 	}
 
-	void RadPointModifier_AnalytTreatQuadPhaseTerm(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, srTDriftPropBufVars* pBufVars) //OC30082019
+	GPU_PORTABLE void RadPointModifier_AnalytTreatQuadPhaseTerm(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, srTDriftPropBufVars* pBufVars) //OC30082019
 	//void RadPointModifier_AnalytTreatQuadPhaseTerm(srTEXZ& EXZ, srTEFieldPtrs& EPtrs)
 	{//don't use RobsX, RobsZ directly here!
 

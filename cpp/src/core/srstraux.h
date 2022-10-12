@@ -203,7 +203,7 @@ struct srTStokesC {
 
 struct srTEFieldPtrs {
 	float *pExRe, *pExIm, *pEzRe, *pEzIm;
-	srTEFieldPtrs(float* In_pExRe =0, float* In_pExIm =0, float* In_pEzRe =0, float* In_pEzIm =0) 
+	GPU_PORTABLE srTEFieldPtrs(float* In_pExRe =0, float* In_pExIm =0, float* In_pEzRe =0, float* In_pEzIm =0) 
 	{ 
 		pExRe = In_pExRe; pExIm = In_pExIm; pEzRe = In_pEzRe; pEzIm = In_pEzIm;
 	}
