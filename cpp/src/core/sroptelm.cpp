@@ -1040,7 +1040,6 @@ int srTGenOptElem::SetupWfrEdgeCorrData1D(srTRadSect1D* pRadSect1D, float* pData
 
 void srTGenOptElem::MakeWfrEdgeCorrection(srTSRWRadStructAccessData* pRadAccessData, float* pDataEx, float* pDataEz, srTDataPtrsForWfrEdgeCorr& DataPtrs, gpuUsageArg_t *pGpuUsage)
 {
-	pGpuUsage = 0;
 	GPU_COND(pGpuUsage,
 	{
 		printf("GPU: srTGenOptElem::MakeWfrEdgeCorrection\n");

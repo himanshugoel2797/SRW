@@ -76,12 +76,19 @@ template<class T> int RadPointModifierParallelImpl(srTSRWRadStructAccessData* pR
 
 	UtiDev::MarkUpdated(pGpuUsage, pRadAccessData->pBaseRadX, true, false);
 	UtiDev::MarkUpdated(pGpuUsage, pRadAccessData->pBaseRadZ, true, false);
+
+#ifndef _DEBUG
 	if (pRadAccessData->pBaseRadX != NULL)
 		pRadAccessData->pBaseRadX = (float*)UtiDev::GetHostPtr(pGpuUsage, pRadAccessData->pBaseRadX);
 	if (pRadAccessData->pBaseRadZ != NULL)
 		pRadAccessData->pBaseRadZ = (float*)UtiDev::GetHostPtr(pGpuUsage, pRadAccessData->pBaseRadZ);
+#endif
 
 #ifdef _DEBUG
+	if (pRadAccessData->pBaseRadX != NULL)
+		pRadAccessData->pBaseRadX = (float*)UtiDev::ToHostAndFree(pGpuUsage, pRadAccessData->pBaseRadX, 2 * pRadAccessData->ne * pRadAccessData->nx * pRadAccessData->nz * pRadAccessData->nwfr * sizeof(float));
+	if (pRadAccessData->pBaseRadZ != NULL)
+		pRadAccessData->pBaseRadZ = (float*)UtiDev::ToHostAndFree(pGpuUsage, pRadAccessData->pBaseRadZ, 2 * pRadAccessData->ne * pRadAccessData->nx * pRadAccessData->nz * pRadAccessData->nwfr * sizeof(float));
 	cudaStreamSynchronize(0);
 	auto err = cudaGetLastError();
 	printf("%s\r\n", cudaGetErrorString(err));

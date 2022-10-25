@@ -112,10 +112,10 @@ void* UtiDev::ToDevice(gpuUsageArg_t* arg, void* hostPtr, size_t size, bool dont
 		void* devPtr = gpuMap[hostPtr].devicePtr;
 		if (gpuMap[devPtr].HostToDevUpdated && !dontCopy)
 			cudaMemcpy(devPtr, hostPtr, size, cudaMemcpyHostToDevice);
-		gpuMap[devPtr].HostToDevUpdated = false;
 #if _DEBUG
 		printf("ToDevice: %p -> %p, %d, D2H: %d, H2D: %d\n", hostPtr, devPtr, size, gpuMap[devPtr].DevToHostUpdated, gpuMap[devPtr].HostToDevUpdated);
 #endif
+		gpuMap[devPtr].HostToDevUpdated = false;
 		return devPtr;
 	}
 

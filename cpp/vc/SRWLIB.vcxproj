@@ -657,8 +657,10 @@
     </CudaCompile>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
-      <CodeGeneration>compute_60,sm_60</CodeGeneration>
+      <CodeGeneration>compute_80,sm_80</CodeGeneration>
       <Defines>_OFFLOAD_GPU;_USE_CUDA;</Defines>
+      <GPUDebugInfo>false</GPUDebugInfo>
+      <GenerateLineInfo>false</GenerateLineInfo>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug_omp|x64'">
@@ -1002,7 +1004,7 @@
     <ClCompile>
       <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
-      <AdditionalIncludeDirectories>..\src\lib;..\src\core;..\src\ext\genmath;..\src\ext\auxparse;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(CUDA_PATH)\include;..\src\lib;..\src\core;..\src\ext\genmath;..\src\ext\auxparse;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>NDEBUG;WIN32;_WINDOWS;_USRDLL;__VC__;SRWLIB_STATIC;_GM_WITHOUT_BASE;_CRT_SECURE_NO_WARNINGS;NON_UNIX_STDIO;_FFTW3;_OFFLOAD_GPU;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <StringPooling>true</StringPooling>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
@@ -1040,6 +1042,7 @@
     </PostBuildEvent>
     <CudaCompile>
       <Defines>_OFFLOAD_GPU;_USE_CUDA;</Defines>
+      <CodeGeneration>compute_80,sm_80</CodeGeneration>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release_omp|x64'">
@@ -1346,6 +1349,7 @@
     <ClInclude Include="..\src\lib\utidev.h" />
   </ItemGroup>
   <ItemGroup>
+    <CudaCompile Include="..\src\core\sroptgtrgpu.cu" />
     <CudaCompile Include="..\src\core\sroptdrfgpu.cu" />
     <CudaCompile Include="..\src\core\sroptelmgpu.cu" />
     <CudaCompile Include="..\src\core\srradstrgpu.cu" />

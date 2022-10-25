@@ -93,12 +93,19 @@ void TreatStronglyOscillatingTerm_GPU(srTSRWRadStructAccessData& RadAccessData, 
 	
 	UtiDev::MarkUpdated(pGpuUsage, RadAccessData.pBaseRadX, true, false);
 	UtiDev::MarkUpdated(pGpuUsage, RadAccessData.pBaseRadZ, true, false);
+
+#ifndef _DEBUG
 	if (RadAccessData.pBaseRadX != NULL)
 		RadAccessData.pBaseRadX = (float*)UtiDev::GetHostPtr(pGpuUsage, RadAccessData.pBaseRadX);
 	if (RadAccessData.pBaseRadZ != NULL)
 		RadAccessData.pBaseRadZ = (float*)UtiDev::GetHostPtr(pGpuUsage, RadAccessData.pBaseRadZ);
+#endif
 
 #ifdef _DEBUG
+	if (RadAccessData.pBaseRadX != NULL)
+		RadAccessData.pBaseRadX = (float*)UtiDev::ToHostAndFree(pGpuUsage, RadAccessData.pBaseRadX, 2 * RadAccessData.ne * RadAccessData.nx * RadAccessData.nz * RadAccessData.nwfr * sizeof(float));
+	if (RadAccessData.pBaseRadZ != NULL)
+		RadAccessData.pBaseRadZ = (float*)UtiDev::ToHostAndFree(pGpuUsage, RadAccessData.pBaseRadZ, 2 * RadAccessData.ne * RadAccessData.nx * RadAccessData.nz * RadAccessData.nwfr * sizeof(float));
 	cudaStreamSynchronize(0);
 	auto err = cudaGetLastError();
 	printf("%s\r\n", cudaGetErrorString(err));
@@ -279,6 +286,8 @@ void MakeWfrEdgeCorrection_GPU(srTSRWRadStructAccessData& RadAccessData, float* 
 	UtiDev::MarkUpdated(pGpuUsage, pDataEz, true, false);
 
 #ifdef _DEBUG
+	UtiDev::ToHostAndFree(pGpuUsage, pDataEx, 2 * RadAccessData.ne * RadAccessData.nx * RadAccessData.nz * RadAccessData.nwfr * sizeof(float));
+	UtiDev::ToHostAndFree(pGpuUsage, pDataEz, 2 * RadAccessData.ne * RadAccessData.nx * RadAccessData.nz * RadAccessData.nwfr * sizeof(float));
 	cudaStreamSynchronize(0);
 	auto err = cudaGetLastError();
 	printf("%s\r\n", cudaGetErrorString(err));
@@ -523,13 +532,18 @@ int srTGenOptElem::RadResizeCore_GPU(srTSRWRadStructAccessData& OldRadAccessData
 	//NewRadAccessData.pBaseRadZ = UtiDev::ToHostAndFree(pGpuUsage, NewRadAccessData.pBaseRadZ, 2*NewRadAccessData.ne*NewRadAccessData.nx*NewRadAccessData.nz*NewRadAccessData.nwfr*sizeof(float));
 	UtiDev::MarkUpdated(pGpuUsage, NewRadAccessData.pBaseRadX, true, false);
 	UtiDev::MarkUpdated(pGpuUsage, NewRadAccessData.pBaseRadZ, true, false);
+#ifndef _DEBUG
 	NewRadAccessData.pBaseRadX = (float*)UtiDev::GetHostPtr(pGpuUsage, NewRadAccessData.pBaseRadX);
 	NewRadAccessData.pBaseRadZ = (float*)UtiDev::GetHostPtr(pGpuUsage, NewRadAccessData.pBaseRadZ);
+#endif
 
 #ifdef _DEBUG
+	NewRadAccessData.pBaseRadX = (float*)UtiDev::ToHostAndFree(pGpuUsage, NewRadAccessData.pBaseRadX, 2 * NewRadAccessData.ne * NewRadAccessData.nx * NewRadAccessData.nz * NewRadAccessData.nwfr * sizeof(float), false);
+	NewRadAccessData.pBaseRadZ = (float*)UtiDev::ToHostAndFree(pGpuUsage, NewRadAccessData.pBaseRadZ, 2 * NewRadAccessData.ne * NewRadAccessData.nx * NewRadAccessData.nz * NewRadAccessData.nwfr * sizeof(float), false);
 	cudaStreamSynchronize(0);
 	auto err = cudaGetLastError();
 	printf("%s\r\n", cudaGetErrorString(err));
+
 #endif
 
 	return 0;
