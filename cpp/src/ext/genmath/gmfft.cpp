@@ -365,8 +365,10 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 	fftw_complex* dDataToFFT = 0;
 #endif
 
+#ifdef _DEBUG
 	if (pGpuUsage != NULL)
 		printf ("GPU: Make2DFFT\n");
+#endif
 	GPU_COND(pGpuUsage, //HG02112021
 	{
 		if (FFT2DInfo.pData != 0) 
@@ -806,8 +808,10 @@ int CGenMathFFT1D::Make1DFFT(CGenMathFFT1DInfo& FFT1DInfo, gpuUsageArg_t *pGpuUs
 	fftw_complex* dDataToFFT = 0, * dOutDataFFT = 0; //, *pdOutDataFFT=0;
 #endif
 
+#ifdef _DEBUG
 	if (pGpuUsage != NULL)
 		printf ("GPU: Make1DFFT\n");
+#endif
 	GPU_COND(pGpuUsage, //HG20012022
 	{
 		if ((FFT1DInfo.pInData != 0) && (FFT1DInfo.pOutData != 0))

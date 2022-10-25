@@ -111,7 +111,7 @@ void* UtiDev::ToDevice(gpuUsageArg_t* arg, void* hostPtr, size_t size, bool dont
 	if (gpuMap.find(hostPtr) != gpuMap.end()){
 		void* devPtr = gpuMap[hostPtr].devicePtr;
 		if (gpuMap[devPtr].HostToDevUpdated && !dontCopy)
-			cudaMemcpy(devPtr, hostPtr, size, cudaMemcpyHostToDevice);
+			cudaMemcpyAsync(devPtr, hostPtr, size, cudaMemcpyHostToDevice);
 #if _DEBUG
 		printf("ToDevice: %p -> %p, %d, D2H: %d, H2D: %d\n", hostPtr, devPtr, size, gpuMap[devPtr].DevToHostUpdated, gpuMap[devPtr].HostToDevUpdated);
 #endif
@@ -124,7 +124,7 @@ void* UtiDev::ToDevice(gpuUsageArg_t* arg, void* hostPtr, size_t size, bool dont
 	if (err != cudaSuccess)
 		return NULL;
 	if (!dontCopy)
-		cudaMemcpy(devicePtr, hostPtr, size, cudaMemcpyHostToDevice);
+		cudaMemcpyAsync(devicePtr, hostPtr, size, cudaMemcpyHostToDevice);
 #if _DEBUG
 	printf("ToDevice: %p -> %p, %d\n", hostPtr, devicePtr, size);
 #endif
@@ -185,7 +185,7 @@ void* UtiDev::ToHostAndFree(gpuUsageArg_t* arg, void* devicePtr, size_t size, bo
 	info = gpuMap[devicePtr];
 	void *hostPtr = info.hostPtr;
 	if (!dontCopy)
-		cudaMemcpy(hostPtr, devicePtr, size, cudaMemcpyDeviceToHost);
+		cudaMemcpyAsync(hostPtr, devicePtr, size, cudaMemcpyDeviceToHost);
 #if _DEBUG
 	printf("ToHostAndFree: %p -> %p, %d\n", devicePtr, hostPtr, size);
 #endif
@@ -256,15 +256,16 @@ void UtiDev::Fini() {
 #ifdef _OFFLOAD_GPU
 	// Copy back all updated data
 	bool updated = false;
-	for (std::map<void*, memAllocInfo_t>::iterator it = gpuMap.begin(); it != gpuMap.end(); it++)
+	for (std::map<void*, memAllocInfo_t>::const_iterator it = gpuMap.cbegin(); it != gpuMap.cend(); it++)
 	{
 		if (it->second.DevToHostUpdated){
 #if _DEBUG
 			printf("Fini: %p -> %p, %d\n", it->second.devicePtr, it->second.hostPtr, it->second.size);
 #endif
-			cudaMemcpy(it->second.hostPtr, it->second.devicePtr, it->second.size, cudaMemcpyDeviceToHost);
+			cudaMemcpyAsync(it->second.hostPtr, it->second.devicePtr, it->second.size, cudaMemcpyDeviceToHost);
 			updated = true;
-			it->second.DevToHostUpdated = false;
+			gpuMap[it->second.hostPtr].DevToHostUpdated = false;
+			gpuMap[it->second.devicePtr].DevToHostUpdated = false;
 		}
 	}
 	if (updated)
