@@ -1723,12 +1723,12 @@ struct srTDataPtrsForWfrEdgeCorr {
 	double dxSt, dxFi, dzSt, dzFi, dx, dz;
 	char WasSetup;
 
-	srTDataPtrsForWfrEdgeCorr()
+	GPU_PORTABLE srTDataPtrsForWfrEdgeCorr()
 	{
 		InitializeAll();
 	}
 
-	void InitializeAll()
+	GPU_PORTABLE void InitializeAll()
 	{
 		ExpArrXSt = ExpArrXFi = 0;
 		ExpArrZSt = ExpArrZFi = 0;
@@ -1746,7 +1746,7 @@ struct srTDataPtrsForWfrEdgeCorr {
 		}
 		WasSetup = 0;
 	}
-	void DisposeData()
+	GPU_PORTABLE void DisposeData()
 	{
 		if(ExpArrXSt != 0) FREE_ARRAY(ExpArrXSt);
 		if(ExpArrXFi != 0) FREE_ARRAY(ExpArrXFi);

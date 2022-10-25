@@ -502,7 +502,7 @@ public:
 
 		GPU_COND(pGpuUsage,
 		{
-			MultiplyElFieldByPhaseLin_GPU(xMult, zMult, pBaseRadX, pBaseRadZ, nwfr, nz, nx, ne, zStart, zStep, xStart, xStep);
+			MultiplyElFieldByPhaseLin_GPU(xMult, zMult, pBaseRadX, pBaseRadZ, nwfr, nz, nx, ne, zStart, zStep, xStart, xStep, pGpuUsage);
 		})
 		else
 		{

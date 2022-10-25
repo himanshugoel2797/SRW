@@ -267,20 +267,36 @@ void MakeWfrEdgeCorrection_GPU(srTSRWRadStructAccessData& RadAccessData, float* 
 	pDataEx = (float*)UtiDev::ToDevice(pGpuUsage, pDataEx, 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz*RadAccessData.nwfr*sizeof(float));
 	pDataEz = (float*)UtiDev::ToDevice(pGpuUsage, pDataEz, 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz*RadAccessData.nwfr*sizeof(float));
 
-	DataPtrs.FFTArrXStEx = (float*)UtiDev::ToDevice(pGpuUsage, DataPtrs.FFTArrXStEx, 2*RadAccessData.nz*RadAccessData.nwfr);
-	DataPtrs.FFTArrXStEz = (float*)UtiDev::ToDevice(pGpuUsage, DataPtrs.FFTArrXStEz, 2*RadAccessData.nz*RadAccessData.nwfr);
-	DataPtrs.FFTArrXFiEx = (float*)UtiDev::ToDevice(pGpuUsage, DataPtrs.FFTArrXFiEx, 2*RadAccessData.nz*RadAccessData.nwfr);
-	DataPtrs.FFTArrXFiEz = (float*)UtiDev::ToDevice(pGpuUsage, DataPtrs.FFTArrXFiEz, 2*RadAccessData.nz*RadAccessData.nwfr);
+	DataPtrs.FFTArrXStEx = (float*)UtiDev::ToDevice(pGpuUsage, DataPtrs.FFTArrXStEx, 2*RadAccessData.nz*RadAccessData.nwfr*sizeof(float));
+	DataPtrs.FFTArrXStEz = (float*)UtiDev::ToDevice(pGpuUsage, DataPtrs.FFTArrXStEz, 2*RadAccessData.nz*RadAccessData.nwfr*sizeof(float));
+	DataPtrs.FFTArrXFiEx = (float*)UtiDev::ToDevice(pGpuUsage, DataPtrs.FFTArrXFiEx, 2*RadAccessData.nz*RadAccessData.nwfr*sizeof(float));
+	DataPtrs.FFTArrXFiEz = (float*)UtiDev::ToDevice(pGpuUsage, DataPtrs.FFTArrXFiEz, 2*RadAccessData.nz*RadAccessData.nwfr*sizeof(float));
+	DataPtrs.FFTArrZStEx = (float*)UtiDev::ToDevice(pGpuUsage, DataPtrs.FFTArrZStEx, 2*RadAccessData.nx*RadAccessData.nwfr*sizeof(float));
+	DataPtrs.FFTArrZStEz = (float*)UtiDev::ToDevice(pGpuUsage, DataPtrs.FFTArrZStEz, 2*RadAccessData.nx*RadAccessData.nwfr*sizeof(float));
+	DataPtrs.FFTArrZFiEx = (float*)UtiDev::ToDevice(pGpuUsage, DataPtrs.FFTArrZFiEx, 2*RadAccessData.nx*RadAccessData.nwfr*sizeof(float));
+	DataPtrs.FFTArrZFiEz = (float*)UtiDev::ToDevice(pGpuUsage, DataPtrs.FFTArrZFiEz, 2*RadAccessData.nx*RadAccessData.nwfr*sizeof(float));
+	DataPtrs.ExpArrXSt = (float*)UtiDev::ToDevice(pGpuUsage, DataPtrs.ExpArrXSt, 2*RadAccessData.nx*sizeof(float));
+	DataPtrs.ExpArrXFi = (float*)UtiDev::ToDevice(pGpuUsage, DataPtrs.ExpArrXFi, 2*RadAccessData.nx*sizeof(float));
+	DataPtrs.ExpArrZSt = (float*)UtiDev::ToDevice(pGpuUsage, DataPtrs.ExpArrZSt, 2*RadAccessData.nz*sizeof(float));
+	DataPtrs.ExpArrZFi = (float*)UtiDev::ToDevice(pGpuUsage, DataPtrs.ExpArrZFi, 2*RadAccessData.nz*sizeof(float));
 
 	const int bs = 256;
 	dim3 blocks(RadAccessData.nx / bs + ((RadAccessData.nx & (bs - 1)) != 0), RadAccessData.nz, RadAccessData.nwfr);
 	dim3 threads(bs, 1);
 	MakeWfrEdgeCorrection_Kernel << <blocks, threads >> > (RadAccessData, pDataEx, pDataEz, DataPtrs, (float)DataPtrs.dxSt, (float)DataPtrs.dxFi, (float)DataPtrs.dzSt, (float)DataPtrs.dzFi);
 
-	DataPtrs.FFTArrXStEx = (float*)UtiDev::ToHostAndFree(pGpuUsage, DataPtrs.FFTArrXStEx, 2*RadAccessData.nz*RadAccessData.nwfr, true);
-	DataPtrs.FFTArrXStEz = (float*)UtiDev::ToHostAndFree(pGpuUsage, DataPtrs.FFTArrXStEz, 2*RadAccessData.nz*RadAccessData.nwfr, true);
-	DataPtrs.FFTArrXFiEx = (float*)UtiDev::ToHostAndFree(pGpuUsage, DataPtrs.FFTArrXFiEx, 2*RadAccessData.nz*RadAccessData.nwfr, true);
-	DataPtrs.FFTArrXFiEz = (float*)UtiDev::ToHostAndFree(pGpuUsage, DataPtrs.FFTArrXFiEz, 2*RadAccessData.nz*RadAccessData.nwfr, true);
+	DataPtrs.FFTArrXStEx = (float*)UtiDev::ToHostAndFree(pGpuUsage, DataPtrs.FFTArrXStEx, 2*RadAccessData.nz*RadAccessData.nwfr*sizeof(float), true);
+	DataPtrs.FFTArrXStEz = (float*)UtiDev::ToHostAndFree(pGpuUsage, DataPtrs.FFTArrXStEz, 2*RadAccessData.nz*RadAccessData.nwfr*sizeof(float), true);
+	DataPtrs.FFTArrXFiEx = (float*)UtiDev::ToHostAndFree(pGpuUsage, DataPtrs.FFTArrXFiEx, 2*RadAccessData.nz*RadAccessData.nwfr*sizeof(float), true);
+	DataPtrs.FFTArrXFiEz = (float*)UtiDev::ToHostAndFree(pGpuUsage, DataPtrs.FFTArrXFiEz, 2*RadAccessData.nz*RadAccessData.nwfr*sizeof(float), true);
+	DataPtrs.FFTArrZStEx = (float*)UtiDev::ToHostAndFree(pGpuUsage, DataPtrs.FFTArrZStEx, 2*RadAccessData.nx*RadAccessData.nwfr*sizeof(float), true);
+	DataPtrs.FFTArrZStEz = (float*)UtiDev::ToHostAndFree(pGpuUsage, DataPtrs.FFTArrZStEz, 2*RadAccessData.nx*RadAccessData.nwfr*sizeof(float), true);
+	DataPtrs.FFTArrZFiEx = (float*)UtiDev::ToHostAndFree(pGpuUsage, DataPtrs.FFTArrZFiEx, 2*RadAccessData.nx*RadAccessData.nwfr*sizeof(float), true);
+	DataPtrs.FFTArrZFiEz = (float*)UtiDev::ToHostAndFree(pGpuUsage, DataPtrs.FFTArrZFiEz, 2*RadAccessData.nx*RadAccessData.nwfr*sizeof(float), true);
+	DataPtrs.ExpArrXSt = (float*)UtiDev::ToHostAndFree(pGpuUsage, DataPtrs.ExpArrXSt, 2*RadAccessData.nx*sizeof(float), true);
+	DataPtrs.ExpArrXFi = (float*)UtiDev::ToHostAndFree(pGpuUsage, DataPtrs.ExpArrXFi, 2*RadAccessData.nx*sizeof(float), true);
+	DataPtrs.ExpArrZSt = (float*)UtiDev::ToHostAndFree(pGpuUsage, DataPtrs.ExpArrZSt, 2*RadAccessData.nz*sizeof(float), true);
+	DataPtrs.ExpArrZFi = (float*)UtiDev::ToHostAndFree(pGpuUsage, DataPtrs.ExpArrZFi, 2*RadAccessData.nz*sizeof(float), true);
 
 	UtiDev::MarkUpdated(pGpuUsage, pDataEx, true, false);
 	UtiDev::MarkUpdated(pGpuUsage, pDataEz, true, false);
