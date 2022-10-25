@@ -7,6 +7,7 @@ import srwlpy as srwl
 from array import *
 from math import *
 from copy import *
+import numpy as np
 
 import datetime
 import json
@@ -7313,6 +7314,10 @@ def srwl_uti_array_alloc(_type, _n, _list_base=[0]): #OC14042019
     #print('srwl_uti_array_alloc: array requested:', _n)
     lenBase = len(_list_base) #OC14042019
     nTrue = _n*lenBase #OC14042019
+    if _type == 'f':
+        return np.zeros(_n, dtype=np.float32)
+    elif _type == 'd':
+        return np.zeros(_n, dtype=np.float64)
     
     if(nTrue <= nPartMax): return array(_type, _list_base*_n)
     #if(_n <= nPartMax): return array(_type, [0]*_n)
