@@ -29,8 +29,12 @@ typedef struct
 	size_t size;
 	bool HostToDevUpdated;
 	bool DevToHostUpdated;
+	cudaEvent_t h2d_event;
+	cudaEvent_t d2h_event;
 } memAllocInfo_t;
 static std::map<void*, memAllocInfo_t> gpuMap;
+static cudaStream_t memcpy_stream;
+static bool memcpy_stream_initialized = false;
 #endif
 
 static void CheckGPUAvailability() 
@@ -69,7 +73,13 @@ bool UtiDev::GPUEnabled(gpuUsageArg_t *arg)
 		return false;
 	if (arg->deviceIndex > 0) {
 		if (arg->deviceIndex <= deviceCount)
+		{
+			if (memcpy_stream_initialized)
+				cudaStreamDestroy(memcpy_stream);
 			cudaSetDevice(arg->deviceIndex - 1);
+			cudaStreamCreateWithFlags(&memcpy_stream, cudaStreamNonBlocking);
+			memcpy_stream_initialized = true;
+		}
 		return GPUAvailable();
 	}
 #endif
@@ -103,15 +113,17 @@ void* UtiDev::ToDevice(gpuUsageArg_t* arg, void* hostPtr, size_t size, bool dont
 	if (arg->deviceIndex == 0)
 		return hostPtr;
 	if (hostPtr == NULL)
-		return NULL;
+		return hostPtr;
 	if (size == 0)
-		return NULL;
+		return hostPtr;
 	if (!GPUEnabled(arg))
 		return hostPtr;
 	if (gpuMap.find(hostPtr) != gpuMap.end()){
 		void* devPtr = gpuMap[hostPtr].devicePtr;
-		if (gpuMap[devPtr].HostToDevUpdated && !dontCopy)
-			cudaMemcpyAsync(devPtr, hostPtr, size, cudaMemcpyHostToDevice);
+		if (gpuMap[devPtr].HostToDevUpdated && !dontCopy){
+			cudaMemcpyAsync(devPtr, hostPtr, size, cudaMemcpyHostToDevice, memcpy_stream);
+			cudaEventRecord(gpuMap[devPtr].h2d_event, memcpy_stream);
+		}
 #if _DEBUG
 		printf("ToDevice: %p -> %p, %d, D2H: %d, H2D: %d\n", hostPtr, devPtr, size, gpuMap[devPtr].DevToHostUpdated, gpuMap[devPtr].HostToDevUpdated);
 #endif
@@ -123,8 +135,6 @@ void* UtiDev::ToDevice(gpuUsageArg_t* arg, void* hostPtr, size_t size, bool dont
 	cudaError_t err = cudaMalloc(&devicePtr, size);
 	if (err != cudaSuccess)
 		return NULL;
-	if (!dontCopy)
-		cudaMemcpyAsync(devicePtr, hostPtr, size, cudaMemcpyHostToDevice);
 #if _DEBUG
 	printf("ToDevice: %p -> %p, %d\n", hostPtr, devicePtr, size);
 #endif
@@ -133,12 +143,41 @@ void* UtiDev::ToDevice(gpuUsageArg_t* arg, void* hostPtr, size_t size, bool dont
 	info.hostPtr = hostPtr;
 	info.DevToHostUpdated = false;
 	info.HostToDevUpdated = false;
+	cudaEventCreateWithFlags(&info.h2d_event, cudaEventDisableTiming);
+	cudaEventCreateWithFlags(&info.d2h_event, cudaEventDisableTiming);
+	if (!dontCopy){
+		cudaMemcpyAsync(devicePtr, hostPtr, size, cudaMemcpyHostToDevice, memcpy_stream);
+		cudaEventRecord(info.h2d_event, memcpy_stream);
+	}
 	info.size = size;
 	gpuMap[hostPtr] = info;
 	gpuMap[devicePtr] = info;
 	return devicePtr;
 #else
 	return hostPtr;
+#endif
+}
+
+void UtiDev::EnsureDeviceMemoryReady(gpuUsageArg_t* arg, void* hostPtr)
+{
+#ifdef _OFFLOAD_GPU
+	if (arg == NULL)
+		return;
+	if (arg->deviceIndex == 0)
+		return;
+	if (hostPtr == NULL)
+		return;
+	if (!GPUEnabled(arg))
+		return;
+	if (gpuMap.find(hostPtr) != gpuMap.end()){
+		void* devPtr = gpuMap[hostPtr].devicePtr;
+		if (gpuMap[devPtr].HostToDevUpdated){
+			cudaStreamWaitEvent(0, gpuMap[devPtr].h2d_event);
+		}
+#if _DEBUG
+		printf("EnsureDeviceMemoryReady: %p -> %p, %d, D2H: %d, H2D: %d\n", hostPtr, devPtr, gpuMap[devPtr].size, gpuMap[devPtr].DevToHostUpdated, gpuMap[devPtr].HostToDevUpdated);
+#endif
+	}
 #endif
 }
 
@@ -150,12 +189,12 @@ void* UtiDev::GetHostPtr(gpuUsageArg_t* arg, void* devicePtr)
 	if (arg->deviceIndex == 0)
 		return devicePtr;
 	if (devicePtr == NULL)
-		return NULL;
+		return devicePtr;
 	if (!GPUEnabled(arg))
 		return devicePtr;
 	memAllocInfo_t info;
 	if (gpuMap.find(devicePtr) == gpuMap.end())
-		return NULL;
+		return devicePtr;
 	info = gpuMap[devicePtr];
 #if _DEBUG
 	printf("GetHostPtr: %p -> %p\n", devicePtr, info.hostPtr);
@@ -174,22 +213,31 @@ void* UtiDev::ToHostAndFree(gpuUsageArg_t* arg, void* devicePtr, size_t size, bo
 	if (arg->deviceIndex == 0)
 		return devicePtr;
 	if (devicePtr == NULL)
-		return NULL;
+		return devicePtr;
 	if (size == 0)
-		return NULL;
+		return devicePtr;
 	if (!GPUEnabled(arg))
 		return devicePtr;
 	memAllocInfo_t info;
 	if (gpuMap.find(devicePtr) == gpuMap.end())
-		return NULL;
+		return devicePtr;
 	info = gpuMap[devicePtr];
 	void *hostPtr = info.hostPtr;
-	if (!dontCopy)
-		cudaMemcpyAsync(hostPtr, devicePtr, size, cudaMemcpyDeviceToHost);
+	if (!dontCopy && info.DevToHostUpdated)
+	{
+		cudaStreamWaitEvent(memcpy_stream, info.d2h_event, 0);
+		cudaMemcpyAsync(hostPtr, devicePtr, size, cudaMemcpyDeviceToHost, memcpy_stream);
+		cudaEventRecord(info.d2h_event);
+		cudaEventSynchronize(info.d2h_event); // we can't treat host memory as valid until the copy is complete
+	}
 #if _DEBUG
 	printf("ToHostAndFree: %p -> %p, %d\n", devicePtr, hostPtr, size);
 #endif
+	cudaStreamWaitEvent(0, info.h2d_event);
+	cudaStreamWaitEvent(0, info.d2h_event);
 	cudaFreeAsync(devicePtr, 0);
+    cudaEventDestroy(info.h2d_event);
+	cudaEventDestroy(info.d2h_event);
 	gpuMap.erase(devicePtr);
 	gpuMap.erase(hostPtr);
 	return hostPtr;
@@ -211,7 +259,11 @@ void UtiDev::FreeHost(void* ptr)
 #if _DEBUG
 	printf("FreeHost: %p, %p\n", devicePtr, hostPtr);
 #endif
+    //cudaStreamWaitEvent(0, info.h2d_event);
+	//cudaStreamWaitEvent(0, info.d2h_event);
 	cudaFreeAsync(devicePtr, 0);
+	//cudaEventDestroy(info.h2d_event);
+	//cudaEventDestroy(info.d2h_event);
 	UtiDev::free(hostPtr);
 	gpuMap.erase(devicePtr);
 	gpuMap.erase(hostPtr);
@@ -238,6 +290,8 @@ void UtiDev::MarkUpdated(gpuUsageArg_t* arg, void* ptr, bool devToHost, bool hos
 	gpuMap[devPtr].HostToDevUpdated = hostToDev;
 	gpuMap[hostPtr].DevToHostUpdated = devToHost;
 	gpuMap[hostPtr].HostToDevUpdated = hostToDev;
+	if (devToHost)
+		cudaEventRecord(gpuMap[devPtr].d2h_event, 0);
 #if _DEBUG
 	printf("MarkUpdated: %p -> %p, D2H: %d, H2D: %d\n", ptr, devPtr, devToHost, hostToDev);
 #endif
@@ -259,10 +313,11 @@ void UtiDev::Fini() {
 	for (std::map<void*, memAllocInfo_t>::const_iterator it = gpuMap.cbegin(); it != gpuMap.cend(); it++)
 	{
 		if (it->second.DevToHostUpdated){
+			cudaStreamWaitEvent(memcpy_stream, it->second.d2h_event, 0);
+			cudaMemcpyAsync(it->second.hostPtr, it->second.devicePtr, it->second.size, cudaMemcpyDeviceToHost, memcpy_stream);
 #if _DEBUG
 			printf("Fini: %p -> %p, %d\n", it->second.devicePtr, it->second.hostPtr, it->second.size);
 #endif
-			cudaMemcpyAsync(it->second.hostPtr, it->second.devicePtr, it->second.size, cudaMemcpyDeviceToHost);
 			updated = true;
 			gpuMap[it->second.hostPtr].DevToHostUpdated = false;
 			gpuMap[it->second.devicePtr].DevToHostUpdated = false;
@@ -270,6 +325,18 @@ void UtiDev::Fini() {
 	}
 	if (updated)
 		cudaDeviceSynchronize();
+	for (std::map<void*, memAllocInfo_t>::const_iterator it = gpuMap.cbegin(); it != gpuMap.cend(); it++)
+	{
+		if (it->first == it->second.devicePtr)
+		{
+			cudaStreamWaitEvent(0, it->second.h2d_event);
+			cudaStreamWaitEvent(0, it->second.d2h_event);
+			cudaFree(it->second.devicePtr);
+			cudaEventDestroy(it->second.h2d_event);
+			cudaEventDestroy(it->second.d2h_event);
+		}
+	}
+	gpuMap.clear();
 #if _DEBUG
 	printf("Fini: %d\n", gpuMap.size());
 #endif

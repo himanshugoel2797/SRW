@@ -374,12 +374,10 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 		if (FFT2DInfo.pData != 0) 
 		{
 			DataToFFT = (fftwf_complex*)UtiDev::ToDevice(pGpuUsage, FFT2DInfo.pData, FFT2DInfo.Nx * FFT2DInfo.Ny * FFT2DInfo.howMany * 2 * sizeof(float));
-			UtiDev::MarkUpdated(pGpuUsage, DataToFFT, true, false);
 		}
 		else if (FFT2DInfo.pdData != 0) 
 		{
 			dDataToFFT = (fftw_complex*)UtiDev::ToDevice(pGpuUsage, FFT2DInfo.pdData, FFT2DInfo.Nx * FFT2DInfo.Ny * FFT2DInfo.howMany * 2 * sizeof(double));
-			UtiDev::MarkUpdated(pGpuUsage, dDataToFFT, true, false);
 		}
 	})
 	else
@@ -412,12 +410,18 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 		else if(m_dArrayShiftY != 0)
 			FillArrayShift('y', t0SignMult*y0_Before, FFT2DInfo.yStep, m_dArrayShiftY);
 	}
+	
+	if (DataToFFT != 0) UtiDev::EnsureDeviceMemoryReady(pGpuUsage, DataToFFT);
+	else if (dDataToFFT != 0) UtiDev::EnsureDeviceMemoryReady(pGpuUsage, dDataToFFT);
+
 	if (NeedsShiftBeforeX || NeedsShiftBeforeY) //HG02112021
 	{
 		GPU_COND(pGpuUsage, {
 			if (DataToFFT != 0) {
 				m_ArrayShiftX = (float*)UtiDev::ToDevice(pGpuUsage, m_ArrayShiftX, (Nx << 1) * sizeof(float), false);
 				m_ArrayShiftY = (float*)UtiDev::ToDevice(pGpuUsage, m_ArrayShiftY, (Ny << 1) * sizeof(float), false);	
+				UtiDev::EnsureDeviceMemoryReady(pGpuUsage, m_ArrayShiftX);
+				UtiDev::EnsureDeviceMemoryReady(pGpuUsage, m_ArrayShiftY);
 				TreatShifts2D_GPU((float*)DataToFFT, Nx, Ny, FFT2DInfo.howMany, NeedsShiftBeforeX, NeedsShiftBeforeY, m_ArrayShiftX, m_ArrayShiftY);
 				m_ArrayShiftX = (float*)UtiDev::ToHostAndFree(pGpuUsage, m_ArrayShiftX, (Nx << 1) * sizeof(float), true);
 				m_ArrayShiftY = (float*)UtiDev::ToHostAndFree(pGpuUsage, m_ArrayShiftY, (Ny << 1) * sizeof(float), true);
@@ -425,6 +429,8 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 			else if (dDataToFFT != 0) {
 				m_dArrayShiftX = (double*)UtiDev::ToDevice(pGpuUsage, m_dArrayShiftX, (Nx << 1) * sizeof(double), false);	
 				m_dArrayShiftY = (double*)UtiDev::ToDevice(pGpuUsage, m_dArrayShiftY, (Ny << 1) * sizeof(double), false);	
+				UtiDev::EnsureDeviceMemoryReady(pGpuUsage, m_dArrayShiftX);
+				UtiDev::EnsureDeviceMemoryReady(pGpuUsage, m_dArrayShiftY);
 				TreatShifts2D_GPU((double*)dDataToFFT, Nx, Ny, FFT2DInfo.howMany, NeedsShiftBeforeX, NeedsShiftBeforeY, m_dArrayShiftX, m_dArrayShiftY);
 				m_dArrayShiftX = (double*)UtiDev::ToHostAndFree(pGpuUsage, m_dArrayShiftX, (Nx << 1) * sizeof(double), true);
 				m_dArrayShiftY = (double*)UtiDev::ToHostAndFree(pGpuUsage, m_dArrayShiftY, (Ny << 1) * sizeof(double), true);
@@ -700,7 +706,9 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 		{
 			if (DataToFFT != 0) {
 				m_ArrayShiftX = (float*)UtiDev::ToDevice(pGpuUsage, m_ArrayShiftX, (Nx << 1) * sizeof(float), false);
-				m_ArrayShiftY = (float*)UtiDev::ToDevice(pGpuUsage, m_ArrayShiftY, (Ny << 1) * sizeof(float), false);	
+				m_ArrayShiftY = (float*)UtiDev::ToDevice(pGpuUsage, m_ArrayShiftY, (Ny << 1) * sizeof(float), false);
+				UtiDev::EnsureDeviceMemoryReady(pGpuUsage, m_ArrayShiftX);
+				UtiDev::EnsureDeviceMemoryReady(pGpuUsage, m_ArrayShiftY);
 				TreatShifts2D_GPU((float*)DataToFFT, Nx, Ny, FFT2DInfo.howMany, NeedsShiftAfterX, NeedsShiftAfterY, m_ArrayShiftX, m_ArrayShiftY);
 				m_ArrayShiftX = (float*)UtiDev::ToHostAndFree(pGpuUsage, m_ArrayShiftX, (Nx << 1) * sizeof(float), true);
 				m_ArrayShiftY = (float*)UtiDev::ToHostAndFree(pGpuUsage, m_ArrayShiftY, (Ny << 1) * sizeof(float), true);
@@ -708,6 +716,8 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 			else if (dDataToFFT != 0) {
 				m_dArrayShiftX = (double*)UtiDev::ToDevice(pGpuUsage, m_dArrayShiftX, (Nx << 1) * sizeof(double), false);	
 				m_dArrayShiftY = (double*)UtiDev::ToDevice(pGpuUsage, m_dArrayShiftY, (Ny << 1) * sizeof(double), false);
+				UtiDev::EnsureDeviceMemoryReady(pGpuUsage, m_dArrayShiftX);
+				UtiDev::EnsureDeviceMemoryReady(pGpuUsage, m_dArrayShiftY);
 				TreatShifts2D_GPU((double*)dDataToFFT, Nx, Ny, FFT2DInfo.howMany, NeedsShiftAfterX, NeedsShiftAfterY, m_dArrayShiftX, m_dArrayShiftY);
 				m_dArrayShiftX = (double*)UtiDev::ToHostAndFree(pGpuUsage, m_dArrayShiftX, (Nx << 1) * sizeof(double), true);
 				m_dArrayShiftY = (double*)UtiDev::ToHostAndFree(pGpuUsage, m_dArrayShiftY, (Ny << 1) * sizeof(double), true);
@@ -727,8 +737,18 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 	//fftwnd_destroy_plan(Plan2DFFT);
 	//OC27102018
 	//SY: adopted for OpenMP
-
-	if(!GPU_ENABLED(pGpuUsage))
+	GPU_COND(pGpuUsage, //HG02112021
+	{
+		if (FFT2DInfo.pData != 0) 
+		{
+			UtiDev::MarkUpdated(pGpuUsage, DataToFFT, true, false);
+		}
+		else if (FFT2DInfo.pdData != 0) 
+		{
+			UtiDev::MarkUpdated(pGpuUsage, dDataToFFT, true, false);
+		}
+	})
+	else
 	{
 #if _FFTW3 //OC28012019
 		if (DataToFFT != 0)
@@ -788,13 +808,13 @@ int CGenMathFFT1D::Make1DFFT(CGenMathFFT1DInfo& FFT1DInfo, gpuUsageArg_t *pGpuUs
 	{
 		if (FFT1DInfo.pInData != 0)
 		{
-			m_ArrayShiftX = ALLOC_ARRAY(float, Nx << 1);
+			m_ArrayShiftX = new float[Nx << 1];//ALLOC_ARRAY(float, Nx << 1);
 			if (m_ArrayShiftX == 0) return MEMORY_ALLOCATION_FAILURE;
 			m_ArrayShiftX = (float*)UtiDev::ToDevice(pGpuUsage, m_ArrayShiftX, (Nx << 1) * sizeof(float), true);
 		}
 		else if (FFT1DInfo.pdInData != 0)
 		{
-			m_dArrayShiftX = ALLOC_ARRAY(double, Nx << 1);
+			m_dArrayShiftX = new double[Nx << 1];//ALLOC_ARRAY(double, Nx << 1);
 			if (m_dArrayShiftX == 0) return MEMORY_ALLOCATION_FAILURE;
 			m_dArrayShiftX = (double*)UtiDev::ToDevice(pGpuUsage, m_dArrayShiftX, (Nx << 1) * sizeof(double), true);
 		}
@@ -818,13 +838,11 @@ int CGenMathFFT1D::Make1DFFT(CGenMathFFT1DInfo& FFT1DInfo, gpuUsageArg_t *pGpuUs
 		{
 			DataToFFT = (fftwf_complex*)UtiDev::ToDevice(pGpuUsage, FFT1DInfo.pInData, FFT1DInfo.Nx * FFT1DInfo.HowMany * 2 * sizeof(float));
 			OutDataFFT = (fftwf_complex*)UtiDev::ToDevice(pGpuUsage, FFT1DInfo.pOutData, FFT1DInfo.Nx * FFT1DInfo.HowMany * 2 * sizeof(float), true);
-			UtiDev::MarkUpdated(pGpuUsage, OutDataFFT, true, false);
 		}
 		else if ((FFT1DInfo.pdInData != 0) && (FFT1DInfo.pdOutData != 0))
 		{
 			dDataToFFT = (fftw_complex*)UtiDev::ToDevice(pGpuUsage, FFT1DInfo.pdInData, FFT1DInfo.Nx * FFT1DInfo.HowMany * 2 * sizeof(double));
 			dOutDataFFT = (fftw_complex*)UtiDev::ToDevice(pGpuUsage, FFT1DInfo.pdOutData, FFT1DInfo.Nx * FFT1DInfo.HowMany * 2 * sizeof(double), true);
-			UtiDev::MarkUpdated(pGpuUsage, dOutDataFFT, true, false);
 		}
 	})
 	else 
@@ -862,6 +880,9 @@ int CGenMathFFT1D::Make1DFFT(CGenMathFFT1DInfo& FFT1DInfo, gpuUsageArg_t *pGpuUs
 	**/
 #endif
 	}
+
+	if (DataToFFT != 0) UtiDev::EnsureDeviceMemoryReady(pGpuUsage, DataToFFT);
+	else if (dDataToFFT != 0) UtiDev::EnsureDeviceMemoryReady(pGpuUsage, dDataToFFT);
 
 	char t0SignMult = (FFT1DInfo.Dir > 0) ? -1 : 1;
 	if (NeedsShiftBeforeX)
@@ -1201,8 +1222,19 @@ int CGenMathFFT1D::Make1DFFT(CGenMathFFT1DInfo& FFT1DInfo, gpuUsageArg_t *pGpuUs
 		int result = ProcessSharpEdges(FFT1DInfo);
 		if(result) return result;
 	}
-
-	if (!GPU_ENABLED(pGpuUsage))
+	
+	GPU_COND(pGpuUsage, //HG20012022
+	{
+		if ((FFT1DInfo.pInData != 0) && (FFT1DInfo.pOutData != 0))
+		{
+			UtiDev::MarkUpdated(pGpuUsage, OutDataFFT, true, false);
+		}
+		else if ((FFT1DInfo.pdInData != 0) && (FFT1DInfo.pdOutData != 0))
+		{
+			UtiDev::MarkUpdated(pGpuUsage, dOutDataFFT, true, false);
+		}
+	})
+	else 
 	{
 		//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
 		//srwlPrintTime("::Make1DFFT : ProcessSharpEdges",&start);
@@ -1229,11 +1261,13 @@ int CGenMathFFT1D::Make1DFFT(CGenMathFFT1DInfo& FFT1DInfo, gpuUsageArg_t *pGpuUs
 
 	if (m_ArrayShiftX != 0)
 	{
-		FREE_ARRAY(m_ArrayShiftX);
+		m_ArrayShiftX = (float*)UtiDev::ToHostAndFree(pGpuUsage, m_ArrayShiftX, (Nx << 1) * sizeof(float), true);
+		delete[] m_ArrayShiftX;//FREE_ARRAY(m_ArrayShiftX);
 	}
 	if (m_dArrayShiftX != 0)
 	{
-		FREE_ARRAY(m_dArrayShiftX);
+		m_dArrayShiftX = (double*)UtiDev::ToHostAndFree(pGpuUsage, m_dArrayShiftX, (Nx << 1) * sizeof(double), true);
+		delete[] m_dArrayShiftX;//FREE_ARRAY(m_dArrayShiftX);
 	}
 
 	//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:

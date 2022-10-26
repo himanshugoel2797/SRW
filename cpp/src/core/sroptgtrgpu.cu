@@ -11,8 +11,9 @@
 int srTGenTransmission::RadPointModifierParallel(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars, long pBufVarsSz, gpuUsageArg_t *pGpuUsage)
 {
     GenTransNumData.pData = (char*)UtiDev::ToDevice(pGpuUsage, GenTransNumData.pData, GenTransNumData.DimSizes[0] * (int)GenTransNumData.DimSizes[1] * (int)GenTransNumData.DimSizes[2] * sizeof(double) * 2);
+	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, GenTransNumData.pData);
     int retCode = RadPointModifierParallelImpl<srTGenTransmission>(pRadAccessData, pBufVars, pBufVarsSz, this, pGpuUsage); 
-    GenTransNumData.pData = (char*)UtiDev::ToHostAndFree(pGpuUsage, GenTransNumData.pData, GenTransNumData.DimSizes[0] * (int)GenTransNumData.DimSizes[1] * (int)GenTransNumData.DimSizes[2] * sizeof(double) * 2, true);
+	GenTransNumData.pData = (char*)UtiDev::ToHostAndFree(pGpuUsage, GenTransNumData.pData, GenTransNumData.DimSizes[0] * (int)GenTransNumData.DimSizes[1] * (int)GenTransNumData.DimSizes[2] * sizeof(double) * 2, true);
     return retCode;
 } //HG03092022
 #endif

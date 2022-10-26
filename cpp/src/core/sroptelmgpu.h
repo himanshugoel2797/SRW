@@ -57,17 +57,26 @@ template<class T> int RadPointModifierParallelImpl(srTSRWRadStructAccessData* pR
 	dim3 threads(bs, 1);
 	
 	if (pRadAccessData->pBaseRadX != NULL)
+	{
 		pRadAccessData->pBaseRadX = (float*)UtiDev::ToDevice(pGpuUsage, pRadAccessData->pBaseRadX, 2*pRadAccessData->ne*pRadAccessData->nx*pRadAccessData->nz*pRadAccessData->nwfr*sizeof(float));
+		UtiDev::EnsureDeviceMemoryReady(pGpuUsage, pRadAccessData->pBaseRadX);
+	}
 	if (pRadAccessData->pBaseRadZ != NULL)
+	{
 		pRadAccessData->pBaseRadZ = (float*)UtiDev::ToDevice(pGpuUsage, pRadAccessData->pBaseRadZ, 2*pRadAccessData->ne*pRadAccessData->nx*pRadAccessData->nz*pRadAccessData->nwfr*sizeof(float));
+		UtiDev::EnsureDeviceMemoryReady(pGpuUsage, pRadAccessData->pBaseRadZ);
+	}
 
     T* local_copy = (T*)UtiDev::ToDevice(pGpuUsage, tgt_obj, sizeof(T));
+	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, local_copy);
     //cudaMalloc(&local_copy, sizeof(T));
     //cudaMemcpy(local_copy, tgt_obj, sizeof(T), cudaMemcpyHostToDevice);
 	
 	void* pBufVars_dev = NULL;
-	if (pBufVarsSz > 0)
+	if (pBufVarsSz > 0){
 		pBufVars_dev = UtiDev::ToDevice(pGpuUsage, pBufVars, pBufVarsSz);
+		UtiDev::EnsureDeviceMemoryReady(pGpuUsage, pBufVars_dev);
+	}
 	RadPointModifierParallel_Kernel<T> << <blocks, threads >> > (*pRadAccessData, pBufVars_dev, local_copy);
     //cudaDeviceSynchronize();
     //cudaFreeAsync(local_copy, 0);

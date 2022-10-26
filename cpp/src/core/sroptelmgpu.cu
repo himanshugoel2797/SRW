@@ -82,9 +82,15 @@ __global__ void TreatStronglyOscillatingTerm_Kernel(srTSRWRadStructAccessData Ra
 void TreatStronglyOscillatingTerm_GPU(srTSRWRadStructAccessData& RadAccessData, bool TreatPolCompX, bool TreatPolCompZ, int ieStart, int ieBefEnd, double ConstRx, double ConstRz, gpuUsageArg_t* pGpuUsage)
 {
 	if (RadAccessData.pBaseRadX != NULL)
+	{
 		RadAccessData.pBaseRadX = (float*)UtiDev::ToDevice(pGpuUsage, RadAccessData.pBaseRadX, 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz*RadAccessData.nwfr*sizeof(float));
+		UtiDev::EnsureDeviceMemoryReady(pGpuUsage, RadAccessData.pBaseRadX);
+	}
 	if (RadAccessData.pBaseRadZ != NULL)
+	{
 		RadAccessData.pBaseRadZ = (float*)UtiDev::ToDevice(pGpuUsage, RadAccessData.pBaseRadZ, 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz*RadAccessData.nwfr*sizeof(float));
+		UtiDev::EnsureDeviceMemoryReady(pGpuUsage, RadAccessData.pBaseRadZ);
+	}
 
     const int bs = 256;
     dim3 blocks(RadAccessData.nx / bs + ((RadAccessData.nx & (bs - 1)) != 0), RadAccessData.nz, ieBefEnd - ieStart);
@@ -266,7 +272,6 @@ void MakeWfrEdgeCorrection_GPU(srTSRWRadStructAccessData& RadAccessData, float* 
 {
 	pDataEx = (float*)UtiDev::ToDevice(pGpuUsage, pDataEx, 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz*RadAccessData.nwfr*sizeof(float));
 	pDataEz = (float*)UtiDev::ToDevice(pGpuUsage, pDataEz, 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz*RadAccessData.nwfr*sizeof(float));
-
 	DataPtrs.FFTArrXStEx = (float*)UtiDev::ToDevice(pGpuUsage, DataPtrs.FFTArrXStEx, 2*RadAccessData.nz*RadAccessData.nwfr*sizeof(float));
 	DataPtrs.FFTArrXStEz = (float*)UtiDev::ToDevice(pGpuUsage, DataPtrs.FFTArrXStEz, 2*RadAccessData.nz*RadAccessData.nwfr*sizeof(float));
 	DataPtrs.FFTArrXFiEx = (float*)UtiDev::ToDevice(pGpuUsage, DataPtrs.FFTArrXFiEx, 2*RadAccessData.nz*RadAccessData.nwfr*sizeof(float));
@@ -279,6 +284,21 @@ void MakeWfrEdgeCorrection_GPU(srTSRWRadStructAccessData& RadAccessData, float* 
 	DataPtrs.ExpArrXFi = (float*)UtiDev::ToDevice(pGpuUsage, DataPtrs.ExpArrXFi, 2*RadAccessData.nx*sizeof(float));
 	DataPtrs.ExpArrZSt = (float*)UtiDev::ToDevice(pGpuUsage, DataPtrs.ExpArrZSt, 2*RadAccessData.nz*sizeof(float));
 	DataPtrs.ExpArrZFi = (float*)UtiDev::ToDevice(pGpuUsage, DataPtrs.ExpArrZFi, 2*RadAccessData.nz*sizeof(float));
+
+	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, pDataEx);
+	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, pDataEz);
+	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, DataPtrs.FFTArrXStEx);
+	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, DataPtrs.FFTArrXStEz);
+	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, DataPtrs.FFTArrXFiEx);
+	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, DataPtrs.FFTArrXFiEz);
+	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, DataPtrs.FFTArrZStEx);
+	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, DataPtrs.FFTArrZStEz);
+	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, DataPtrs.FFTArrZFiEx);
+	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, DataPtrs.FFTArrZFiEz);
+	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, DataPtrs.ExpArrXSt);
+	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, DataPtrs.ExpArrXFi);
+	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, DataPtrs.ExpArrZSt);
+	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, DataPtrs.ExpArrZFi);
 
 	const int bs = 256;
 	dim3 blocks(RadAccessData.nx / bs + ((RadAccessData.nx & (bs - 1)) != 0), RadAccessData.nz, RadAccessData.nwfr);
@@ -530,6 +550,11 @@ int srTGenOptElem::RadResizeCore_GPU(srTSRWRadStructAccessData& OldRadAccessData
 	OldRadAccessData.pBaseRadZ = (float*)UtiDev::ToDevice(pGpuUsage, OldRadAccessData.pBaseRadZ, 2*OldRadAccessData.ne*OldRadAccessData.nx*OldRadAccessData.nz*OldRadAccessData.nwfr*sizeof(float));
 	NewRadAccessData.pBaseRadX = (float*)UtiDev::ToDevice(pGpuUsage, NewRadAccessData.pBaseRadX, 2*NewRadAccessData.ne*NewRadAccessData.nx*NewRadAccessData.nz*NewRadAccessData.nwfr*sizeof(float), true);
 	NewRadAccessData.pBaseRadZ = (float*)UtiDev::ToDevice(pGpuUsage, NewRadAccessData.pBaseRadZ, 2*NewRadAccessData.ne*NewRadAccessData.nx*NewRadAccessData.nz*NewRadAccessData.nwfr*sizeof(float), true);
+	
+	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, OldRadAccessData.pBaseRadX);
+	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, OldRadAccessData.pBaseRadZ);
+	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, NewRadAccessData.pBaseRadX);
+	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, NewRadAccessData.pBaseRadZ);
 
 	const int bs = 32;
 	dim3 blocks(nx / bs + ((nx & (bs - 1)) != 0), nz, ne);

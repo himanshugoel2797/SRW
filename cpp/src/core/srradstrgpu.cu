@@ -51,9 +51,15 @@ __global__ void MultiplyElFieldByPhaseLin_Kernel(double xMult, double zMult, flo
 void MultiplyElFieldByPhaseLin_GPU(double xMult, double zMult, float* pBaseRadX, float* pBaseRadZ, int nWfr, int nz, int nx, int ne, float zStart, float zStep, float xStart, float xStep, gpuUsageArg_t* pGpuUsage)
 {
 	if (pBaseRadX != NULL)
+	{
 		pBaseRadX = (float*)UtiDev::ToDevice(pGpuUsage, pBaseRadX, nWfr * nz * nx * ne * 2 * sizeof(float));
+		UtiDev::EnsureDeviceMemoryReady(pGpuUsage, pBaseRadX);
+	}
 	if (pBaseRadZ != NULL)
+	{
 		pBaseRadZ = (float*)UtiDev::ToDevice(pGpuUsage, pBaseRadZ, nWfr * nz * nx * ne * 2 * sizeof(float));
+		UtiDev::EnsureDeviceMemoryReady(pGpuUsage, pBaseRadZ);
+	}
 
     const int bs = 256;
     dim3 blocks(nx / bs + ((nx & (bs - 1)) != 0), nz, nWfr);
