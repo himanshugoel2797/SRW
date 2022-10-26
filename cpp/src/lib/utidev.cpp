@@ -35,6 +35,7 @@ typedef struct
 static std::map<void*, memAllocInfo_t> gpuMap;
 static cudaStream_t memcpy_stream;
 static bool memcpy_stream_initialized = false;
+static int current_device = -1;
 #endif
 
 static void CheckGPUAvailability() 
@@ -74,10 +75,15 @@ bool UtiDev::GPUEnabled(gpuUsageArg_t *arg)
 	if (arg->deviceIndex > 0) {
 		if (arg->deviceIndex <= deviceCount)
 		{
-			if (memcpy_stream_initialized)
+			if (memcpy_stream_initialized && current_device != arg->deviceIndex)
+			{
 				cudaStreamDestroy(memcpy_stream);
+				memcpy_stream_initialized = false;
+			}
 			cudaSetDevice(arg->deviceIndex - 1);
-			cudaStreamCreateWithFlags(&memcpy_stream, cudaStreamNonBlocking);
+			if (!memcpy_stream_initialized)
+				cudaStreamCreateWithFlags(&memcpy_stream, cudaStreamNonBlocking);
+			current_device = arg->deviceIndex;
 			memcpy_stream_initialized = true;
 		}
 		return GPUAvailable();
@@ -331,7 +337,7 @@ void UtiDev::Fini() {
 		{
 			cudaStreamWaitEvent(0, it->second.h2d_event);
 			cudaStreamWaitEvent(0, it->second.d2h_event);
-			cudaFree(it->second.devicePtr);
+			cudaFreeAsync(it->second.devicePtr, 0);
 			cudaEventDestroy(it->second.h2d_event);
 			cudaEventDestroy(it->second.d2h_event);
 		}
