@@ -18,6 +18,7 @@
 #include "gmobj.h"
 #endif
 
+#include "utidev.h"
 #include "gmvect.h"
 #include <math.h>
 #include <complex>
@@ -163,7 +164,7 @@ public:
 	//static double Integ1D_FuncDefByArray(double* FuncArr, long Np, double Step);
 	//static double Integ1D_FuncDefByArray(float* FuncArr, long Np, double Step);
 	//template <class T> static double Integ1D_FuncDefByArray(T* FuncArr, long Np, double Step)
-	template <class T> static double Integ1D_FuncDefByArray(T* FuncArr, long long Np, double Step)
+	template <class T> GPU_PORTABLE static double Integ1D_FuncDefByArray(T* FuncArr, long long Np, double Step)
 	{
 		if((FuncArr == 0) || (Np < 2) || (Step == 0)) return 0;
 		//if(Np == 2) return (double)(0.5*(FuncArr[0] + FuncArr[1]));

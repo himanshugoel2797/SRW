@@ -752,7 +752,7 @@ EXP int CALL srwlCalcPowDenSR(SRWLStokes* pStokes, SRWLPartBeam* pElBeam, SRWLPr
 
 //-------------------------------------------------------------------------
 
-EXP int CALL srwlCalcIntFromElecField(char* pInt, SRWLWfr* pWfr, char polar, char intType, char depType, double e, double x, double y, double* pMeth, void* pFldTrj) //OC23022020
+EXP int CALL srwlCalcIntFromElecField(char* pInt, SRWLWfr* pWfr, char polar, char intType, char depType, double e, double x, double y, double* pMeth, void* pFldTrj, gpuUsageArg_t* pGpuUsage) //OC23022020
 //EXP int CALL srwlCalcIntFromElecField(char* pInt, SRWLWfr* pWfr, char polar, char intType, char depType, double e, double x, double y, double *pMeth) //OC16122019
 //EXP int CALL srwlCalcIntFromElecField(char* pInt, SRWLWfr* pWfr, char polar, char intType, char depType, double e, double x, double y, int *pMeth) //OC13122019
 //EXP int CALL srwlCalcIntFromElecField(char* pInt, SRWLWfr* pWfr, char polar, char intType, char depType, double e, double x, double y)
@@ -797,7 +797,7 @@ EXP int CALL srwlCalcIntFromElecField(char* pInt, SRWLWfr* pWfr, char polar, cha
 			//pFldTrj = pTrjData;
 		}
 
-		radGenManip.ExtractRadiation((int)polar, (int)arIntTypeConv[intType], (int)depType, wfr.Pres, e, x, y, pInt, pMeth, pTrjDat); //OC23022020
+		radGenManip.ExtractRadiation((int)polar, (int)arIntTypeConv[intType], (int)depType, wfr.Pres, e, x, y, pInt, pMeth, pTrjDat, pGpuUsage); //OC23022020
 		//radGenManip.ExtractRadiation((int)polar, (int)arIntTypeConv[intType], (int)depType, wfr.Pres, e, x, y, pInt, pMeth); //OC13122019
 		//radGenManip.ExtractRadiation((int)polar, (int)intType, (int)depType, wfr.Pres, e, x, y, pInt);
 

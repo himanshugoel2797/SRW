@@ -4652,18 +4652,20 @@ static PyObject* srwlpy_CalcIntFromElecField(PyObject *self, PyObject *args)
 {
 	//PyObject *oInt=0, *oWfr=0, *oPol=0, *oIntType=0, *oDepType=0, *oE=0, *oX=0, *oY=0;
 	//PyObject *oInt=0, *oWfr=0, *oPol=0, *oIntType=0, *oDepType=0, *oE=0, *oX=0, *oY=0, *oMeth=0;
-	PyObject *oInt=0, *oWfr=0, *oPol=0, *oIntType=0, *oDepType=0, *oE=0, *oX=0, *oY=0, *oMeth=0, *oFldTrj=0; //OC23022020
+	PyObject *oInt=0, *oWfr=0, *oPol=0, *oIntType=0, *oDepType=0, *oE=0, *oX=0, *oY=0, *oMeth=0, *oFldTrj=0, *oDev=0; //OC23022020
 	vector<Py_buffer> vBuf;
 	SRWLWfr wfr;
 	SRWLMagFldC *pMagCnt=0; //OC23022020
 	SRWLPrtTrj *pPrtTrj=0;
+	gpuUsageArg_t gpuArgs;
 
+	srwlUtiDevInit();
 	try
 	{
 		//if(!PyArg_ParseTuple(args, "OOOOOOOO:CalcIntFromElecField", &oInt, &oWfr, &oPol, &oIntType, &oDepType, &oE, &oX, &oY)) throw strEr_BadArg_CalcIntFromElecField;
 		//if(!PyArg_ParseTuple(args, "OOOOOOOO|O:CalcIntFromElecField", &oInt, &oWfr, &oPol, &oIntType, &oDepType, &oE, &oX, &oY, &oMeth)) throw strEr_BadArg_CalcIntFromElecField; //OC13122019
 		//if(!PyArg_ParseTuple(args, "OOOOOOOO|O:CalcIntFromElecField", &oInt, &oWfr, &oPol, &oIntType, &oDepType, &oE, &oX, &oY, &oMeth, &oFldTrj)) throw strEr_BadArg_CalcIntFromElecField; //OC23022020
-		if(!PyArg_ParseTuple(args, "OOOOOOOO|OO:CalcIntFromElecField", &oInt, &oWfr, &oPol, &oIntType, &oDepType, &oE, &oX, &oY, &oMeth, &oFldTrj)) throw strEr_BadArg_CalcIntFromElecField; //OC03032021 (just formally corrected, according to number of arguments)
+		if(!PyArg_ParseTuple(args, "OOOOOOOO|OOO:CalcIntFromElecField", &oInt, &oWfr, &oPol, &oIntType, &oDepType, &oE, &oX, &oY, &oMeth, &oFldTrj, &oDev)) throw strEr_BadArg_CalcIntFromElecField; //OC03032021 (just formally corrected, according to number of arguments)
 		if((oInt == 0) || (oWfr == 0) || (oPol == 0) || (oIntType == 0) || (oDepType == 0) || (oE == 0) || (oX == 0) || (oY == 0)) throw strEr_BadArg_CalcIntFromElecField;
 
 		//char *arInt = (char*)GetPyArrayBuf(oInt, vBuf, PyBUF_WRITABLE, 0);
@@ -4724,9 +4726,12 @@ static PyObject* srwlpy_CalcIntFromElecField(PyObject *self, PyObject *args)
 			}
 		}
 
+		ParseDeviceParam(oDev, &gpuArgs);
+
 		//ProcRes(srwlCalcIntFromElecField(arInt, &wfr, pol, intType, depType, e, x, y));
 		//ProcRes(srwlCalcIntFromElecField(arInt, &wfr, pol, intType, depType, e, x, y, pMeth)); //OC13122019
-		ProcRes(srwlCalcIntFromElecField(arInt, &wfr, pol, intType, depType, e, x, y, pMeth, pFldTrj)); //OC23022020
+		ProcRes(srwlCalcIntFromElecField(arInt, &wfr, pol, intType, depType, e, x, y, pMeth, pFldTrj, &gpuArgs)); //OC23022020
+		CleanDeviceParam();
 	}
 	catch(const char* erText) 
 	{
@@ -4738,6 +4743,7 @@ static PyObject* srwlpy_CalcIntFromElecField(PyObject *self, PyObject *args)
 	if(pMagCnt != 0) DeallocMagCntArrays(pMagCnt);
 	ReleasePyBuffers(vBuf);
 	EraseElementFromMap(&wfr, gmWfrPyPtr);
+	srwlUtiDevFini();
 
 	if(oInt) Py_XINCREF(oInt);
 	return oInt;

@@ -553,8 +553,8 @@ int srTGenOptElem::RadResizeCore_GPU(srTSRWRadStructAccessData& OldRadAccessData
 	
 	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, OldRadAccessData.pBaseRadX);
 	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, OldRadAccessData.pBaseRadZ);
-	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, NewRadAccessData.pBaseRadX);
-	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, NewRadAccessData.pBaseRadZ);
+	//UtiDev::EnsureDeviceMemoryReady(pGpuUsage, NewRadAccessData.pBaseRadX);
+	//UtiDev::EnsureDeviceMemoryReady(pGpuUsage, NewRadAccessData.pBaseRadZ);
 
 	const int bs = 32;
 	dim3 blocks(nx / bs + ((nx & (bs - 1)) != 0), nz, ne);
