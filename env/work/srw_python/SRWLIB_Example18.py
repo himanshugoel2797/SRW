@@ -189,7 +189,7 @@ srwl_uti_save_intens_ascii(
 print('   Propagating wavefront ... ', end='')
 t = time.time()
 srwl.PropagElecField(wfr, opBL, None, 1)
-print('done in', round(time.time() - t), 's')
+print('done in', (time.time() - t)*1000, 'ms')
 
 print('   Extracting and projecting propagated wavefront intensity on detector and saving it to file ... ', end='')
 t = time.time()

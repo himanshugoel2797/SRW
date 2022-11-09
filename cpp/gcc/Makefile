@@ -24,7 +24,7 @@ LDFLAGS=-L$(LIB_DIR) -lm
 ifeq ($(MODE),cuda)
 SRW_SRC_DEF += -D_OFFLOAD_GPU -DUSE_CUDA -D_FFTW3
 SRW_INCLUDES += -I$(NVCOMPILERS)/$(NVARCH)/$(NVVERSION)/math_libs/include -I$(NVCOMPILERS)/$(NVARCH)/$(NVVERSION)/cuda/include 
-SRW_FLAGS += -std=c++11
+SRW_FLAGS += -std=c++17
 LDFLAGS += -L$(NVCOMPILERS)/$(NVARCH)/$(NVVERSION)/cuda/lib64 -lcudart_static -lcudadevrt -lcufft -lrt
 NVCFLAGS = -O3 -arch=sm_80 -dlto -rdc=true
 #CUDA_OBJ= gmfftgpu0.o srradmnpgpu.o srradstrgpu.o sroptelmgpu.o #srradintgpu.o
