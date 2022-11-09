@@ -124,6 +124,10 @@ public:
 #endif
 	}
 
+	virtual int SupportedFeatures() {
+		return 0; //(1 << 0) = GPU, (1 << 1) = Wavefront Batching
+	}
+
 	virtual int PropagateRadiation(srTSRWRadStructAccessData*, srTParPrecWfrPropag&, srTRadResizeVect&, gpuUsageArg_t* =0)
 	{
 #if _DEBUG

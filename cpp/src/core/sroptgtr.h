@@ -37,6 +37,7 @@ protected: //OC29012021
 	double DxContin, DzContin; // Minimal intervals between discontinuties
 
 public:
+	int SupportedFeatures() override { return 1; }
 
 	srTGenTransmission(srTStringVect* pElemInfo, srTDataMD* pExtraData);
 	srTGenTransmission(const SRWLOptT& tr);

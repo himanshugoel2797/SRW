@@ -102,7 +102,7 @@ public:
 
 		int res;
 		if(TransvPres != RadAccessData.Pres)
-			if(res = GenOptElem.SetRadRepres(&RadAccessData, char(TransvPres))) throw res;
+			if(res = GenOptElem.SetRadRepres(&RadAccessData, char(TransvPres), 0, 0, pGpuUsage)) throw res;
 
 		if(RadExtract.Int_or_Phase == 1)
 		{//1- Multi-Elec Intensity

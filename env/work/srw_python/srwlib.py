@@ -7314,7 +7314,7 @@ def srwl_uti_array_alloc(_type, _n, _list_base=[0]): #OC14042019
     #print('srwl_uti_array_alloc: array requested:', _n)
     lenBase = len(_list_base) #OC14042019
     nTrue = _n*lenBase #OC14042019
-    if _type == 'f':
+    if _type == 'f': #HG01112022
         return np.zeros(_n, dtype=np.float32)
     elif _type == 'd':
         return np.zeros(_n, dtype=np.float64)

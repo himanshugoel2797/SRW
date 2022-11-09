@@ -265,6 +265,7 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 	int res = 0, elemCount = 0;
 
 	bool propIntIsNeeded = (nInt != 0) && (arID != 0) && (arI != 0); //OC27082018
+	bool dataOnDevice = false;
 
 	for(srTGenOptElemHndlList::iterator it = GenOptElemList.begin(); it != GenOptElemList.end(); ++it)
 	{
@@ -305,10 +306,15 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 
 			//TO IMPLEMENT: eventual shift of wavefront before resizing!!!
 
-			if((::fabs(curPropResizeInst.pxd - 1.) > tolRes) || (::fabs(curPropResizeInst.pxm - 1.) > tolRes) ||
-			   //(::fabs(curPropResizeInst.pzd - 1.) > tolRes) || (::fabs(curPropResizeInst.pzm - 1.) > tolRes))
-			   (::fabs(curPropResizeInst.pzd - 1.) > tolRes) || (::fabs(curPropResizeInst.pzm - 1.) > tolRes) || (curPropResizeInst.ShiftTypeBeforeRes > 0)) //OC11072019
+			if ((::fabs(curPropResizeInst.pxd - 1.) > tolRes) || (::fabs(curPropResizeInst.pxm - 1.) > tolRes) ||
+				//(::fabs(curPropResizeInst.pzd - 1.) > tolRes) || (::fabs(curPropResizeInst.pzm - 1.) > tolRes))
+				(::fabs(curPropResizeInst.pzd - 1.) > tolRes) || (::fabs(curPropResizeInst.pzm - 1.) > tolRes) || (curPropResizeInst.ShiftTypeBeforeRes > 0)) //OC11072019
+			{
 				if(res = RadResizeGen(wfr, curPropResizeInst, pGpuUsage)) return res;
+				GPU_COND(pGpuUsage, {
+						dataOnDevice = true;
+					});
+			}
 
 			//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
 			//srwlPrintTime("Iteration: RadResizeGen",&start);
@@ -325,6 +331,23 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 		//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
 		//srwlPrintTime("Iteration: precParWfrPropag",&start);
 
+		GPU_COND(pGpuUsage, {
+			if (dataOnDevice && (((srTGenOptElem*)it->rep)->SupportedFeatures() & 1) == 0)
+			{
+				printf("Element does not support GPU, transferring to CPU.\r\n");
+				if (wfr.pBaseRadX != NULL)
+					wfr.pBaseRadX = (float*)UtiDev::ToHostAndFree(pGpuUsage, wfr.pBaseRadX, 2 * wfr.ne * wfr.nx * wfr.nz * wfr.nwfr * sizeof(float));
+				if (wfr.pBaseRadZ != NULL)
+					wfr.pBaseRadZ = (float*)UtiDev::ToHostAndFree(pGpuUsage, wfr.pBaseRadZ, 2 * wfr.ne * wfr.nx * wfr.nz * wfr.nwfr * sizeof(float));
+				dataOnDevice = false;
+			}
+			else if (!dataOnDevice && (((srTGenOptElem*)it->rep)->SupportedFeatures() & 1) == 1)
+			{
+					dataOnDevice = true;
+					printf("Element supports GPU, transferring...\r\n");
+			}
+		});
+
 		srTRadResizeVect auxResizeVect;
 		if(res = ((srTGenOptElem*)(it->rep))->PropagateRadiation(&wfr, precParWfrPropag, auxResizeVect, pGpuUsage)) return res;
 		//maybe to use "PropagateRadiationGuided" for srTCompositeOptElem?
@@ -332,7 +355,18 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 		//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
 		//srwlPrintTime("Iteration: PropagateRadiation",&start);
 
-		if(propIntIsNeeded) ExtractPropagatedIntensity(wfr, nInt, arID, arIM, arI, elemCount);
+		if (propIntIsNeeded)
+		{
+			if (dataOnDevice)
+			{
+				if (wfr.pBaseRadX != NULL)
+					wfr.pBaseRadX = (float*)UtiDev::ToHostAndFree(pGpuUsage, wfr.pBaseRadX, 2 * wfr.ne * wfr.nx * wfr.nz * wfr.nwfr * sizeof(float));
+				if (wfr.pBaseRadZ != NULL)
+					wfr.pBaseRadZ = (float*)UtiDev::ToHostAndFree(pGpuUsage, wfr.pBaseRadZ, 2 * wfr.ne * wfr.nx * wfr.nz * wfr.nwfr * sizeof(float));
+				dataOnDevice = false;
+			}
+			ExtractPropagatedIntensity(wfr, nInt, arID, arIM, arI, elemCount);
+		}
 
 		elemCount++;
 

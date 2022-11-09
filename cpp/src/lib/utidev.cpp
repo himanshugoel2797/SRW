@@ -86,6 +86,7 @@ bool UtiDev::GPUEnabled(gpuUsageArg_t *arg)
 			current_device = arg->deviceIndex;
 			memcpy_stream_initialized = true;
 		}
+		//TODO: Add warning that GPU isn't available
 		return GPUAvailable();
 	}
 #endif
@@ -125,7 +126,9 @@ void* UtiDev::ToDevice(gpuUsageArg_t* arg, void* hostPtr, size_t size, bool dont
 	if (!GPUEnabled(arg))
 		return hostPtr;
 	if (gpuMap.find(hostPtr) != gpuMap.end()){
-		void* devPtr = gpuMap[hostPtr].devicePtr;
+		memAllocInfo_t info = gpuMap[hostPtr];
+		void* devPtr = info.devicePtr;
+		hostPtr = info.hostPtr;
 		if (gpuMap[devPtr].HostToDevUpdated && !dontCopy){
 			cudaMemcpyAsync(devPtr, hostPtr, size, cudaMemcpyHostToDevice, memcpy_stream);
 			cudaEventRecord(gpuMap[devPtr].h2d_event, memcpy_stream);
@@ -228,6 +231,7 @@ void* UtiDev::ToHostAndFree(gpuUsageArg_t* arg, void* devicePtr, size_t size, bo
 	if (gpuMap.find(devicePtr) == gpuMap.end())
 		return devicePtr;
 	info = gpuMap[devicePtr];
+	devicePtr = info.devicePtr;
 	void *hostPtr = info.hostPtr;
 	if (!dontCopy && info.DevToHostUpdated)
 	{

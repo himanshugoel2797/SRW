@@ -30,7 +30,7 @@
 typedef struct
 {
 	int deviceIndex;
-} gpuUsageArg_t;
+} gpuUsageArg_t; 
 
 #define ALLOC_ARRAY(type, size) (type *)UtiDev::malloc(sizeof(type)*(size))
 #define FREE_ARRAY(x) UtiDev::free(x); x=NULL

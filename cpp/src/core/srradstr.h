@@ -245,7 +245,7 @@ public:
 	void CheckAndSubtractPhaseTermsLin(double newXc, double newZc);
 	void CheckAndResetPhaseTermsLin();
 	void EstimateOversamplingFactors(double& estimOverSampX, double& estimOverSampZ);
-	void MirrorFieldData(int sx, int sz);
+	void MirrorFieldData(int sx, int sz, gpuUsageArg_t *pGpuUsage=0);
 
 	int SetupWfrEdgeCorrData(float* pDataEx, float* pDataEz, srTDataPtrsForWfrEdgeCorr& DataPtrsForWfrEdgeCorr);
 	void MakeWfrEdgeCorrection(float* pDataEx, float* pDataEz, srTDataPtrsForWfrEdgeCorr& DataPtrs);

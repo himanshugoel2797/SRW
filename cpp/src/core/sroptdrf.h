@@ -90,6 +90,7 @@ public:
 	double Length;
 	//OC06092019 (commented-out)
 	//srTDriftPropBufVars PropBufVars;
+	int SupportedFeatures() override { return 1; }
 
 	srTDriftSpace(double InLength =0., char InTreatPath =0) 
 	{ 

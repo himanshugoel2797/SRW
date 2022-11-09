@@ -4740,10 +4740,10 @@ static PyObject* srwlpy_CalcIntFromElecField(PyObject *self, PyObject *args)
 		oInt = 0;
 	}
 
+	srwlUtiDevFini();
 	if(pMagCnt != 0) DeallocMagCntArrays(pMagCnt);
 	ReleasePyBuffers(vBuf);
 	EraseElementFromMap(&wfr, gmWfrPyPtr);
-	srwlUtiDevFini();
 
 	if(oInt) Py_XINCREF(oInt);
 	return oInt;
@@ -5041,10 +5041,10 @@ static PyObject* srwlpy_PropagElecField(PyObject *self, PyObject *args)
 		oWfr = 0;
 	}
 
+	srwlUtiDevFini();
 	DeallocOptCntArrays(&optCnt);
 	ReleasePyBuffers(vBuf);
 	EraseElementFromMap(&wfr, gmWfrPyPtr);
-	srwlUtiDevFini();
 
 	for(int i=0; i<4; i++) if(arIntDescr[i] != 0) delete[] arIntDescr[i];
 	if(arIntMesh != 0) delete[] arIntMesh;
