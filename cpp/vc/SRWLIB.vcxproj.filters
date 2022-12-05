@@ -174,81 +174,6 @@
     <ClCompile Include="..\src\core\srtrjdat3d.cpp">
       <Filter>core</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\all_com.c">
-      <Filter>genesis</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\check.c">
-      <Filter>genesis</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\diagno.c">
-      <Filter>genesis</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\esource.c">
-      <Filter>genesis</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\field.c">
-      <Filter>genesis</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\incoherent.c">
-      <Filter>genesis</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\initrun.c">
-      <Filter>genesis</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\input.c">
-      <Filter>genesis</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\loadbeam.c">
-      <Filter>genesis</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\loadrad.c">
-      <Filter>genesis</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\magfield.c">
-      <Filter>genesis</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\main.c">
-      <Filter>genesis</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\math.c">
-      <Filter>genesis</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\mpi.c">
-      <Filter>genesis</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\output.c">
-      <Filter>genesis</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\partsim.c">
-      <Filter>genesis</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\pushp.c">
-      <Filter>genesis</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\rpos.c">
-      <Filter>genesis</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\scan.c">
-      <Filter>genesis</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\source.c">
-      <Filter>genesis</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\stepz.c">
-      <Filter>genesis</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\string.c">
-      <Filter>genesis</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\tdepend.c">
-      <Filter>genesis</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\timerec.c">
-      <Filter>genesis</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\track.c">
-      <Filter>genesis</Filter>
-    </ClCompile>
     <ClCompile Include="..\src\core\sroptcryst.cpp">
       <Filter>core</Filter>
     </ClCompile>
@@ -392,6 +317,81 @@
     </ClCompile>
     <ClCompile Include="..\src\ext\f2c_min\Z_EXP.C">
       <Filter>f2c</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\mpi.c">
+      <Filter>genesis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\output.c">
+      <Filter>genesis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\partsim.c">
+      <Filter>genesis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\pushp.c">
+      <Filter>genesis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\rpos.c">
+      <Filter>genesis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\scan.c">
+      <Filter>genesis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\source.c">
+      <Filter>genesis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\stepz.c">
+      <Filter>genesis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\string.c">
+      <Filter>genesis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\tdepend.c">
+      <Filter>genesis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\timerec.c">
+      <Filter>genesis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\track.c">
+      <Filter>genesis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\all_com.c">
+      <Filter>genesis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\check.c">
+      <Filter>genesis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\diagno.c">
+      <Filter>genesis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\esource.c">
+      <Filter>genesis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\field.c">
+      <Filter>genesis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\incoherent.c">
+      <Filter>genesis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\initrun.c">
+      <Filter>genesis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\input.c">
+      <Filter>genesis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\loadbeam.c">
+      <Filter>genesis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\loadrad.c">
+      <Filter>genesis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\magfield.c">
+      <Filter>genesis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\main.c">
+      <Filter>genesis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\math.c">
+      <Filter>genesis</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

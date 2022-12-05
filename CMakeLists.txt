@@ -60,7 +60,13 @@ endif()
 set(FFTW_USE_STATIC_LIBS ON)
 
 # External Libraries
-add_subdirectory(cpp/src/ext_lib)
+if(USE_OPENMP)
+    message(STATUS "Looking for FFTW2")
+    add_subdirectory(ext_lib/fftw)
+else()
+    message(STATUS "Looking for FFTW3")
+    add_subdirectory(ext_lib/fftw3)
+endif()
 
 # Main library
 add_subdirectory(cpp/cmake)

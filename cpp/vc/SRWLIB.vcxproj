@@ -61,92 +61,92 @@
   <PropertyGroup Label="Globals">
     <ProjectGuid>{A7E707A6-D325-42AE-A0D0-3C97C38D36A6}</ProjectGuid>
     <RootNamespace>SRWLIB</RootNamespace>
-    <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_fftw2|Win32'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_omp|Win32'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_omph|Win32'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_fftw2|Win32'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_omp|Win32'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_fftw2|x64'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>MultiByte</CharacterSet>
     <SpectreMitigation>false</SpectreMitigation>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_omp|x64'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_omph|x64'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_fftw2|x64'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>MultiByte</CharacterSet>
     <SpectreMitigation>false</SpectreMitigation>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_omp|x64'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>MultiByte</CharacterSet>
     <SpectreMitigation>false</SpectreMitigation>
@@ -774,7 +774,8 @@
       </AdditionalOptions>
     </Lib>
     <PostBuildEvent>
-      <Command>copy $(SolutionDir)$(TargetName)$(TargetExt) "$(SolutionDir)..\..\env\work\srw_python\lib\"</Command>
+      <Command>
+      </Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release_omp|x64'">
@@ -921,6 +922,31 @@
     <ClCompile Include="..\src\ext\f2c_min\XWSNE.C" />
     <ClCompile Include="..\src\ext\f2c_min\Z_DIV.C" />
     <ClCompile Include="..\src\ext\f2c_min\Z_EXP.C" />
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\all_com.c" />
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\check.c" />
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\diagno.c" />
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\esource.c" />
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\field.c" />
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\incoherent.c" />
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\initrun.c" />
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\input.c" />
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\loadbeam.c" />
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\loadrad.c" />
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\magfield.c" />
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\main.c" />
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\math.c" />
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\mpi.c" />
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\output.c" />
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\partsim.c" />
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\pushp.c" />
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\rpos.c" />
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\scan.c" />
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\source.c" />
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\stepz.c" />
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\string.c" />
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\tdepend.c" />
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\timerec.c" />
+    <ClCompile Include="..\src\ext\genesis\genesis_july08\track.c" />
     <ClCompile Include="..\src\ext\genmath\gmfft.cpp" />
     <ClCompile Include="..\src\ext\genmath\gmfit.cpp" />
     <ClCompile Include="..\src\ext\genmath\gminterp.cpp" />
@@ -973,31 +999,6 @@
     <ClCompile Include="..\src\core\srtrjaux.cpp" />
     <ClCompile Include="..\src\core\srtrjdat.cpp" />
     <ClCompile Include="..\src\core\srtrjdat3d.cpp" />
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\all_com.c" />
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\check.c" />
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\diagno.c" />
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\esource.c" />
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\field.c" />
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\incoherent.c" />
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\initrun.c" />
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\input.c" />
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\loadbeam.c" />
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\loadrad.c" />
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\magfield.c" />
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\main.c" />
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\math.c" />
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\mpi.c" />
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\output.c" />
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\partsim.c" />
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\pushp.c" />
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\rpos.c" />
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\scan.c" />
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\source.c" />
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\stepz.c" />
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\string.c" />
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\tdepend.c" />
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\timerec.c" />
-    <ClCompile Include="..\src\ext\genesis\genesis_july08\track.c" />
     <ClCompile Include="..\src\lib\srerror.cpp" />
     <ClCompile Include="..\src\lib\srwlib.cpp" />
   </ItemGroup>

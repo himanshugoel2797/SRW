@@ -44,36 +44,36 @@ target_compile_definitions(auxparse PRIVATE ${SRW_DEFINITIONS})
 
 #genesis
 set(genesis_source_files
-    ../src/ext/genesis/all_com.c
-    ../src/ext/genesis/check.c
-    ../src/ext/genesis/diagno.c
-    ../src/ext/genesis/esource.c
-    ../src/ext/genesis/field.c
-    ../src/ext/genesis/incoherent.c
-    ../src/ext/genesis/initrun.c
-    ../src/ext/genesis/input.c
-    ../src/ext/genesis/loadbeam.c
-    ../src/ext/genesis/loadrad.c
-    ../src/ext/genesis/magfield.c
-    ../src/ext/genesis/main.c
-    ../src/ext/genesis/math.c
-    ../src/ext/genesis/mpi.c
-    ../src/ext/genesis/output.c
-    ../src/ext/genesis/partsim.c
-    ../src/ext/genesis/pushp.c
-    ../src/ext/genesis/rpos.c
-    ../src/ext/genesis/scan.c
-    ../src/ext/genesis/source.c
-    ../src/ext/genesis/stepz.c
-    ../src/ext/genesis/string.c
-    ../src/ext/genesis/tdepend.c
-    ../src/ext/genesis/timerec.c
-    ../src/ext/genesis/track.c
+    ../src/ext/genesis/genesis_july08/all_com.c
+    ../src/ext/genesis/genesis_july08/check.c
+    ../src/ext/genesis/genesis_july08/diagno.c
+    ../src/ext/genesis/genesis_july08/esource.c
+    ../src/ext/genesis/genesis_july08/field.c
+    ../src/ext/genesis/genesis_july08/incoherent.c
+    ../src/ext/genesis/genesis_july08/initrun.c
+    ../src/ext/genesis/genesis_july08/input.c
+    ../src/ext/genesis/genesis_july08/loadbeam.c
+    ../src/ext/genesis/genesis_july08/loadrad.c
+    ../src/ext/genesis/genesis_july08/magfield.c
+    ../src/ext/genesis/genesis_july08/main.c
+    ../src/ext/genesis/genesis_july08/math.c
+    ../src/ext/genesis/genesis_july08/mpi.c
+    ../src/ext/genesis/genesis_july08/output.c
+    ../src/ext/genesis/genesis_july08/partsim.c
+    ../src/ext/genesis/genesis_july08/pushp.c
+    ../src/ext/genesis/genesis_july08/rpos.c
+    ../src/ext/genesis/genesis_july08/scan.c
+    ../src/ext/genesis/genesis_july08/source.c
+    ../src/ext/genesis/genesis_july08/stepz.c
+    ../src/ext/genesis/genesis_july08/string.c
+    ../src/ext/genesis/genesis_july08/tdepend.c
+    ../src/ext/genesis/genesis_july08/timerec.c
+    ../src/ext/genesis/genesis_july08/track.c
 )
 
 add_library(genesis OBJECT ${genesis_source_files})
 target_link_libraries(genesis genmath)
-target_include_directories(genesis PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../src/ext/genesis/)
+target_include_directories(genesis PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../src/ext/genesis/genesis_july08/)
 target_compile_definitions(genesis PRIVATE ${SRW_DEFINITIONS})
 
 #genmath

@@ -1,11 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="12.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_Py3_3|x64'">
-    <LocalDebuggerCommand>C:\SoftwareDevelopments\Python35_x64\python.exe</LocalDebuggerCommand>
-    <LocalDebuggerCommandArguments>SRWLIB_VirtBL_CSX1_01.py --tr --tr_mag=2 --und_g=12.2 --und_ph=10.</LocalDebuggerCommandArguments>
-    <LocalDebuggerWorkingDirectory>..\..\env\work\srw_python</LocalDebuggerWorkingDirectory>
-    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_Py3_5|x64'">
     <LocalDebuggerCommand>C:\SoftwareDevelopments\Python35_x64\python.exe</LocalDebuggerCommand>
     <LocalDebuggerCommandArguments>SRWLIB_VirtBL_CSX1_01.py --tr --und_g=14.27 --und_ph=13.7 --tr_mag=2</LocalDebuggerCommandArguments>
@@ -24,17 +18,17 @@
     <LocalDebuggerWorkingDirectory>..\..\env\work\srw_python</LocalDebuggerWorkingDirectory>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_Py3_9|x64'">
+    <LocalDebuggerCommand>C:\SoftwareDevelopments\Python38_x64\python.exe</LocalDebuggerCommand>
+    <LocalDebuggerCommandArguments>SRWLIB_Example19.py</LocalDebuggerCommandArguments>
+    <LocalDebuggerWorkingDirectory>..\..\env\work\srw_python</LocalDebuggerWorkingDirectory>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_Py3_7|x64'">
     <LocalDebuggerCommand>..\..\Python37_x64\python.exe</LocalDebuggerCommand>
     <LocalDebuggerCommandArguments>SRWLIB_Example04_test_mi4d_resize_mesh.py</LocalDebuggerCommandArguments>
     <LocalDebuggerWorkingDirectory>C:\SoftwareDevelopments\SRW_Dev\env\work\srw_python</LocalDebuggerWorkingDirectory>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_Py3_3|x64'">
-    <LocalDebuggerCommand>C:\SoftwareDevelopments\Python33_x64\python.exe</LocalDebuggerCommand>
-    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArguments> start_calc_TES_misalign_study_01.py</LocalDebuggerCommandArguments>
-    <LocalDebuggerWorkingDirectory>..\..\env\work\srw_python</LocalDebuggerWorkingDirectory>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_Py3_5|x64'">
     <LocalDebuggerCommand>C:\SoftwareDevelopments\Python35_x64\python.exe</LocalDebuggerCommand>
@@ -60,6 +54,12 @@
     <LocalDebuggerCommandArguments>split-delay-test-vcc.py</LocalDebuggerCommandArguments>
     <LocalDebuggerWorkingDirectory>..\..\env\work\srw_python</LocalDebuggerWorkingDirectory>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_Py3_9|x64'">
+    <LocalDebuggerCommand>C:\SoftwareDevelopments\Python38_x64\python.exe</LocalDebuggerCommand>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+    <LocalDebuggerCommandArguments>split-delay-test-vcc.py</LocalDebuggerCommandArguments>
+    <LocalDebuggerWorkingDirectory>..\..\env\work\srw_python</LocalDebuggerWorkingDirectory>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_Py2x|x64'">
     <LocalDebuggerCommand>C:\SoftwareDevelopments\Python27_x64\python.exe</LocalDebuggerCommand>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
@@ -73,6 +73,12 @@
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_Py3_8|Win32'">
+    <LocalDebuggerCommand>python</LocalDebuggerCommand>
+    <LocalDebuggerCommandArguments>test_hdf5_convert.py</LocalDebuggerCommandArguments>
+    <LocalDebuggerWorkingDirectory>..\..\env\work\srw_python</LocalDebuggerWorkingDirectory>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_Py3_9|Win32'">
     <LocalDebuggerCommand>python</LocalDebuggerCommand>
     <LocalDebuggerCommandArguments>test_hdf5_convert.py</LocalDebuggerCommandArguments>
     <LocalDebuggerWorkingDirectory>..\..\env\work\srw_python</LocalDebuggerWorkingDirectory>
