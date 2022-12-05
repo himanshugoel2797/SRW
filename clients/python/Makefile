@@ -11,5 +11,5 @@ srwlpy.so:
 
 clean:
 	rm -rf build
-	rm -f ../gcc/srwlpy*.so
-	rm -f ../../env/work/srw_python/srwlpy*.so
+	rm -f ../src/srwlpy*.so
+	rm -f ../../clients/python/srwpy/srwlpy*.so

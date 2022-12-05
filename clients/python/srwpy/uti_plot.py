@@ -29,7 +29,11 @@ Modules:
 
 .. moduleauthor:: Rob Nagler <nagler@radiasoft.net>
 """
-from . import uti_plot_com
+try: #OC15112022
+    from . import uti_plot_com
+except:
+    import uti_plot_com
+#from . import uti_plot_com
 import sys
 import traceback
 
@@ -52,13 +56,26 @@ def uti_plot_init(backend=DEFAULT_BACKEND, fname_format=None):
     """
     global _backend
     if backend is not None:
-        try:
+
+        try: #OC15112022 (to test!)
             from . import uti_plot_matplotlib
+        except:
+            import uti_plot_matplotlib
+        try:
             _backend = uti_plot_matplotlib.Backend(backend, fname_format)
             return
         except:
             traceback.print_exc()
             print(backend + ': unable to import specified backend (or its dependency); no plots')
+            
+        #try:
+        #    from . import uti_plot_matplotlib
+        #    _backend = uti_plot_matplotlib.Backend(backend, fname_format)
+        #    return
+        #except:
+        #    traceback.print_exc()
+        #    print(backend + ': unable to import specified backend (or its dependency); no plots')
+            
     elif fname_format is not None:
         #raise Value(fname_format + ': fname_format must be null if backend is None')
         raise ValueError(fname_format + ': fname_format must be null if backend is None')

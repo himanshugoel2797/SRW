@@ -9,7 +9,12 @@
 #nproc = comm.Get_size()  #Total number of processes
 
 from __future__ import print_function #Python 2.7 compatibility
-from .srwlib import *
+
+try: #OC16112022
+    from .srwlib import *
+except:
+    from srwlib import *
+#from .srwlib import *
 
 #from xframework.adaptors.genesis import *
 ##################from ocelot.adaptors.genesis import *

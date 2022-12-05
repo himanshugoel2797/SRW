@@ -7,8 +7,14 @@ import traceback
 #import sys
 #import numpy as np
 
-from . import uti_math
-from . import uti_io
+try: #OC15112022
+    from . import uti_math
+    from . import uti_io
+except:
+    import uti_math
+    import uti_io
+#from . import uti_math
+#from . import uti_io
 
 #****************************************************************************
 def _multicolumn_file_load(fname): #MR31102017

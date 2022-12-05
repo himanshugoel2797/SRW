@@ -2,8 +2,11 @@
 # SRWLib for Python: Magnet Utilities v 0.02
 #############################################################################
 
-from .srwlib import *
-#from copy import *
+try: #OC16112022
+    from .srwlib import *
+except:
+    from srwlib import *
+#from .srwlib import *
 
 #****************************************************************************
 def srwl_mag_kick(_el_en=3., _ang=1., _x_or_y='x', _len=1., _led=0):
