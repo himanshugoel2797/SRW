@@ -5,7 +5,7 @@ MODE ?= 0
 python: srwlpy.so
 
 srwlpy.so:
-	MODE=$(MODE) python setup.py build_ext --build-lib='../gcc'
+	MODE=$(MODE) python3 setup.py build_ext --build-lib='../gcc'
 	cp ../gcc/srwlpy*.so ../../clients/python/srwpy/srwlpy.so
 	rm -rf build
 
