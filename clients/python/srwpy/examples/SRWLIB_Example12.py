@@ -12,12 +12,12 @@ import sys
 import time
 
 try: #OC15112022
-    from srwpy.srwlib import *
-    from srwpy.uti_plot import *
-except:
     sys.path.append('../')
     from srwlib import *
     from uti_plot import *
+except:
+    from srwpy.srwlib import *
+    from srwpy.uti_plot import *
 #from srwpy.srwlib import *
 #from srwpy.uti_plot import *
 

@@ -11,15 +11,15 @@ The example requires SciPy library to perform comparison.
 from __future__ import print_function  # Python 2.7 compatibility
 
 try: #OC15112022
-    from srwpy.srwlib import *
-    from srwpy.uti_math import fwhm
-    from srwpy.uti_plot import *
-except:
     import sys
     sys.path.append('../')
     from srwlib import *
     from uti_math import fwhm
     from uti_plot import *
+except:
+    from srwpy.srwlib import *
+    from srwpy.uti_math import fwhm
+    from srwpy.uti_plot import *
 #import srwpy.uti_plot as uti_plot
 #from srwpy.srwlib import *
 #from srwpy.uti_math import fwhm

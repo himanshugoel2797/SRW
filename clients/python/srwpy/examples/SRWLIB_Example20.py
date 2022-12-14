@@ -18,13 +18,13 @@ except:
     pass
 
 try: #OC15112022
-    from srwpy import srwl_bl
-    from srwpy import srwlib
-except:
     import sys
     sys.path.append('../')
     import srwl_bl
     import srwlib
+except:
+    from srwpy import srwl_bl
+    from srwpy import srwlib
 #from srwpy import srwl_bl
 #from srwpy import srwlib
 

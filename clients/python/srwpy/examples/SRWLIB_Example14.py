@@ -8,15 +8,15 @@
 from __future__ import print_function #Python 2.7 compatibility
 
 try: #OC15112022
-    from srwpy.srwlib import *
-    from srwpy.uti_math import *
-    from srwpy.uti_plot import *
-except:
     import sys
     sys.path.append('../')
     from srwlib import *
     from uti_math import *
     from uti_plot import *
+except:
+    from srwpy.srwlib import *
+    from srwpy.uti_math import *
+    from srwpy.uti_plot import *
 #from srwpy.srwlib import *
 #from srwpy.uti_math import *
 #from srwpy.uti_plot import * #required for plotting

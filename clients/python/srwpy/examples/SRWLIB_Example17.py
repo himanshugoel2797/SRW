@@ -9,15 +9,15 @@
 from __future__ import print_function #Python 2.7 compatibility
 
 try: #OC15112022
-    from srwpy.srwlib import *
-    from srwpy.srwl_uti_smp import *
-    from srwpy.uti_plot import *
-except:
     import sys
     sys.path.append('../')
     from srwlib import *
     from srwl_uti_smp import *
     from uti_plot import *
+except:
+    from srwpy.srwlib import *
+    from srwpy.srwl_uti_smp import *
+    from srwpy.uti_plot import *
 #from srwpy.srwlib import *
 #from srwpy.srwl_uti_smp import *
 #from srwpy.uti_plot import * #required for plotting
