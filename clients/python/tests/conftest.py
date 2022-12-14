@@ -27,10 +27,11 @@ def filter_source(file, filter=True, as_string=True):
     if filter:
         for i, line in enumerate(lines):
             lstripped_line = line.lstrip()
+            startwhites = line[:len(line)-len(lstripped_line)]
             if lstripped_line.startswith("uti_plot_show"):
-                lines[i] = f"# {line}"
+                lines[i] = f"{startwhites}pass # {line}"
             elif lstripped_line.startswith(("from ", "import ")):
-                lines[i] = f"# {line}"
+                lines[i] = f"{startwhites}pass # {line}"
             else:
                 pass
 
