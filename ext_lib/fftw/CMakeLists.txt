@@ -23,6 +23,7 @@ else()
               MD5=8d16a84f3ca02a785ef9eb36249ba433
             CMAKE_ARGS "${CMAKE_ARGS};-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER} -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}"
             PREFIX ${CMAKE_CURRENT_BINARY_DIR}
+            DOWNLOAD_DIR $(CMAKE_CURRENT_LIST_DIR)
             CONFIGURE_COMMAND ""
             BUILD_COMMAND ""
             # This cp line is important. FFTW 2 must be build inplace otherwise
