@@ -7,12 +7,8 @@ import shutil
 def examples_dir():
     _examples_dir = os.path.abspath(os.path.join(
         os.path.dirname(
-            os.path.dirname(
-                os.path.dirname(
-                    os.path.dirname(__file__)
-                )
-            )
-        ), "examples", "python")
+            os.path.dirname(__file__) #../
+        ), "srwpy", "examples")
     )
 
     current_dir = os.getcwd()
