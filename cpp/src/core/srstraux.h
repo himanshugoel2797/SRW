@@ -203,7 +203,7 @@ struct srTStokesC {
 
 struct srTEFieldPtrs {
 	float *pExRe, *pExIm, *pEzRe, *pEzIm;
-	srTEFieldPtrs(float* In_pExRe =0, float* In_pExIm =0, float* In_pEzRe =0, float* In_pEzIm =0) 
+	GPU_PORTABLE srTEFieldPtrs(float* In_pExRe =0, float* In_pExIm =0, float* In_pEzRe =0, float* In_pEzIm =0) 
 	{ 
 		pExRe = In_pExRe; pExIm = In_pExIm; pEzRe = In_pEzRe; pEzIm = In_pEzIm;
 	}
@@ -1587,7 +1587,7 @@ struct srTInterpolAux01 {
 	double cAx2z0, cAx2z1, cAx2z2, cAx2z3, cAx3z0, cAx3z1, cAx3z2, cAx3z3;
 	double cLAx1z0, cLAx0z1, cLAx1z1;
 
-	srTInterpolAux01()
+	GPU_PORTABLE srTInterpolAux01()
 	{
 		cAx0z1 = 0.1666666667;
 		cAx0z2 = 0.5;
@@ -1653,11 +1653,11 @@ struct srTInterpolAuxF {
 	float f03, f13, f23, f33;
 
 	float fAvg, fNorm;
-	void SetUpAvg()
+	GPU_PORTABLE void SetUpAvg()
 	{
 		fAvg = (float)(0.0625*(f00 + f10 + f20 + f30 + f01 + f11 + f21 + f31 + f02 + f12 + f22 + f32 + f03 + f13 + f23 + f33));
 	}
-	void NormalizeByAvg()
+	GPU_PORTABLE void NormalizeByAvg()
 	{
 		const float CritNorm = 1.;
 		if(::fabs(fAvg) > CritNorm)
@@ -1718,17 +1718,17 @@ struct srTDataPtrsForWfrEdgeCorr {
 	float *FFTArrXStEz, *FFTArrXFiEz;
 	float *FFTArrZStEz, *FFTArrZFiEz;
 
-	float fxStzSt[4], fxFizSt[4], fxStzFi[4], fxFizFi[4];
+	long fxStzSt[4], fxFizSt[4], fxStzFi[4], fxFizFi[4];
 
 	double dxSt, dxFi, dzSt, dzFi, dx, dz;
 	char WasSetup;
 
-	srTDataPtrsForWfrEdgeCorr()
+	GPU_PORTABLE srTDataPtrsForWfrEdgeCorr()
 	{
 		InitializeAll();
 	}
 
-	void InitializeAll()
+	GPU_PORTABLE void InitializeAll()
 	{
 		ExpArrXSt = ExpArrXFi = 0;
 		ExpArrZSt = ExpArrZFi = 0;
@@ -1742,20 +1742,20 @@ struct srTDataPtrsForWfrEdgeCorr {
 
 		for(int i=0; i<4; i++)
 		{
-			fxStzSt[i] = 0.; fxFizSt[i] = 0.; fxStzFi[i] = 0.; fxFizFi[i] = 0.;
+			fxStzSt[i] = -1; fxFizSt[i] = -1; fxStzFi[i] = -1; fxFizFi[i] = -1;
 		}
 		WasSetup = 0;
 	}
-	void DisposeData()
+	GPU_PORTABLE void DisposeData()
 	{
-		if(ExpArrXSt != 0) delete[] ExpArrXSt;
-		if(ExpArrXFi != 0) delete[] ExpArrXFi;
-		if(ExpArrZSt != 0) delete[] ExpArrZSt;
-		if(ExpArrZFi != 0) delete[] ExpArrZFi;
-		if(FFTArrXStEx != 0) delete[] FFTArrXStEx;
-		if(FFTArrXFiEx != 0) delete[] FFTArrXFiEx;
-		if(FFTArrZStEx != 0) delete[] FFTArrZStEx;
-		if(FFTArrZFiEx != 0) delete[] FFTArrZFiEx;
+		if(ExpArrXSt != 0) FREE_ARRAY(ExpArrXSt);
+		if(ExpArrXFi != 0) FREE_ARRAY(ExpArrXFi);
+		if(ExpArrZSt != 0) FREE_ARRAY(ExpArrZSt);
+		if(ExpArrZFi != 0) FREE_ARRAY(ExpArrZFi);
+		if(FFTArrXStEx != 0) FREE_ARRAY(FFTArrXStEx);
+		if(FFTArrXFiEx != 0) FREE_ARRAY(FFTArrXFiEx);
+		if(FFTArrZStEx != 0) FREE_ARRAY(FFTArrZStEx);
+		if(FFTArrZFiEx != 0) FREE_ARRAY(FFTArrZFiEx);
 		InitializeAll();
 	}
 };

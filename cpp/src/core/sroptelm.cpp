@@ -29,6 +29,7 @@
 #include "srinterf.h"
 #include "sropthck.h"
 #include "sroptgrat.h"
+#include "utidev.h"
 
 #ifdef _WITH_OMP //Pre-processor definition for compiling with OpenMP library
 #include "omp.h"
@@ -146,150 +147,167 @@ int srTGenOptElem::ExtraDataExpected(const char* sElemID) //OC01062020
 
 //*************************************************************************
 
-int srTGenOptElem::TraverseRadZXE(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars) //OC29082019
+int srTGenOptElem::TraverseRadZXE(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars, long pBufVarSz, gpuUsageArg_t* pGpuUsage) //OC29082019
 //int srTGenOptElem::TraverseRadZXE(srTSRWRadStructAccessData* pRadAccessData)
 {
-	float *pEx0 = pRadAccessData->pBaseRadX;
-	float *pEz0 = pRadAccessData->pBaseRadZ;
 	//long PerX = pRadAccessData->ne << 1;
 	//long PerZ = PerX*pRadAccessData->nx;
 	long long PerX = pRadAccessData->ne << 1;
 	long long PerZ = PerX*pRadAccessData->nx;
+	long long PerWfr = PerZ*pRadAccessData->nz;
+
+	GPU_COND(pGpuUsage,
+	{
+//#if _DEBUG
+//		printf("srTGenOptElem::TraverseRadZXE\n");
+//#endif
+		if(RadPointModifierParallel(pRadAccessData, pBufVars, pBufVarSz, pGpuUsage) == -1)
+			return TraverseRadZXE(pRadAccessData, pBufVars, pBufVarSz, 0);
+	})
+	else
+	{
 
 #ifndef _WITH_OMP //OC28102018
 
-	srTEFieldPtrs EFieldPtrs;
-	srTEXZ EXZ;
-	EXZ.z = pRadAccessData->zStart;
-	//long izPerZ = 0;
-	//long iTotTest = 0; //OCTEST
-	long long izPerZ = 0;
-	//long long iTotTest = 0; //OCTEST
-
-	//int result = 0;
-	for(int iz=0; iz<pRadAccessData->nz; iz++)
-	{
-		//if(result = srYield.Check()) return result;
-
-		float *pEx_StartForX = pEx0 + izPerZ;
-		float *pEz_StartForX = pEz0 + izPerZ;
-		EXZ.x = pRadAccessData->xStart;
-		//long ixPerX = 0;
-		long long ixPerX = 0;
-
-		for(int ix=0; ix<pRadAccessData->nx; ix++)
-		{
-			float *pEx_StartForE = pEx_StartForX + ixPerX;
-			float *pEz_StartForE = pEz_StartForX + ixPerX;
-			EXZ.e = pRadAccessData->eStart;
-			//long iePerE = 0;
-			long long iePerE = 0;
-
-			for(int ie=0; ie<pRadAccessData->ne; ie++)
-			{
-				if(pEx0 != 0)
-				{
-					EFieldPtrs.pExRe = pEx_StartForE + iePerE;
-					EFieldPtrs.pExIm = EFieldPtrs.pExRe + 1;
-				}
-				else
-				{
-					EFieldPtrs.pExRe = 0;
-					EFieldPtrs.pExIm = 0;
-				}
-				if(pEz0 != 0)
-				{
-					EFieldPtrs.pEzRe = pEz_StartForE + iePerE;
-					EFieldPtrs.pEzIm = EFieldPtrs.pEzRe + 1;
-				}
-				else
-				{
-					EFieldPtrs.pEzRe = 0;
-					EFieldPtrs.pEzIm = 0;
-				}
-
-				EXZ.aux_offset = izPerZ + ixPerX + iePerE;
-				RadPointModifier(EXZ, EFieldPtrs, pBufVars); //OC29082019
-				//RadPointModifier(EXZ, EFieldPtrs);
-
-				//iTotTest++; //OCTEST
-
-				iePerE += 2;
-				EXZ.e += pRadAccessData->eStep;
-			}
-			ixPerX += PerX;
-			EXZ.x += pRadAccessData->xStep;
-		}
-		izPerZ += PerZ;
-		EXZ.z += pRadAccessData->zStep;
-	}
-
-#else //OC28102018 (does this really need to be parallelized for OpenMP?)
-	//SY: adapted for OpenMP
-	
-	#pragma omp parallel for if (omp_get_num_threads()==1) // to avoid nested multi-threading
-	for(int iz=0; iz<pRadAccessData->nz; iz++)
-	{
 		srTEFieldPtrs EFieldPtrs;
-		long long izPerZ = iz*PerZ;
 		srTEXZ EXZ;
 
-		//SY: to have one-to-one with previous version (so that tests do no fail)
-		//EXZ.z = pRadAccessData->zStart;
-		//for(int i=0; i<iz; i++) EXZ.z += pRadAccessData->zStep;
-		//SY: can be replaced with this
-		EXZ.z = (pRadAccessData->zStart) + iz*(pRadAccessData->zStep);
-
-		float *pEx_StartForX = pEx0 + izPerZ;
-		float *pEz_StartForX = pEz0 + izPerZ;
-		EXZ.x = pRadAccessData->xStart;
-		//long ixPerX = 0;
-		long long ixPerX = 0;
-
-		for(int ix=0; ix<pRadAccessData->nx; ix++)
+		for(int iwfr=0; iwfr<pRadAccessData->nwfr; iwfr++)
 		{
-			float *pEx_StartForE = pEx_StartForX + ixPerX;
-			float *pEz_StartForE = pEz_StartForX + ixPerX;
-			EXZ.e = pRadAccessData->eStart;
-			//long iePerE = 0;
-			long long iePerE = 0;
+			float *pEx0 = pRadAccessData->pBaseRadX+iwfr*PerWfr;
+			float *pEz0 = pRadAccessData->pBaseRadZ+iwfr*PerWfr;
 
-			for(int ie=0; ie<pRadAccessData->ne; ie++)
+			EXZ.z = pRadAccessData->zStart;
+			//long izPerZ = 0;
+			//long iTotTest = 0; //OCTEST
+			long long izPerZ = 0;
+			//long long iTotTest = 0; //OCTEST
+
+			//int result = 0;
+			for(int iz=0; iz<pRadAccessData->nz; iz++)
 			{
-				if(pEx0 != 0)
-				{
-					EFieldPtrs.pExRe = pEx_StartForE + iePerE;
-					EFieldPtrs.pExIm = EFieldPtrs.pExRe + 1;
-				}
-				else
-				{
-					EFieldPtrs.pExRe = 0;
-					EFieldPtrs.pExIm = 0;
-				}
-				if(pEz0 != 0)
-				{
-					EFieldPtrs.pEzRe = pEz_StartForE + iePerE;
-					EFieldPtrs.pEzIm = EFieldPtrs.pEzRe + 1;
-				}
-				else
-				{
-					EFieldPtrs.pEzRe = 0;
-					EFieldPtrs.pEzIm = 0;
-				}
+				//if(result = srYield.Check()) return result;
 
-				EXZ.aux_offset = izPerZ + ixPerX + iePerE;
-				RadPointModifier(EXZ, EFieldPtrs, pBufVars); //OC29082019
-				//RadPointModifier(EXZ, EFieldPtrs);
+				float *pEx_StartForX = pEx0 + izPerZ;
+				float *pEz_StartForX = pEz0 + izPerZ;
+				EXZ.x = pRadAccessData->xStart;
+				//long ixPerX = 0;
+				long long ixPerX = 0;
 
-				iePerE += 2;
-				EXZ.e += pRadAccessData->eStep;
+				for(int ix=0; ix<pRadAccessData->nx; ix++)
+				{
+					float *pEx_StartForE = pEx_StartForX + ixPerX;
+					float *pEz_StartForE = pEz_StartForX + ixPerX;
+					EXZ.e = pRadAccessData->eStart;
+					//long iePerE = 0;
+					long long iePerE = 0;
+
+					for(int ie=0; ie<pRadAccessData->ne; ie++)
+					{
+						if(pEx0 != 0)
+						{
+							EFieldPtrs.pExRe = pEx_StartForE + iePerE;
+							EFieldPtrs.pExIm = EFieldPtrs.pExRe + 1;
+						}
+						else
+						{
+							EFieldPtrs.pExRe = 0;
+							EFieldPtrs.pExIm = 0;
+						}
+						if(pEz0 != 0)
+						{
+							EFieldPtrs.pEzRe = pEz_StartForE + iePerE;
+							EFieldPtrs.pEzIm = EFieldPtrs.pEzRe + 1;
+						}
+						else
+						{
+							EFieldPtrs.pEzRe = 0;
+							EFieldPtrs.pEzIm = 0;
+						}
+
+						EXZ.aux_offset = izPerZ + ixPerX + iePerE;
+						RadPointModifier(EXZ, EFieldPtrs, pBufVars); //OC29082019
+						//RadPointModifier(EXZ, EFieldPtrs);
+
+						//iTotTest++; //OCTEST
+
+						iePerE += 2;
+						EXZ.e += pRadAccessData->eStep;
+					}
+					ixPerX += PerX;
+					EXZ.x += pRadAccessData->xStep;
+				}
+				izPerZ += PerZ;
+				EXZ.z += pRadAccessData->zStep;
 			}
-			ixPerX += PerX;
-			EXZ.x += pRadAccessData->xStep;
 		}
-	}
-#endif
 
+#else //OC28102018 (does this really need to be parallelized for OpenMP?)
+		//SY: adapted for OpenMP
+		
+		#pragma omp parallel for if (omp_get_num_threads()==1) // to avoid nested multi-threading
+		for(int iz=0; iz<pRadAccessData->nz; iz++)
+		{
+			srTEFieldPtrs EFieldPtrs;
+			long long izPerZ = iz*PerZ;
+			srTEXZ EXZ;
+
+			//SY: to have one-to-one with previous version (so that tests do no fail)
+			//EXZ.z = pRadAccessData->zStart;
+			//for(int i=0; i<iz; i++) EXZ.z += pRadAccessData->zStep;
+			//SY: can be replaced with this
+			EXZ.z = (pRadAccessData->zStart) + iz*(pRadAccessData->zStep);
+
+			float *pEx_StartForX = pEx0 + izPerZ;
+			float *pEz_StartForX = pEz0 + izPerZ;
+			EXZ.x = pRadAccessData->xStart;
+			//long ixPerX = 0;
+			long long ixPerX = 0;
+
+			for(int ix=0; ix<pRadAccessData->nx; ix++)
+			{
+				float *pEx_StartForE = pEx_StartForX + ixPerX;
+				float *pEz_StartForE = pEz_StartForX + ixPerX;
+				EXZ.e = pRadAccessData->eStart;
+				//long iePerE = 0;
+				long long iePerE = 0;
+
+				for(int ie=0; ie<pRadAccessData->ne; ie++)
+				{
+					if(pEx0 != 0)
+					{
+						EFieldPtrs.pExRe = pEx_StartForE + iePerE;
+						EFieldPtrs.pExIm = EFieldPtrs.pExRe + 1;
+					}
+					else
+					{
+						EFieldPtrs.pExRe = 0;
+						EFieldPtrs.pExIm = 0;
+					}
+					if(pEz0 != 0)
+					{
+						EFieldPtrs.pEzRe = pEz_StartForE + iePerE;
+						EFieldPtrs.pEzIm = EFieldPtrs.pEzRe + 1;
+					}
+					else
+					{
+						EFieldPtrs.pEzRe = 0;
+						EFieldPtrs.pEzIm = 0;
+					}
+
+					EXZ.aux_offset = izPerZ + ixPerX + iePerE;
+					RadPointModifier(EXZ, EFieldPtrs, pBufVars); //OC29082019
+					//RadPointModifier(EXZ, EFieldPtrs);
+
+					iePerE += 2;
+					EXZ.e += pRadAccessData->eStep;
+				}
+				ixPerX += PerX;
+				EXZ.x += pRadAccessData->xStep;
+			}
+		}
+#endif
+	}
 	return 0;
 }
 
@@ -731,7 +749,7 @@ int srTGenOptElem::RemoveSliceConstE_FromGenRadStruct(srTSRWRadStructAccessData*
 
 //*************************************************************************
 
-int srTGenOptElem::SetupWfrEdgeCorrData(srTSRWRadStructAccessData* pRadAccessData, float* pDataEx, float* pDataEz, srTDataPtrsForWfrEdgeCorr& DataPtrsForWfrEdgeCorr)
+int srTGenOptElem::SetupWfrEdgeCorrData(srTSRWRadStructAccessData* pRadAccessData, float* pDataEx, float* pDataEz, srTDataPtrsForWfrEdgeCorr& DataPtrsForWfrEdgeCorr, gpuUsageArg_t *pGpuUsage)
 {
 	int result;
 
@@ -793,13 +811,14 @@ int srTGenOptElem::SetupWfrEdgeCorrData(srTSRWRadStructAccessData* pRadAccessDat
 	FFT2DInfo.yStart = pRadAccessData->zStart;
 	FFT2DInfo.Nx = pRadAccessData->nx;
 	FFT2DInfo.Ny = pRadAccessData->nz;
+	FFT2DInfo.howMany = pRadAccessData->nwfr;
 	FFT2DInfo.UseGivenStartTrValues = 0;
 	CGenMathFFT2D FFT2D;
 	FFT2D.SetupLimitsTr(FFT2DInfo);
 
 	CGenMathFFT1DInfo FFT1DInfo;
 	FFT1DInfo.Dir = 1;
-	FFT1DInfo.HowMany = 2;
+	FFT1DInfo.HowMany = 2*pRadAccessData->nwfr;
 	FFT1DInfo.UseGivenStartTrValue = 0;
 
 	if(xWfrCorrNeeded || zWfrCorrNeeded)
@@ -809,38 +828,41 @@ int srTGenOptElem::SetupWfrEdgeCorrData(srTSRWRadStructAccessData* pRadAccessDat
 
 		long TwoNx = pRadAccessData->nx << 1;
 		long TwoNz = pRadAccessData->nz << 1;
+		long PerWfr = pRadAccessData->nx * pRadAccessData->nz * (pRadAccessData->ne << 1);
+		long nwfr = pRadAccessData->nwfr;
 
 		if(dxSt != 0.)
 		{
-			DataPtrsForWfrEdgeCorr.ExpArrXSt = new float[TwoNx];
+			DataPtrsForWfrEdgeCorr.ExpArrXSt = ALLOC_ARRAY(float, TwoNx);
 			if(DataPtrsForWfrEdgeCorr.ExpArrXSt == 0) return MEMORY_ALLOCATION_FAILURE;
 
-			DataPtrsForWfrEdgeCorr.FFTArrXStEx = new float[TwoNz << 1];
+			DataPtrsForWfrEdgeCorr.FFTArrXStEx = ALLOC_ARRAY(float, (TwoNz << 1)*nwfr);
 			if(DataPtrsForWfrEdgeCorr.FFTArrXStEx == 0) return MEMORY_ALLOCATION_FAILURE;
-			DataPtrsForWfrEdgeCorr.FFTArrXStEz = DataPtrsForWfrEdgeCorr.FFTArrXStEx + TwoNz;
+			DataPtrsForWfrEdgeCorr.FFTArrXStEz = DataPtrsForWfrEdgeCorr.FFTArrXStEx + TwoNz * nwfr;
 			DataPtrsForWfrEdgeCorr.dxSt = dxSt;
 
 			long jxSt = ixWfrMinLower + 1;
 			double xjSt = pRadAccessData->xStart + jxSt*pRadAccessData->xStep;
 			SetupExpCorrArray(DataPtrsForWfrEdgeCorr.ExpArrXSt, pRadAccessData->nx, xjSt, FFT2DInfo.xStartTr, FFT2DInfo.xStepTr);
 
-			SetupRadXorZSectFromSliceConstE(pDataEx, pDataEz, pRadAccessData->nx, pRadAccessData->nz, 'z', jxSt, DataPtrsForWfrEdgeCorr.FFTArrXStEx, DataPtrsForWfrEdgeCorr.FFTArrXStEz);
+			for(long iwfr=0; iwfr<nwfr; iwfr++)
+				SetupRadXorZSectFromSliceConstE(pDataEx + PerWfr * iwfr, pDataEz + PerWfr * iwfr, pRadAccessData->nx, pRadAccessData->nz, 'z', jxSt, DataPtrsForWfrEdgeCorr.FFTArrXStEx + TwoNz * iwfr, DataPtrsForWfrEdgeCorr.FFTArrXStEz + TwoNz * iwfr);
 
 			if(dzSt != 0.)
 			{
 				long jzSt2 = (izWfrMinLower + 1) << 1;
-				DataPtrsForWfrEdgeCorr.fxStzSt[0] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEx + jzSt2);
-				DataPtrsForWfrEdgeCorr.fxStzSt[1] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEx + jzSt2 + 1);
-				DataPtrsForWfrEdgeCorr.fxStzSt[2] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEz + jzSt2);
-				DataPtrsForWfrEdgeCorr.fxStzSt[3] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEz + jzSt2 + 1);
+				DataPtrsForWfrEdgeCorr.fxStzSt[0] = (jzSt2);
+				DataPtrsForWfrEdgeCorr.fxStzSt[1] = (jzSt2 + 1);
+				DataPtrsForWfrEdgeCorr.fxStzSt[2] = (jzSt2);
+				DataPtrsForWfrEdgeCorr.fxStzSt[3] = (jzSt2 + 1);
 			}
 			if(dzFi != 0.)
 			{
 				long jzFi2 = izWfrMaxLower << 1;
-				DataPtrsForWfrEdgeCorr.fxStzFi[0] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEx + jzFi2);
-				DataPtrsForWfrEdgeCorr.fxStzFi[1] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEx + jzFi2 + 1);
-				DataPtrsForWfrEdgeCorr.fxStzFi[2] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEz + jzFi2);
-				DataPtrsForWfrEdgeCorr.fxStzFi[3] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEz + jzFi2 + 1);
+				DataPtrsForWfrEdgeCorr.fxStzFi[0] = (jzFi2);
+				DataPtrsForWfrEdgeCorr.fxStzFi[1] = (jzFi2 + 1);
+				DataPtrsForWfrEdgeCorr.fxStzFi[2] = (jzFi2);
+				DataPtrsForWfrEdgeCorr.fxStzFi[3] = (jzFi2 + 1);
 			}
 
 			FFT1DInfo.pInData = DataPtrsForWfrEdgeCorr.FFTArrXStEx;
@@ -849,38 +871,39 @@ int srTGenOptElem::SetupWfrEdgeCorrData(srTSRWRadStructAccessData* pRadAccessDat
 			FFT1DInfo.xStart = pRadAccessData->zStart;
 			FFT1DInfo.Nx = pRadAccessData->nz;
 			CGenMathFFT1D FFT1D;
-			if(result = FFT1D.Make1DFFT_InPlace(FFT1DInfo)) return result;
+			if(result = FFT1D.Make1DFFT_InPlace(FFT1DInfo, pGpuUsage)) return result;
 		}
 		if(dxFi != 0.)
 		{
-			DataPtrsForWfrEdgeCorr.ExpArrXFi = new float[TwoNx];
+			DataPtrsForWfrEdgeCorr.ExpArrXFi = ALLOC_ARRAY(float, TwoNx);
 			if(DataPtrsForWfrEdgeCorr.ExpArrXFi == 0) return MEMORY_ALLOCATION_FAILURE;
 
-			DataPtrsForWfrEdgeCorr.FFTArrXFiEx = new float[TwoNz << 1];
+			DataPtrsForWfrEdgeCorr.FFTArrXFiEx = ALLOC_ARRAY(float, (TwoNz << 1) * nwfr);
 			if(DataPtrsForWfrEdgeCorr.FFTArrXFiEx == 0) return MEMORY_ALLOCATION_FAILURE;
-			DataPtrsForWfrEdgeCorr.FFTArrXFiEz = DataPtrsForWfrEdgeCorr.FFTArrXFiEx + TwoNz;
+			DataPtrsForWfrEdgeCorr.FFTArrXFiEz = DataPtrsForWfrEdgeCorr.FFTArrXFiEx + TwoNz * nwfr;
 			DataPtrsForWfrEdgeCorr.dxFi = dxFi;
 
 			double xjFi = pRadAccessData->xStart + ixWfrMaxLower*pRadAccessData->xStep;
 			SetupExpCorrArray(DataPtrsForWfrEdgeCorr.ExpArrXFi, pRadAccessData->nx, xjFi, FFT2DInfo.xStartTr, FFT2DInfo.xStepTr);
 
-			SetupRadXorZSectFromSliceConstE(pDataEx, pDataEz, pRadAccessData->nx, pRadAccessData->nz, 'z', ixWfrMaxLower, DataPtrsForWfrEdgeCorr.FFTArrXFiEx, DataPtrsForWfrEdgeCorr.FFTArrXFiEz);
+			for(long iwfr=0; iwfr<nwfr; iwfr++)
+				SetupRadXorZSectFromSliceConstE(pDataEx + PerWfr * iwfr, pDataEz + PerWfr * iwfr, pRadAccessData->nx, pRadAccessData->nz, 'z', ixWfrMaxLower, DataPtrsForWfrEdgeCorr.FFTArrXFiEx + TwoNz * iwfr, DataPtrsForWfrEdgeCorr.FFTArrXFiEz + TwoNz * iwfr);
 
 			if(dzSt != 0.)
 			{
 				long jzSt2 = (izWfrMinLower + 1) << 1;
-				DataPtrsForWfrEdgeCorr.fxFizSt[0] = *(DataPtrsForWfrEdgeCorr.FFTArrXFiEx + jzSt2);
-				DataPtrsForWfrEdgeCorr.fxFizSt[1] = *(DataPtrsForWfrEdgeCorr.FFTArrXFiEx + jzSt2 + 1);
-				DataPtrsForWfrEdgeCorr.fxFizSt[2] = *(DataPtrsForWfrEdgeCorr.FFTArrXFiEz + jzSt2);
-				DataPtrsForWfrEdgeCorr.fxFizSt[3] = *(DataPtrsForWfrEdgeCorr.FFTArrXFiEz + jzSt2 + 1);
+				DataPtrsForWfrEdgeCorr.fxFizSt[0] = (jzSt2);
+				DataPtrsForWfrEdgeCorr.fxFizSt[1] = (jzSt2 + 1);
+				DataPtrsForWfrEdgeCorr.fxFizSt[2] = (jzSt2);
+				DataPtrsForWfrEdgeCorr.fxFizSt[3] = (jzSt2 + 1);
 			}
 			if(dzFi != 0.)
 			{
 				long jzFi2 = izWfrMaxLower << 1;
-				DataPtrsForWfrEdgeCorr.fxFizFi[0] = *(DataPtrsForWfrEdgeCorr.FFTArrXFiEx + jzFi2);
-				DataPtrsForWfrEdgeCorr.fxFizFi[1] = *(DataPtrsForWfrEdgeCorr.FFTArrXFiEx + jzFi2 + 1);
-				DataPtrsForWfrEdgeCorr.fxFizFi[2] = *(DataPtrsForWfrEdgeCorr.FFTArrXFiEz + jzFi2);
-				DataPtrsForWfrEdgeCorr.fxFizFi[3] = *(DataPtrsForWfrEdgeCorr.FFTArrXFiEz + jzFi2 + 1);
+				DataPtrsForWfrEdgeCorr.fxFizFi[0] = (jzFi2);
+				DataPtrsForWfrEdgeCorr.fxFizFi[1] = (jzFi2 + 1);
+				DataPtrsForWfrEdgeCorr.fxFizFi[2] = (jzFi2);
+				DataPtrsForWfrEdgeCorr.fxFizFi[3] = (jzFi2 + 1);
 			}
 
 			FFT1DInfo.pInData = DataPtrsForWfrEdgeCorr.FFTArrXFiEx;
@@ -889,23 +912,24 @@ int srTGenOptElem::SetupWfrEdgeCorrData(srTSRWRadStructAccessData* pRadAccessDat
 			FFT1DInfo.xStart = pRadAccessData->zStart;
 			FFT1DInfo.Nx = pRadAccessData->nz;
 			CGenMathFFT1D FFT1D;
-			if(result = FFT1D.Make1DFFT_InPlace(FFT1DInfo)) return result;
+			if(result = FFT1D.Make1DFFT_InPlace(FFT1DInfo, pGpuUsage)) return result;
 		}
 		if(dzSt != 0.)
 		{
-			DataPtrsForWfrEdgeCorr.ExpArrZSt = new float[TwoNz];
+			DataPtrsForWfrEdgeCorr.ExpArrZSt = ALLOC_ARRAY(float, TwoNz);
 			if(DataPtrsForWfrEdgeCorr.ExpArrZSt == 0) return MEMORY_ALLOCATION_FAILURE;
 
-			DataPtrsForWfrEdgeCorr.FFTArrZStEx = new float[TwoNx << 1];
+			DataPtrsForWfrEdgeCorr.FFTArrZStEx = ALLOC_ARRAY(float, (TwoNx << 1) * nwfr);
 			if(DataPtrsForWfrEdgeCorr.FFTArrZStEx == 0) return MEMORY_ALLOCATION_FAILURE;
-			DataPtrsForWfrEdgeCorr.FFTArrZStEz = DataPtrsForWfrEdgeCorr.FFTArrZStEx + TwoNx;
+			DataPtrsForWfrEdgeCorr.FFTArrZStEz = DataPtrsForWfrEdgeCorr.FFTArrZStEx + TwoNx * nwfr;
 			DataPtrsForWfrEdgeCorr.dzSt = dzSt;
 
 			long jzSt = izWfrMinLower + 1;
 			double zjSt = pRadAccessData->zStart + jzSt*pRadAccessData->zStep;
 			SetupExpCorrArray(DataPtrsForWfrEdgeCorr.ExpArrZSt, pRadAccessData->nz, zjSt, FFT2DInfo.yStartTr, FFT2DInfo.yStepTr);
 
-			SetupRadXorZSectFromSliceConstE(pDataEx, pDataEz, pRadAccessData->nx, pRadAccessData->nz, 'x', jzSt, DataPtrsForWfrEdgeCorr.FFTArrZStEx, DataPtrsForWfrEdgeCorr.FFTArrZStEz);
+			for(int iwfr=0; iwfr<nwfr; iwfr++)
+				SetupRadXorZSectFromSliceConstE(pDataEx + iwfr*PerWfr, pDataEz + iwfr*PerWfr, pRadAccessData->nx, pRadAccessData->nz, 'x', jzSt, DataPtrsForWfrEdgeCorr.FFTArrZStEx + TwoNx*iwfr, DataPtrsForWfrEdgeCorr.FFTArrZStEz + TwoNx*iwfr);
 
 			FFT1DInfo.pInData = DataPtrsForWfrEdgeCorr.FFTArrZStEx;
 			FFT1DInfo.pOutData = 0;
@@ -913,14 +937,14 @@ int srTGenOptElem::SetupWfrEdgeCorrData(srTSRWRadStructAccessData* pRadAccessDat
 			FFT1DInfo.xStart = pRadAccessData->xStart;
 			FFT1DInfo.Nx = pRadAccessData->nx;
 			CGenMathFFT1D FFT1D;
-			if(result = FFT1D.Make1DFFT_InPlace(FFT1DInfo)) return result;
+			if(result = FFT1D.Make1DFFT_InPlace(FFT1DInfo, pGpuUsage)) return result;
 		}
 		if(dzFi != 0.)
 		{
-			DataPtrsForWfrEdgeCorr.ExpArrZFi = new float[TwoNz];
+			DataPtrsForWfrEdgeCorr.ExpArrZFi = ALLOC_ARRAY(float, TwoNz);
 			if(DataPtrsForWfrEdgeCorr.ExpArrZFi == 0) return MEMORY_ALLOCATION_FAILURE;
 
-			DataPtrsForWfrEdgeCorr.FFTArrZFiEx = new float[TwoNx << 1];
+			DataPtrsForWfrEdgeCorr.FFTArrZFiEx = ALLOC_ARRAY(float, (TwoNx << 1) * nwfr);
 			if(DataPtrsForWfrEdgeCorr.FFTArrZFiEx == 0) return MEMORY_ALLOCATION_FAILURE;
 			DataPtrsForWfrEdgeCorr.FFTArrZFiEz = DataPtrsForWfrEdgeCorr.FFTArrZFiEx + TwoNx;
 			DataPtrsForWfrEdgeCorr.dzFi = dzFi;
@@ -928,7 +952,8 @@ int srTGenOptElem::SetupWfrEdgeCorrData(srTSRWRadStructAccessData* pRadAccessDat
 			double zjFi = pRadAccessData->zStart + izWfrMaxLower*pRadAccessData->zStep;
 			SetupExpCorrArray(DataPtrsForWfrEdgeCorr.ExpArrZFi, pRadAccessData->nz, zjFi, FFT2DInfo.yStartTr, FFT2DInfo.yStepTr);
 
-			SetupRadXorZSectFromSliceConstE(pDataEx, pDataEz, pRadAccessData->nx, pRadAccessData->nz, 'x', izWfrMaxLower, DataPtrsForWfrEdgeCorr.FFTArrZFiEx, DataPtrsForWfrEdgeCorr.FFTArrZFiEz);
+			for(int iwfr=0; iwfr<nwfr; iwfr++)
+				SetupRadXorZSectFromSliceConstE(pDataEx + iwfr*PerWfr, pDataEz + iwfr*PerWfr, pRadAccessData->nx, pRadAccessData->nz, 'x', izWfrMaxLower, DataPtrsForWfrEdgeCorr.FFTArrZFiEx + TwoNx*iwfr, DataPtrsForWfrEdgeCorr.FFTArrZFiEz + TwoNx*iwfr);
 
 			FFT1DInfo.pInData = DataPtrsForWfrEdgeCorr.FFTArrZFiEx;
 			FFT1DInfo.pOutData = 0;
@@ -936,7 +961,7 @@ int srTGenOptElem::SetupWfrEdgeCorrData(srTSRWRadStructAccessData* pRadAccessDat
 			FFT1DInfo.xStart = pRadAccessData->xStart;
 			FFT1DInfo.Nx = pRadAccessData->nx;
 			CGenMathFFT1D FFT1D;
-			if(result = FFT1D.Make1DFFT_InPlace(FFT1DInfo)) return result;
+			if(result = FFT1D.Make1DFFT_InPlace(FFT1DInfo, pGpuUsage)) return result;
 		}
 		DataPtrsForWfrEdgeCorr.WasSetup = 1;
 	}
@@ -1015,134 +1040,166 @@ int srTGenOptElem::SetupWfrEdgeCorrData1D(srTRadSect1D* pRadSect1D, float* pData
 
 //*************************************************************************
 
-void srTGenOptElem::MakeWfrEdgeCorrection(srTSRWRadStructAccessData* pRadAccessData, float* pDataEx, float* pDataEz, srTDataPtrsForWfrEdgeCorr& DataPtrs)
+void srTGenOptElem::MakeWfrEdgeCorrection(srTSRWRadStructAccessData* pRadAccessData, float* pDataEx, float* pDataEz, srTDataPtrsForWfrEdgeCorr& DataPtrs, gpuUsageArg_t *pGpuUsage)
 {
-	float *tEx = pDataEx, *tEz = pDataEz;
-
-	double dxSt_dzSt = DataPtrs.dxSt*DataPtrs.dzSt;
-	double dxSt_dzFi = DataPtrs.dxSt*DataPtrs.dzFi;
-	double dxFi_dzSt = DataPtrs.dxFi*DataPtrs.dzSt;
-	double dxFi_dzFi = DataPtrs.dxFi*DataPtrs.dzFi;
-
-	float fSSExRe = DataPtrs.fxStzSt[0], fSSExIm = DataPtrs.fxStzSt[1], fSSEzRe = DataPtrs.fxStzSt[2], fSSEzIm = DataPtrs.fxStzSt[3];
-	float fFSExRe = DataPtrs.fxFizSt[0], fFSExIm = DataPtrs.fxFizSt[1], fFSEzRe = DataPtrs.fxFizSt[2], fFSEzIm = DataPtrs.fxFizSt[3];
-	float fSFExRe = DataPtrs.fxStzFi[0], fSFExIm = DataPtrs.fxStzFi[1], fSFEzRe = DataPtrs.fxStzFi[2], fSFEzIm = DataPtrs.fxStzFi[3];
-	float fFFExRe = DataPtrs.fxFizFi[0], fFFExIm = DataPtrs.fxFizFi[1], fFFEzRe = DataPtrs.fxFizFi[2], fFFEzIm = DataPtrs.fxFizFi[3];
-
-	float bRe, bIm, cRe, cIm;
-
-	for(long iz=0; iz<pRadAccessData->nz; iz++)
+	GPU_COND(pGpuUsage,
 	{
-		//long Two_iz = iz << 1;
-		//long Two_iz_p_1 = Two_iz + 1;
-		long long Two_iz = iz << 1;
-		long long Two_iz_p_1 = Two_iz + 1;
+//#if _DEBUG
+//		printf("GPU: srTGenOptElem::MakeWfrEdgeCorrection\n");
+//#endif
+		MakeWfrEdgeCorrection_GPU(*pRadAccessData, pDataEx, pDataEz, DataPtrs, pGpuUsage);
+	})
+	else
+	{
+		double dxSt_dzSt = DataPtrs.dxSt*DataPtrs.dzSt;
+		double dxSt_dzFi = DataPtrs.dxSt*DataPtrs.dzFi;
+		double dxFi_dzSt = DataPtrs.dxFi*DataPtrs.dzSt;
+		double dxFi_dzFi = DataPtrs.dxFi*DataPtrs.dzFi;
+		long TwoNz = pRadAccessData->nz << 1;
+		long TwoNx = pRadAccessData->nx << 1;
+		long PerWfr = pRadAccessData->nx * pRadAccessData->nz * 2;
 
-		for(long ix=0; ix<pRadAccessData->nx; ix++)
+		for(long iwfr=0; iwfr<pRadAccessData->nwfr; iwfr++)
 		{
-			//long Two_ix = ix << 1;
-			//long Two_ix_p_1 = Two_ix + 1;
-			long long Two_ix = ix << 1;
-			long long Two_ix_p_1 = Two_ix + 1;
+			float *tEx = pDataEx+iwfr*PerWfr, *tEz = pDataEz+iwfr*PerWfr;
 
-			float ExRe = *tEx, ExIm = *(tEx+1);
-			float EzRe = *tEz, EzIm = *(tEz+1);
+#define DATAPTR_CHECK(x, a) ((x >= 0) ? a[x+TwoNz*iwfr] : 0.)
+			float fSSExRe = DATAPTR_CHECK(DataPtrs.fxStzSt[0], DataPtrs.FFTArrXStEx);
+			float fSSExIm = DATAPTR_CHECK(DataPtrs.fxStzSt[1], DataPtrs.FFTArrXStEx);
+			float fSSEzRe = DATAPTR_CHECK(DataPtrs.fxStzSt[2], DataPtrs.FFTArrXStEz);
+			float fSSEzIm = DATAPTR_CHECK(DataPtrs.fxStzSt[3], DataPtrs.FFTArrXStEz);
+			
+			float fFSExRe = DATAPTR_CHECK(DataPtrs.fxFizSt[0], DataPtrs.FFTArrXFiEx);
+			float fFSExIm = DATAPTR_CHECK(DataPtrs.fxFizSt[1], DataPtrs.FFTArrXFiEx);
+			float fFSEzRe = DATAPTR_CHECK(DataPtrs.fxFizSt[2], DataPtrs.FFTArrXFiEz);
+			float fFSEzIm = DATAPTR_CHECK(DataPtrs.fxFizSt[3], DataPtrs.FFTArrXFiEz);
+			
+			float fSFExRe = DATAPTR_CHECK(DataPtrs.fxStzFi[0], DataPtrs.FFTArrXStEx);
+			float fSFExIm = DATAPTR_CHECK(DataPtrs.fxStzFi[1], DataPtrs.FFTArrXStEx);
+			float fSFEzRe = DATAPTR_CHECK(DataPtrs.fxStzFi[2], DataPtrs.FFTArrXStEz);
+			float fSFEzIm = DATAPTR_CHECK(DataPtrs.fxStzFi[3], DataPtrs.FFTArrXStEz);
+			
+			float fFFExRe = DATAPTR_CHECK(DataPtrs.fxFizFi[0], DataPtrs.FFTArrXFiEx);
+			float fFFExIm = DATAPTR_CHECK(DataPtrs.fxFizFi[1], DataPtrs.FFTArrXFiEx);
+			float fFFEzRe = DATAPTR_CHECK(DataPtrs.fxFizFi[2], DataPtrs.FFTArrXFiEz);
+			float fFFEzIm = DATAPTR_CHECK(DataPtrs.fxFizFi[3], DataPtrs.FFTArrXFiEz);
 
-			if(DataPtrs.dxSt != 0.)
+			float bRe, bIm, cRe, cIm;
+
+			for(long iz=0; iz<pRadAccessData->nz; iz++)
 			{
-				float ExpXStRe = DataPtrs.ExpArrXSt[Two_ix], ExpXStIm = DataPtrs.ExpArrXSt[Two_ix_p_1];
+				//long Two_iz = iz << 1;
+				//long Two_iz_p_1 = Two_iz + 1;
+				long long Two_iz = iz << 1;
+				long long Two_iz_p_1 = Two_iz + 1;
 
-				bRe = DataPtrs.FFTArrXStEx[Two_iz]; bIm = DataPtrs.FFTArrXStEx[Two_iz_p_1];
-				ExRe += (float)(DataPtrs.dxSt*(ExpXStRe*bRe - ExpXStIm*bIm));
-				ExIm += (float)(DataPtrs.dxSt*(ExpXStRe*bIm + ExpXStIm*bRe));
-
-				bRe = DataPtrs.FFTArrXStEz[Two_iz]; bIm = DataPtrs.FFTArrXStEz[Two_iz_p_1];
-				EzRe += (float)(DataPtrs.dxSt*(ExpXStRe*bRe - ExpXStIm*bIm));
-				EzIm += (float)(DataPtrs.dxSt*(ExpXStRe*bIm + ExpXStIm*bRe));
-
-				if(DataPtrs.dzSt != 0.)
+				for(long ix=0; ix<pRadAccessData->nx; ix++)
 				{
-					bRe = DataPtrs.ExpArrZSt[Two_iz], bIm = DataPtrs.ExpArrZSt[Two_iz_p_1];
-					cRe = ExpXStRe*bRe - ExpXStIm*bIm; cIm = ExpXStRe*bIm + ExpXStIm*bRe;
+					//long Two_ix = ix << 1;
+					//long Two_ix_p_1 = Two_ix + 1;
+					long long Two_ix = ix << 1;
+					long long Two_ix_p_1 = Two_ix + 1;
 
-					ExRe += (float)(dxSt_dzSt*(fSSExRe*cRe - fSSExIm*cIm));
-					ExIm += (float)(dxSt_dzSt*(fSSExRe*cIm + fSSExIm*cRe));
-					EzRe += (float)(dxSt_dzSt*(fSSEzRe*cRe - fSSEzIm*cIm));
-					EzIm += (float)(dxSt_dzSt*(fSSEzRe*cIm + fSSEzIm*cRe));
-				}
-				if(DataPtrs.dzFi != 0.)
-				{
-					bRe = DataPtrs.ExpArrZFi[Two_iz], bIm = DataPtrs.ExpArrZFi[Two_iz_p_1];
-					cRe = ExpXStRe*bRe - ExpXStIm*bIm; cIm = ExpXStRe*bIm + ExpXStIm*bRe;
+					float ExRe = *tEx, ExIm = *(tEx+1);
+					float EzRe = *tEz, EzIm = *(tEz+1);
 
-					ExRe -= (float)(dxSt_dzFi*(fSFExRe*cRe - fSFExIm*cIm));
-					ExIm -= (float)(dxSt_dzFi*(fSFExRe*cIm + fSFExIm*cRe));
-					EzRe -= (float)(dxSt_dzFi*(fSFEzRe*cRe - fSFEzIm*cIm));
-					EzIm -= (float)(dxSt_dzFi*(fSFEzRe*cIm + fSFEzIm*cRe));
+					if(DataPtrs.dxSt != 0.)
+					{
+						float ExpXStRe = DataPtrs.ExpArrXSt[Two_ix], ExpXStIm = DataPtrs.ExpArrXSt[Two_ix_p_1];
+
+						bRe = DataPtrs.FFTArrXStEx[Two_iz+TwoNz*iwfr]; bIm = DataPtrs.FFTArrXStEx[Two_iz_p_1+TwoNz*iwfr];
+						ExRe += (float)(DataPtrs.dxSt*(ExpXStRe*bRe - ExpXStIm*bIm));
+						ExIm += (float)(DataPtrs.dxSt*(ExpXStRe*bIm + ExpXStIm*bRe));
+
+						bRe = DataPtrs.FFTArrXStEz[Two_iz+TwoNz*iwfr]; bIm = DataPtrs.FFTArrXStEz[Two_iz_p_1+TwoNz*iwfr];
+						EzRe += (float)(DataPtrs.dxSt*(ExpXStRe*bRe - ExpXStIm*bIm));
+						EzIm += (float)(DataPtrs.dxSt*(ExpXStRe*bIm + ExpXStIm*bRe));
+
+						if(DataPtrs.dzSt != 0.)
+						{
+							bRe = DataPtrs.ExpArrZSt[Two_iz], bIm = DataPtrs.ExpArrZSt[Two_iz_p_1];
+							cRe = ExpXStRe*bRe - ExpXStIm*bIm; cIm = ExpXStRe*bIm + ExpXStIm*bRe;
+
+							ExRe += (float)(dxSt_dzSt*(fSSExRe*cRe - fSSExIm*cIm));
+							ExIm += (float)(dxSt_dzSt*(fSSExRe*cIm + fSSExIm*cRe));
+							EzRe += (float)(dxSt_dzSt*(fSSEzRe*cRe - fSSEzIm*cIm));
+							EzIm += (float)(dxSt_dzSt*(fSSEzRe*cIm + fSSEzIm*cRe));
+						}
+						if(DataPtrs.dzFi != 0.)
+						{
+							bRe = DataPtrs.ExpArrZFi[Two_iz], bIm = DataPtrs.ExpArrZFi[Two_iz_p_1];
+							cRe = ExpXStRe*bRe - ExpXStIm*bIm; cIm = ExpXStRe*bIm + ExpXStIm*bRe;
+
+							ExRe -= (float)(dxSt_dzFi*(fSFExRe*cRe - fSFExIm*cIm));
+							ExIm -= (float)(dxSt_dzFi*(fSFExRe*cIm + fSFExIm*cRe));
+							EzRe -= (float)(dxSt_dzFi*(fSFEzRe*cRe - fSFEzIm*cIm));
+							EzIm -= (float)(dxSt_dzFi*(fSFEzRe*cIm + fSFEzIm*cRe));
+						}
+					}
+					if(DataPtrs.dxFi != 0.)
+					{
+						float ExpXFiRe = DataPtrs.ExpArrXFi[Two_ix], ExpXFiIm = DataPtrs.ExpArrXFi[Two_ix_p_1];
+
+						bRe = DataPtrs.FFTArrXFiEx[Two_iz+TwoNz*iwfr]; bIm = DataPtrs.FFTArrXFiEx[Two_iz_p_1+TwoNz*iwfr];
+						ExRe -= (float)(DataPtrs.dxFi*(ExpXFiRe*bRe - ExpXFiIm*bIm));
+						ExIm -= (float)(DataPtrs.dxFi*(ExpXFiRe*bIm + ExpXFiIm*bRe));
+
+						bRe = DataPtrs.FFTArrXFiEz[Two_iz+TwoNz*iwfr]; bIm = DataPtrs.FFTArrXFiEz[Two_iz_p_1+TwoNz*iwfr];
+						EzRe -= (float)(DataPtrs.dxFi*(ExpXFiRe*bRe - ExpXFiIm*bIm));
+						EzIm -= (float)(DataPtrs.dxFi*(ExpXFiRe*bIm + ExpXFiIm*bRe));
+
+						if(DataPtrs.dzSt != 0.)
+						{
+							bRe = DataPtrs.ExpArrZSt[Two_iz], bIm = DataPtrs.ExpArrZSt[Two_iz_p_1];
+							cRe = ExpXFiRe*bRe - ExpXFiIm*bIm; cIm = ExpXFiRe*bIm + ExpXFiIm*bRe;
+
+							ExRe -= (float)(dxFi_dzSt*(fFSExRe*cRe - fFSExIm*cIm));
+							ExIm -= (float)(dxFi_dzSt*(fFSExRe*cIm + fFSExIm*cRe));
+							EzRe -= (float)(dxFi_dzSt*(fFSEzRe*cRe - fFSEzIm*cIm));
+							EzIm -= (float)(dxFi_dzSt*(fFSEzRe*cIm + fFSEzIm*cRe));
+						}
+						if(DataPtrs.dzFi != 0.)
+						{
+							bRe = DataPtrs.ExpArrZFi[Two_iz], bIm = DataPtrs.ExpArrZFi[Two_iz_p_1];
+							cRe = ExpXFiRe*bRe - ExpXFiIm*bIm; cIm = ExpXFiRe*bIm + ExpXFiIm*bRe;
+
+							ExRe += (float)(dxFi_dzFi*(fFFExRe*cRe - fFFExIm*cIm));
+							ExIm += (float)(dxFi_dzFi*(fFFExRe*cIm + fFFExIm*cRe));
+							EzRe += (float)(dxFi_dzFi*(fFFEzRe*cRe - fFFEzIm*cIm));
+							EzIm += (float)(dxFi_dzFi*(fFFEzRe*cIm + fFFEzIm*cRe));
+						}
+					}
+					if(DataPtrs.dzSt != 0.)
+					{
+						float ExpZStRe = DataPtrs.ExpArrZSt[Two_iz], ExpZStIm = DataPtrs.ExpArrZSt[Two_iz_p_1];
+
+						bRe = DataPtrs.FFTArrZStEx[Two_ix+TwoNx*iwfr]; bIm = DataPtrs.FFTArrZStEx[Two_ix_p_1+TwoNx*iwfr];
+						ExRe += (float)(DataPtrs.dzSt*(ExpZStRe*bRe - ExpZStIm*bIm));
+						ExIm += (float)(DataPtrs.dzSt*(ExpZStRe*bIm + ExpZStIm*bRe));
+
+						bRe = DataPtrs.FFTArrZStEz[Two_ix+TwoNx*iwfr]; bIm = DataPtrs.FFTArrZStEz[Two_ix_p_1+TwoNx*iwfr];
+						EzRe += (float)(DataPtrs.dzSt*(ExpZStRe*bRe - ExpZStIm*bIm));
+						EzIm += (float)(DataPtrs.dzSt*(ExpZStRe*bIm + ExpZStIm*bRe));
+					}
+					if(DataPtrs.dzFi != 0.)
+					{
+						float ExpZFiRe = DataPtrs.ExpArrZFi[Two_iz], ExpZFiIm = DataPtrs.ExpArrZFi[Two_iz_p_1];
+
+						bRe = DataPtrs.FFTArrZFiEx[Two_ix+TwoNx*iwfr]; bIm = DataPtrs.FFTArrZFiEx[Two_ix_p_1+TwoNx*iwfr];
+						ExRe -= (float)(DataPtrs.dzFi*(ExpZFiRe*bRe - ExpZFiIm*bIm));
+						ExIm -= (float)(DataPtrs.dzFi*(ExpZFiRe*bIm + ExpZFiIm*bRe));
+
+						bRe = DataPtrs.FFTArrZFiEz[Two_ix+TwoNx*iwfr]; bIm = DataPtrs.FFTArrZFiEz[Two_ix_p_1+TwoNx*iwfr];
+						EzRe -= (float)(DataPtrs.dzFi*(ExpZFiRe*bRe - ExpZFiIm*bIm));
+						EzIm -= (float)(DataPtrs.dzFi*(ExpZFiRe*bIm + ExpZFiIm*bRe));
+					}
+
+					*tEx = ExRe; *(tEx+1) = ExIm;
+					*tEz = EzRe; *(tEz+1) = EzIm;
+
+					tEx += 2; tEz += 2;
 				}
 			}
-			if(DataPtrs.dxFi != 0.)
-			{
-				float ExpXFiRe = DataPtrs.ExpArrXFi[Two_ix], ExpXFiIm = DataPtrs.ExpArrXFi[Two_ix_p_1];
-
-				bRe = DataPtrs.FFTArrXFiEx[Two_iz]; bIm = DataPtrs.FFTArrXFiEx[Two_iz_p_1];
-				ExRe -= (float)(DataPtrs.dxFi*(ExpXFiRe*bRe - ExpXFiIm*bIm));
-				ExIm -= (float)(DataPtrs.dxFi*(ExpXFiRe*bIm + ExpXFiIm*bRe));
-
-				bRe = DataPtrs.FFTArrXFiEz[Two_iz]; bIm = DataPtrs.FFTArrXFiEz[Two_iz_p_1];
-				EzRe -= (float)(DataPtrs.dxFi*(ExpXFiRe*bRe - ExpXFiIm*bIm));
-				EzIm -= (float)(DataPtrs.dxFi*(ExpXFiRe*bIm + ExpXFiIm*bRe));
-
-				if(DataPtrs.dzSt != 0.)
-				{
-					bRe = DataPtrs.ExpArrZSt[Two_iz], bIm = DataPtrs.ExpArrZSt[Two_iz_p_1];
-					cRe = ExpXFiRe*bRe - ExpXFiIm*bIm; cIm = ExpXFiRe*bIm + ExpXFiIm*bRe;
-
-					ExRe -= (float)(dxFi_dzSt*(fFSExRe*cRe - fFSExIm*cIm));
-					ExIm -= (float)(dxFi_dzSt*(fFSExRe*cIm + fFSExIm*cRe));
-					EzRe -= (float)(dxFi_dzSt*(fFSEzRe*cRe - fFSEzIm*cIm));
-					EzIm -= (float)(dxFi_dzSt*(fFSEzRe*cIm + fFSEzIm*cRe));
-				}
-				if(DataPtrs.dzFi != 0.)
-				{
-					bRe = DataPtrs.ExpArrZFi[Two_iz], bIm = DataPtrs.ExpArrZFi[Two_iz_p_1];
-					cRe = ExpXFiRe*bRe - ExpXFiIm*bIm; cIm = ExpXFiRe*bIm + ExpXFiIm*bRe;
-
-					ExRe += (float)(dxFi_dzFi*(fFFExRe*cRe - fFFExIm*cIm));
-					ExIm += (float)(dxFi_dzFi*(fFFExRe*cIm + fFFExIm*cRe));
-					EzRe += (float)(dxFi_dzFi*(fFFEzRe*cRe - fFFEzIm*cIm));
-					EzIm += (float)(dxFi_dzFi*(fFFEzRe*cIm + fFFEzIm*cRe));
-				}
-			}
-			if(DataPtrs.dzSt != 0.)
-			{
-				float ExpZStRe = DataPtrs.ExpArrZSt[Two_iz], ExpZStIm = DataPtrs.ExpArrZSt[Two_iz_p_1];
-
-				bRe = DataPtrs.FFTArrZStEx[Two_ix]; bIm = DataPtrs.FFTArrZStEx[Two_ix_p_1];
-				ExRe += (float)(DataPtrs.dzSt*(ExpZStRe*bRe - ExpZStIm*bIm));
-				ExIm += (float)(DataPtrs.dzSt*(ExpZStRe*bIm + ExpZStIm*bRe));
-
-				bRe = DataPtrs.FFTArrZStEz[Two_ix]; bIm = DataPtrs.FFTArrZStEz[Two_ix_p_1];
-				EzRe += (float)(DataPtrs.dzSt*(ExpZStRe*bRe - ExpZStIm*bIm));
-				EzIm += (float)(DataPtrs.dzSt*(ExpZStRe*bIm + ExpZStIm*bRe));
-			}
-			if(DataPtrs.dzFi != 0.)
-			{
-				float ExpZFiRe = DataPtrs.ExpArrZFi[Two_iz], ExpZFiIm = DataPtrs.ExpArrZFi[Two_iz_p_1];
-
-				bRe = DataPtrs.FFTArrZFiEx[Two_ix]; bIm = DataPtrs.FFTArrZFiEx[Two_ix_p_1];
-				ExRe -= (float)(DataPtrs.dzFi*(ExpZFiRe*bRe - ExpZFiIm*bIm));
-				ExIm -= (float)(DataPtrs.dzFi*(ExpZFiRe*bIm + ExpZFiIm*bRe));
-
-				bRe = DataPtrs.FFTArrZFiEz[Two_ix]; bIm = DataPtrs.FFTArrZFiEz[Two_ix_p_1];
-				EzRe -= (float)(DataPtrs.dzFi*(ExpZFiRe*bRe - ExpZFiIm*bIm));
-				EzIm -= (float)(DataPtrs.dzFi*(ExpZFiRe*bIm + ExpZFiIm*bRe));
-			}
-
-			*tEx = ExRe; *(tEx+1) = ExIm;
-			*tEz = EzRe; *(tEz+1) = EzIm;
-
-			tEx += 2; tEz += 2;
 		}
 	}
 }
@@ -1204,7 +1261,7 @@ void srTGenOptElem::MakeWfrEdgeCorrection1D(srTRadSect1D* pRadSect1D, float* pDa
 //*************************************************************************
 
 //int srTGenOptElem::SetRadRepres(srTSRWRadStructAccessData* pRadAccessData, char CoordOrAng)
-int srTGenOptElem::SetRadRepres(srTSRWRadStructAccessData* pRadAccessData, char CoordOrAng, double* ar_xStartInSlicesE, double* ar_zStartInSlicesE)
+int srTGenOptElem::SetRadRepres(srTSRWRadStructAccessData* pRadAccessData, char CoordOrAng, double* ar_xStartInSlicesE, double* ar_zStartInSlicesE, gpuUsageArg_t* pGpuUsage)
 {// 0- to coord.; 1- to ang.
 	int result;
 
@@ -1224,6 +1281,7 @@ int srTGenOptElem::SetRadRepres(srTSRWRadStructAccessData* pRadAccessData, char 
 	FFT2DInfo.yStart = pRadAccessData->zStart;
 	FFT2DInfo.Nx = pRadAccessData->nx;
 	FFT2DInfo.Ny = pRadAccessData->nz;
+	FFT2DInfo.howMany = pRadAccessData->nwfr;
 	FFT2DInfo.Dir = DirFFT;
 	FFT2DInfo.UseGivenStartTrValues = 0;
 //New
@@ -1247,7 +1305,7 @@ int srTGenOptElem::SetRadRepres(srTSRWRadStructAccessData* pRadAccessData, char 
 		{
 			if(CoordOrAng == 1)
 			{
-				if(result = SetupWfrEdgeCorrData(pRadAccessData, pRadAccessData->pBaseRadX, pRadAccessData->pBaseRadZ, DataPtrsForWfrEdgeCorr)) return result;
+				if(result = SetupWfrEdgeCorrData(pRadAccessData, pRadAccessData->pBaseRadX, pRadAccessData->pBaseRadZ, DataPtrsForWfrEdgeCorr, pGpuUsage)) return result;
 			}
 		}
 
@@ -1255,9 +1313,9 @@ int srTGenOptElem::SetRadRepres(srTSRWRadStructAccessData* pRadAccessData, char 
 		if(ar_zStartInSlicesE != 0) FFT2DInfo.yStart = *ar_zStartInSlicesE;
 
 		FFT2DInfo.pData = pRadAccessData->pBaseRadX;
-		if(result = FFT2D.Make2DFFT(FFT2DInfo)) return result;
+		if(result = FFT2D.Make2DFFT(FFT2DInfo, 0, 0, pGpuUsage)) return result;
 		FFT2DInfo.pData = pRadAccessData->pBaseRadZ;
-		if(result = FFT2D.Make2DFFT(FFT2DInfo)) return result;
+		if(result = FFT2D.Make2DFFT(FFT2DInfo, 0, 0, pGpuUsage)) return result;
 
 		if(WfrEdgeCorrShouldBeTreated)
 		{
@@ -1265,7 +1323,7 @@ int srTGenOptElem::SetRadRepres(srTSRWRadStructAccessData* pRadAccessData, char 
 			{
 				if(DataPtrsForWfrEdgeCorr.WasSetup)
 				{
-					MakeWfrEdgeCorrection(pRadAccessData, pRadAccessData->pBaseRadX, pRadAccessData->pBaseRadZ, DataPtrsForWfrEdgeCorr);
+					MakeWfrEdgeCorrection(pRadAccessData, pRadAccessData->pBaseRadX, pRadAccessData->pBaseRadZ, DataPtrsForWfrEdgeCorr, pGpuUsage);
 					DataPtrsForWfrEdgeCorr.DisposeData();
 				}
 			}
@@ -1309,7 +1367,7 @@ int srTGenOptElem::SetRadRepres(srTSRWRadStructAccessData* pRadAccessData, char 
 			{
 				if(CoordOrAng == 1)
 				{
-					if(result = SetupWfrEdgeCorrData(pRadAccessData, AuxEx, AuxEz, DataPtrsForWfrEdgeCorr)) return result;
+					if(result = SetupWfrEdgeCorrData(pRadAccessData, AuxEx, AuxEz, DataPtrsForWfrEdgeCorr, pGpuUsage)) return result;
 				}
 			}
 
@@ -1318,9 +1376,9 @@ int srTGenOptElem::SetRadRepres(srTSRWRadStructAccessData* pRadAccessData, char 
 			if(ar_zStartInSlicesE != 0) FFT2DInfo.yStart = ar_zStartInSlicesE[ie];
 
 			FFT2DInfo.pData = AuxEx;
-			if(result = FFT2D.Make2DFFT(FFT2DInfo)) return result;
+			if(result = FFT2D.Make2DFFT(FFT2DInfo, 0, 0, pGpuUsage)) return result;
 			FFT2DInfo.pData = AuxEz;
-			if(result = FFT2D.Make2DFFT(FFT2DInfo)) return result;
+			if(result = FFT2D.Make2DFFT(FFT2DInfo, 0, 0, pGpuUsage)) return result;
 
 			if(WfrEdgeCorrShouldBeTreated)
 			{
@@ -1328,7 +1386,7 @@ int srTGenOptElem::SetRadRepres(srTSRWRadStructAccessData* pRadAccessData, char 
 				{
 					if(DataPtrsForWfrEdgeCorr.WasSetup)
 					{
-						MakeWfrEdgeCorrection(pRadAccessData, AuxEx, AuxEz, DataPtrsForWfrEdgeCorr);
+						MakeWfrEdgeCorrection(pRadAccessData, AuxEx, AuxEz, DataPtrsForWfrEdgeCorr, pGpuUsage);
 						DataPtrsForWfrEdgeCorr.DisposeData();
 					}
 				}
@@ -1341,16 +1399,14 @@ int srTGenOptElem::SetRadRepres(srTSRWRadStructAccessData* pRadAccessData, char 
 		//}
 #else //OC28102018: modified by SY
 
+		//Added by SY (for profiling?) at parallelizing SRW via OpenMP:
+		//srwlPrintTime("SetRadRepres : setup",&start);
+
 		//SY: return outside of parallel regions is not allowed - we do it outside
 
-		int* single_results = new int[pRadAccessData->ne];
-		if(single_results == 0) return MEMORY_ALLOCATION_FAILURE;
-		for(long ie = 0; ie < pRadAccessData->ne; ie++) single_results[ie]=0;
-
-		int max_threads = omp_get_max_threads();
-		int* thread_results = new int[max_threads];
-		if(thread_results == 0) return MEMORY_ALLOCATION_FAILURE;
-		for(int tn = 0; tn < max_threads; tn++) thread_results[tn] = 0;
+		int* results = new int[pRadAccessData->ne];
+		if(results == 0) return MEMORY_ALLOCATION_FAILURE;
+		for(long ie = 0; ie < pRadAccessData->ne; ie++) results[ie]=0;
 
 		//SY: creation (and deletion) of FFTW plans is not thread-safe. Have to do this outside of threads.
 		//(and we don't need to recreate plans for same dimensions anyway)
@@ -1374,14 +1430,14 @@ int srTGenOptElem::SetRadRepres(srTSRWRadStructAccessData* pRadAccessData, char 
 					//members are changed inside Make2DFFT.
 					CGenMathFFT2DInfo FFT2DInfo_local = FFT2DInfo;
 
-					if(single_results[ie] = ExtractRadSliceConstE(pRadAccessData, ie, AuxEx, AuxEz)) continue;
+					if(results[ie] = ExtractRadSliceConstE(pRadAccessData, ie, AuxEx, AuxEz)) continue;
 
 					srTDataPtrsForWfrEdgeCorr DataPtrsForWfrEdgeCorr;
 					if(WfrEdgeCorrShouldBeTreated)
 					{
 						if(CoordOrAng == 1)
 						{
-							if(single_results[ie] = SetupWfrEdgeCorrData(pRadAccessData, AuxEx, AuxEz, DataPtrsForWfrEdgeCorr)) continue;
+							if(results[ie] = SetupWfrEdgeCorrData(pRadAccessData, AuxEx, AuxEz, DataPtrsForWfrEdgeCorr)) continue;
 						}
 					}
 
@@ -1390,10 +1446,10 @@ int srTGenOptElem::SetRadRepres(srTSRWRadStructAccessData* pRadAccessData, char 
 					if(ar_zStartInSlicesE != 0) FFT2DInfo_local.yStart = ar_zStartInSlicesE[ie];
 
 					FFT2DInfo_local.pData = AuxEx;
-					if(single_results[ie] = FFT2D.Make2DFFT(FFT2DInfo_local, &Plan2DFFT)) continue;
+					if(results[ie] = FFT2D.Make2DFFT(FFT2DInfo_local, &Plan2DFFT)) continue;
 
 					FFT2DInfo_local.pData = AuxEz;
-					if(single_results[ie] = FFT2D.Make2DFFT(FFT2DInfo_local, &Plan2DFFT)) continue;
+					if(results[ie] = FFT2D.Make2DFFT(FFT2DInfo_local, &Plan2DFFT)) continue;
 
 					if(WfrEdgeCorrShouldBeTreated)
 					{
@@ -1406,14 +1462,14 @@ int srTGenOptElem::SetRadRepres(srTSRWRadStructAccessData* pRadAccessData, char 
 							}
 						}
 					}
-					single_results[ie] = SetupRadSliceConstE(pRadAccessData, ie, AuxEx, AuxEz);
+					results[ie] = SetupRadSliceConstE(pRadAccessData, ie, AuxEx, AuxEz);
 					//SY: save FFT2DInfo from one of FFT2DInfo_local
 					if(ie == 0) FFT2DInfo = FFT2DInfo_local;
 				} // end for
 			}
 			else
 			{
-				thread_results[omp_get_thread_num()] = MEMORY_ALLOCATION_FAILURE;
+				results[omp_get_thread_num()] = MEMORY_ALLOCATION_FAILURE;
 			}  // end if
 			if(AuxEx != 0) delete[] AuxEx;
 			if(AuxEz != 0) delete[] AuxEz;
@@ -1422,15 +1478,15 @@ int srTGenOptElem::SetRadRepres(srTSRWRadStructAccessData* pRadAccessData, char 
 
 		fftwnd_destroy_plan(Plan2DFFT);
 
-		// check results, free memory, exit if there was error
-		result = 0;
-		for(long ie = 0; ie < pRadAccessData->ne; ie++) if(single_results[ie]) result = single_results[ie];
-		for(int tn = 0; tn < max_threads; tn++) if(thread_results[tn]) result = thread_results[tn];
-		delete[]  single_results;
-		delete[]  thread_results;
-		if (result) return result;
+		for(long ie = 0; ie < pRadAccessData->ne; ie++) if(results[ie]) return results[ie];
+		delete[] results;
 #endif
 	}
+
+	//Added by SY (for profiling?) at parallelizing SRW via OpenMP:
+	//char str[256];
+	//sprintf(str,"%s %d","::SetRadRepres : cycles:",pRadAccessData->ne);
+	//srwlPrintTime(str,&start);
 
 	pRadAccessData->xStep = FFT2DInfo.xStepTr;
 	pRadAccessData->zStep = FFT2DInfo.yStepTr;
@@ -2155,7 +2211,7 @@ void srTGenOptElem::FindMinMaxRatio(double* Arr1, double* Arr2, int n, double& M
 
 //*************************************************************************
 
-int srTGenOptElem::RadResizeGen(srTSRWRadStructAccessData& SRWRadStructAccessData, srTRadResize& RadResizeStruct)
+int srTGenOptElem::RadResizeGen(srTSRWRadStructAccessData& SRWRadStructAccessData, srTRadResize& RadResizeStruct, gpuUsageArg_t *pGpuUsage)
 {
 	//Added by SY (for profiling?) at parallelizing SRW via OpenMP:
 	//double start;
@@ -2230,7 +2286,7 @@ int srTGenOptElem::RadResizeGen(srTSRWRadStructAccessData& SRWRadStructAccessDat
 			SRWRadStructAccessData.zWfrMin += zShift; SRWRadStructAccessData.zWfrMax += zShift;
 		}
 
-		if(result = SetRadRepres(&SRWRadStructAccessData, ToRepres)) return result;
+		if(result = SetRadRepres(&SRWRadStructAccessData, ToRepres, 0, 0, pGpuUsage)) return result;
 
 		double pxmNew = RadResizeStruct.pxd, pxdNew = RadResizeStruct.pxm;
 		double pzmNew = RadResizeStruct.pzd, pzdNew = RadResizeStruct.pzm;
@@ -2429,15 +2485,15 @@ int srTGenOptElem::RadResizeGen(srTSRWRadStructAccessData& SRWRadStructAccessDat
 
 	//long TotAmOfOldData = (SRWRadStructAccessData.ne*SRWRadStructAccessData.nx*SRWRadStructAccessData.nz) << 1;
 	//long TotAmOfNewData = (NewSRWRadStructAccessData.ne*NewSRWRadStructAccessData.nx*NewSRWRadStructAccessData.nz) << 1;
-	long long TotAmOfOldData = (((long long)SRWRadStructAccessData.ne)*((long long)SRWRadStructAccessData.nx)*((long long)SRWRadStructAccessData.nz)) << 1;
-	long long TotAmOfNewData = (((long long)NewSRWRadStructAccessData.ne)*((long long)NewSRWRadStructAccessData.nx)*((long long)NewSRWRadStructAccessData.nz)) << 1;
+	long long TotAmOfOldData = (((long long)SRWRadStructAccessData.nwfr)*((long long)SRWRadStructAccessData.ne)*((long long)SRWRadStructAccessData.nx)*((long long)SRWRadStructAccessData.nz)) << 1;
+	long long TotAmOfNewData = (((long long)SRWRadStructAccessData.nwfr)*((long long)NewSRWRadStructAccessData.ne)*((long long)NewSRWRadStructAccessData.nx)*((long long)NewSRWRadStructAccessData.nz)) << 1;
 
 	//char TreatPolarizSepar = 0;
 	char TreatPolarizSepar = (!ExIsOK) || (!EzIsOK); //OC13112011
 	if(!TreatPolarizSepar)
 	{
 		long nxCurRad = SRWRadStructAccessData.nx, nzCurRad = SRWRadStructAccessData.nz;
-		double ExtraMemSize = ExtraMemSizeForResize(nxCurRad, nzCurRad, pxmIn, pxdIn, pzmIn, pzdIn, 1);
+		double ExtraMemSize = ExtraMemSizeForResize(nxCurRad, nzCurRad, pxmIn, pxdIn, pzmIn, pzdIn, 1) * SRWRadStructAccessData.nwfr;
 		double MemoryAvail = CheckMemoryAvailable();
 
 		double SecurityMemResizeCoef = 0.95; //to tune
@@ -2454,9 +2510,9 @@ int srTGenOptElem::RadResizeGen(srTSRWRadStructAccessData& SRWRadStructAccessDat
 		//if((pxmIn*pxdIn*pzmIn*pzdIn >= 1.) || (SRWRadStructAccessData.m_newExtWfrCreateNotAllowed)) //OC140311
 		if(pxmIn*pxdIn*pzmIn*pzdIn >= 1.) //OC161115
 		{//Is this part really necessary?
-			OldRadXCopy = new float[TotAmOfOldData];
+			OldRadXCopy = ALLOC_ARRAY(float, TotAmOfOldData);
 			if(OldRadXCopy == 0) return MEMORY_ALLOCATION_FAILURE;
-			OldRadZCopy = new float[TotAmOfOldData];
+			OldRadZCopy = ALLOC_ARRAY(float, TotAmOfOldData);
 			if(OldRadZCopy == 0) return MEMORY_ALLOCATION_FAILURE;
 			
 			float *tOldRadXCopy = OldRadXCopy, *tOldRadZCopy = OldRadZCopy;
@@ -2498,10 +2554,11 @@ int srTGenOptElem::RadResizeGen(srTSRWRadStructAccessData& SRWRadStructAccessDat
 				tBaseRadX[j] = 0.; tBaseRadZ[j] = 0.; 
 			}
 #else
-			for(long long j=0; j<TotAmOfNewData; j++)
-			{
-				*(tBaseRadX++) = 0.; *(tBaseRadZ++) = 0.; 
-			}
+			//for(long long j=0; j<TotAmOfNewData; j++)
+			//{
+			//	*(tBaseRadX++) = 0.; *(tBaseRadZ++) = 0.; 
+			//}
+			//HG08252022 Faster to allocate zero initialized memory
 #endif
 			
 			SRWRadStructAccessData.pBaseRadX = OldRadXCopy;
@@ -2510,10 +2567,10 @@ int srTGenOptElem::RadResizeGen(srTSRWRadStructAccessData& SRWRadStructAccessDat
 			//Added by SY (for profiling?) at parallelizing SRW via OpenMP:
 			//srwlPrintTime(":RadResizeGen: copydata",&start);
 			
-			if(result = RadResizeCore(SRWRadStructAccessData, NewSRWRadStructAccessData, RadResizeStruct)) return result;
+			if(result = RadResizeCore(SRWRadStructAccessData, NewSRWRadStructAccessData, RadResizeStruct, 0, pGpuUsage)) return result;
 			
-			if(OldRadXCopy != 0) delete[] OldRadXCopy;
-			if(OldRadZCopy != 0) delete[] OldRadZCopy;
+			if(OldRadXCopy != 0) FREE_ARRAY(OldRadXCopy);
+			if(OldRadZCopy != 0) FREE_ARRAY(OldRadZCopy);
 
 			//Added by SY (for profiling?) at parallelizing SRW via OpenMP:
 			//srwlPrintTime(":RadResizeGen: RadResizeCore 1",&start);
@@ -2567,15 +2624,16 @@ int srTGenOptElem::RadResizeGen(srTSRWRadStructAccessData& SRWRadStructAccessDat
 				tRadX[j] = 0.; tRadZ[j] = 0.;
 			}
 #else
-			for(long long j=0; j<TotAmOfNewData; j++)
-			{
-				*(tRadX++) = 0.; *(tRadZ++) = 0.; 
-			}
+			//for(long long j=0; j<TotAmOfNewData; j++)
+			//{
+			//	*(tRadX++) = 0.; *(tRadZ++) = 0.; 
+			//}
+			//HG08252022 Faster to allocate zero initialized memory
 #endif
 			//Added by SY (for profiling?) at parallelizing SRW via OpenMP:
 			//srwlPrintTime(":RadResizeGen: TreatPolarizSepar-PrepareStructs",&start);
 
-			if(result = RadResizeCore(SRWRadStructAccessData, NewSRWRadStructAccessData, RadResizeStruct)) return result;
+			if(result = RadResizeCore(SRWRadStructAccessData, NewSRWRadStructAccessData, RadResizeStruct, 0, pGpuUsage)) return result;
 
 			//Added by SY (for profiling?) at parallelizing SRW via OpenMP:
 			//srwlPrintTime(":RadResizeGen: RadResizeCore 2",&start);
@@ -2609,7 +2667,7 @@ int srTGenOptElem::RadResizeGen(srTSRWRadStructAccessData& SRWRadStructAccessDat
 		{//Is this part necessary at all?
 			if(ExIsOK) //OC13112011
 			{
-				OldRadXCopy = new float[TotAmOfOldData];
+				OldRadXCopy = ALLOC_ARRAY(float, TotAmOfOldData);
 				if(OldRadXCopy == 0) return MEMORY_ALLOCATION_FAILURE;
 
 				float *tOldRadXCopy = OldRadXCopy;
@@ -2635,15 +2693,15 @@ int srTGenOptElem::RadResizeGen(srTSRWRadStructAccessData& SRWRadStructAccessDat
 					*(tBaseRadX++) = 0.;
 				}
 				SRWRadStructAccessData.pBaseRadX = OldRadXCopy;
-				if(result = RadResizeCore(SRWRadStructAccessData, NewSRWRadStructAccessData, RadResizeStruct, 'x')) return result;
-				if(OldRadXCopy != 0) delete[] OldRadXCopy;
+				if(result = RadResizeCore(SRWRadStructAccessData, NewSRWRadStructAccessData, RadResizeStruct, 'x', pGpuUsage)) return result;
+				if(OldRadXCopy != 0) FREE_ARRAY(OldRadXCopy);
 			}
 			//Added by SY (for profiling?) at parallelizing SRW via OpenMP:
 			//srwlPrintTime(":RadResizeGen: TreatPolarizSepar-ExIsOK1",&start);
 
 			if(EzIsOK)
 			{
-				OldRadZCopy = new float[TotAmOfOldData];
+				OldRadZCopy = ALLOC_ARRAY(float, TotAmOfOldData);
 				if(OldRadZCopy == 0) return MEMORY_ALLOCATION_FAILURE;
 
 				float *tOldRadZCopy = OldRadZCopy;
@@ -2671,7 +2729,7 @@ int srTGenOptElem::RadResizeGen(srTSRWRadStructAccessData& SRWRadStructAccessDat
 					*(tBaseRadZ++) = 0.;
 				}
 				SRWRadStructAccessData.pBaseRadZ = OldRadZCopy;
-				if(result = RadResizeCore(SRWRadStructAccessData, NewSRWRadStructAccessData, RadResizeStruct, 'z')) return result;
+				if(result = RadResizeCore(SRWRadStructAccessData, NewSRWRadStructAccessData, RadResizeStruct, 'z', pGpuUsage)) return result;
 				if(OldRadZCopy != 0) delete[] OldRadZCopy;
 			}
 			//Added by SY (for profiling?) at parallelizing SRW via OpenMP:
@@ -2707,7 +2765,7 @@ int srTGenOptElem::RadResizeGen(srTSRWRadStructAccessData& SRWRadStructAccessDat
 				//for(long j=0; j<TotAmOfNewData; j++) *(tRadX++) = 0.;
 				for(long long j=0; j<TotAmOfNewData; j++) *(tRadX++) = 0.;
 
-				if(result = RadResizeCore(SRWRadStructAccessData, NewSRWRadStructAccessData, RadResizeStruct, 'x')) return result;
+				if(result = RadResizeCore(SRWRadStructAccessData, NewSRWRadStructAccessData, RadResizeStruct, 'x', pGpuUsage)) return result;
 
 #ifdef __IGOR_PRO__
 				srTSRWRadStructWaveKeys Keys;
@@ -2737,7 +2795,7 @@ int srTGenOptElem::RadResizeGen(srTSRWRadStructAccessData& SRWRadStructAccessDat
 				//for(long i = 0; i < TotAmOfNewData; i++) *(tRadZ++) = 0.;
 				for(long long i = 0; i < TotAmOfNewData; i++) *(tRadZ++) = 0.;
 
-				if(result = RadResizeCore(SRWRadStructAccessData, NewSRWRadStructAccessData, RadResizeStruct, 'z')) return result;
+				if(result = RadResizeCore(SRWRadStructAccessData, NewSRWRadStructAccessData, RadResizeStruct, 'z', pGpuUsage)) return result;
 
 #ifdef __IGOR_PRO__
 				srTSRWRadStructWaveKeys Keys;
@@ -2767,7 +2825,7 @@ int srTGenOptElem::RadResizeGen(srTSRWRadStructAccessData& SRWRadStructAccessDat
 	if(RadResizeStruct.useOtherSideFFT()) //OC090311
 	{
 		char ToRepres = (SRWRadStructAccessData.Pres == 0)? 1 : 0;
-		if(result = SetRadRepres(&SRWRadStructAccessData, ToRepres)) return result;
+		if(result = SetRadRepres(&SRWRadStructAccessData, ToRepres, 0, 0, pGpuUsage)) return result;
 
 		if(UseStartTrWithOtherSide)
 		{
@@ -2792,7 +2850,7 @@ int srTGenOptElem::RadResizeGen(srTSRWRadStructAccessData& SRWRadStructAccessDat
 
 //*************************************************************************
 
-int srTGenOptElem::RadResizeCore(srTSRWRadStructAccessData& OldRadAccessData, srTSRWRadStructAccessData& NewRadAccessData, srTRadResize& RadResizeStruct, char PolComp)
+int srTGenOptElem::RadResizeCore(srTSRWRadStructAccessData& OldRadAccessData, srTSRWRadStructAccessData& NewRadAccessData, srTRadResize& RadResizeStruct, char PolComp, gpuUsageArg_t *pGpuUsage)
 {
 	//Added by SY (for profiling?) at parallelizing SRW via OpenMP:
 	//double start;
@@ -2833,7 +2891,7 @@ int srTGenOptElem::RadResizeCore(srTSRWRadStructAccessData& OldRadAccessData, sr
 		NewRadAccessData.WfrQuadTermCanBeTreatedAtResizeX = OldRadAccessData.WfrQuadTermCanBeTreatedAtResizeX;
 		NewRadAccessData.WfrQuadTermCanBeTreatedAtResizeZ = OldRadAccessData.WfrQuadTermCanBeTreatedAtResizeZ;
 
-		TreatStronglyOscillatingTerm(OldRadAccessData, 'r', PolComp);
+		TreatStronglyOscillatingTerm(OldRadAccessData, 'r', PolComp, -1, pGpuUsage);
 
 		//Added by SY (for profiling?) at parallelizing SRW via OpenMP:
 		//srwlPrintTime(":RadResizeCore: TreatStronglyOscillatingTerm 1",&start);
@@ -2858,18 +2916,20 @@ int srTGenOptElem::RadResizeCore(srTSRWRadStructAccessData& OldRadAccessData, sr
 	//int ixStOld, izStOld, ixStOldPrev = -1000, izStOldPrev = -1000;
 
 	float *pEX0_New = 0, *pEZ0_New = 0;
-	if(TreatPolCompX) pEX0_New = NewRadAccessData.pBaseRadX;
-	if(TreatPolCompZ) pEZ0_New = NewRadAccessData.pBaseRadZ;
+	//if(TreatPolCompX) pEX0_New = NewRadAccessData.pBaseRadX;
+	//if(TreatPolCompZ) pEZ0_New = NewRadAccessData.pBaseRadZ;
 
 	//long PerX_New = NewRadAccessData.ne << 1;
 	//long PerZ_New = PerX_New*NewRadAccessData.nx;
 	long long PerX_New = NewRadAccessData.ne << 1;
 	long long PerZ_New = PerX_New*NewRadAccessData.nx;
+	long long PerWfr_New = PerZ_New*NewRadAccessData.nz;
 
 	//long PerX_Old = PerX_New;
 	//long PerZ_Old = PerX_Old*OldRadAccessData.nx;
 	long long PerX_Old = PerX_New;
 	long long PerZ_Old = PerX_Old*OldRadAccessData.nx;
+	long long PerWfr_Old = PerZ_Old*OldRadAccessData.nz;
 
 	//OC31102018: moved by SY at OpenMP parallelization
 	//float BufF[4], BufFI[2];
@@ -2880,178 +2940,197 @@ int srTGenOptElem::RadResizeCore(srTSRWRadStructAccessData& OldRadAccessData, sr
 
 	int result = 0;
 
-#ifdef _WITH_OMP //OC31102018: added by SY at parallelizing SRW via OpenMP
-	#pragma omp parallel for
-#endif
-
-	for(int ie=0; ie<NewRadAccessData.ne; ie++)
+	GPU_COND(pGpuUsage,
 	{
-		//OC31102018: modified by SY at OpenMP parallelization
-		//ixStOldPrev = -1000; izStOldPrev = -1000;
-
-		//OC31102018: moved by SY at OpenMP parallelization
-		srTInterpolAux01 InterpolAux01;
-		srTInterpolAux02 InterpolAux02[4], InterpolAux02I[2];
-		srTInterpolAuxF AuxF[4], AuxFI[2];
-		int ixStOld, izStOld, ixStOldPrev = -1000, izStOldPrev = -1000;
-		float BufF[4], BufFI[2];
-		char UseLowOrderInterp_PolCompX, UseLowOrderInterp_PolCompZ;
-
-		//long Two_ie = ie << 1;
-		long long Two_ie = ie << 1;
-		for(int iz=izStart; iz<=izEnd; iz++)
+//#if _DEBUG
+//		printf("GPU: RadResizeCore\n");
+//#endif
+		RadResizeCore_GPU(OldRadAccessData, NewRadAccessData, pGpuUsage, PolComp);
+	})
+	else
+	{
+#ifdef _WITH_OMP //OC31102018: added by SY at parallelizing SRW via OpenMP
+		#pragma omp parallel for
+#endif
+		for(int iwfr=0; iwfr<OldRadAccessData.nwfr; iwfr++)
 		{
-			//SY: do we need this (always returns 0, updates some clock)
-			//if(result = srYield.Check()) return result;
+			if(TreatPolCompX) pEX0_New = NewRadAccessData.pBaseRadX + iwfr * PerWfr_New;
+			if(TreatPolCompZ) pEZ0_New = NewRadAccessData.pBaseRadZ + iwfr * PerWfr_New;
 
-			double zAbs = NewRadAccessData.zStart + iz*NewRadAccessData.zStep;
+			float* pEX0_Old = 0, * pEZ0_Old = 0;
+			if(TreatPolCompX) pEX0_Old = OldRadAccessData.pBaseRadX + iwfr * PerWfr_Old;
+			if(TreatPolCompZ) pEZ0_Old = OldRadAccessData.pBaseRadZ + iwfr * PerWfr_Old;
 
-			char FieldShouldBeZeroedDueToZ = 0;
-			if(NewRadAccessData.WfrEdgeCorrShouldBeDone)
+			for(int ie=0; ie<NewRadAccessData.ne; ie++)
 			{
-				if((zAbs < NewRadAccessData.zWfrMin - DistAbsTol) || (zAbs > NewRadAccessData.zWfrMax + DistAbsTol)) FieldShouldBeZeroedDueToZ = 1;
-			}
+				//OC31102018: modified by SY at OpenMP parallelization
+				//ixStOldPrev = -1000; izStOldPrev = -1000;
 
-			int izcOld = int((zAbs - OldRadAccessData.zStart)*zStepInvOld + 1.E-06);
+				//OC31102018: moved by SY at OpenMP parallelization
+				srTInterpolAux01 InterpolAux01;
+				srTInterpolAux02 InterpolAux02[4], InterpolAux02I[2];
+				srTInterpolAuxF AuxF[4], AuxFI[2];
+				int ixStOld, izStOld, ixStOldPrev = -1000, izStOldPrev = -1000;
+				float BufF[4], BufFI[2];
+				char UseLowOrderInterp_PolCompX, UseLowOrderInterp_PolCompZ;
 
-			double zRel = zAbs - (OldRadAccessData.zStart + izcOld*OldRadAccessData.zStep);
-
-			if(izcOld == nz_mi_1Old) { izStOld = izcOld - 3; zRel += 2.*OldRadAccessData.zStep;}
-			else if(izcOld == nz_mi_2Old) { izStOld = izcOld - 2; zRel += OldRadAccessData.zStep;}
-			else if(izcOld == 0) { izStOld = izcOld; zRel -= OldRadAccessData.zStep;}
-			else izStOld = izcOld - 1;
-
-			zRel *= zStepInvOld;
-
-			int izcOld_mi_izStOld = izcOld - izStOld;
-			//long izPerZ_New = iz*PerZ_New;
-			long long izPerZ_New = iz*PerZ_New;
-
-			float *pEX_StartForX_New = 0, *pEZ_StartForX_New = 0;
-			if(TreatPolCompX) pEX_StartForX_New = pEX0_New + izPerZ_New;
-			if(TreatPolCompZ) pEZ_StartForX_New = pEZ0_New + izPerZ_New;
-
-			for(int ix=ixStart; ix<=ixEnd; ix++)
-			{
-				//long ixPerX_New_p_Two_ie = ix*PerX_New + Two_ie;
-				long long ixPerX_New_p_Two_ie = ix*PerX_New + Two_ie;
-				float *pEX_New = 0, *pEZ_New = 0;
-				if(TreatPolCompX) pEX_New = pEX_StartForX_New + ixPerX_New_p_Two_ie;
-				if(TreatPolCompZ) pEZ_New = pEZ_StartForX_New + ixPerX_New_p_Two_ie;
-
-				double xAbs = NewRadAccessData.xStart + ix*NewRadAccessData.xStep;
-
-				char FieldShouldBeZeroedDueToX = 0;
-				if(NewRadAccessData.WfrEdgeCorrShouldBeDone)
+				//long Two_ie = ie << 1;
+				long long Two_ie = ie << 1;
+				for(int iz=izStart; iz<=izEnd; iz++)
 				{
-					if((xAbs < NewRadAccessData.xWfrMin - DistAbsTol) || (xAbs > NewRadAccessData.xWfrMax + DistAbsTol)) FieldShouldBeZeroedDueToX = 1;
-				}
-				char FieldShouldBeZeroed = (FieldShouldBeZeroedDueToX || FieldShouldBeZeroedDueToZ);
+					//SY: do we need this (always returns 0, updates some clock)
+					//if(result = srYield.Check()) return result;
 
-				int ixcOld = int((xAbs - OldRadAccessData.xStart)*xStepInvOld + 1.E-06);
-				double xRel = xAbs - (OldRadAccessData.xStart + ixcOld*OldRadAccessData.xStep);
+					double zAbs = NewRadAccessData.zStart + iz * NewRadAccessData.zStep;
 
-				if(ixcOld == nx_mi_1Old) { ixStOld = ixcOld - 3; xRel += 2.*OldRadAccessData.xStep;}
-				else if(ixcOld == nx_mi_2Old) { ixStOld = ixcOld - 2; xRel += OldRadAccessData.xStep;}
-				else if(ixcOld == 0) { ixStOld = ixcOld; xRel -= OldRadAccessData.xStep;}
-				else ixStOld = ixcOld - 1;
-
-				xRel *= xStepInvOld;
-
-				int ixcOld_mi_ixStOld = ixcOld - ixStOld;
-
-				if((izStOld != izStOldPrev) || (ixStOld != ixStOldPrev))
-				{
-					UseLowOrderInterp_PolCompX = 0; UseLowOrderInterp_PolCompZ = 0;
-
-					//long TotOffsetOld = izStOld*PerZ_Old + ixStOld*PerX_Old + Two_ie;
-					long long TotOffsetOld = izStOld*PerZ_Old + ixStOld*PerX_Old + Two_ie;
-
-					if(TreatPolCompX)
+					char FieldShouldBeZeroedDueToZ = 0;
+					if(NewRadAccessData.WfrEdgeCorrShouldBeDone)
 					{
-						float* pExSt_Old = OldRadAccessData.pBaseRadX + TotOffsetOld;
-						GetCellDataForInterpol(pExSt_Old, PerX_Old, PerZ_Old, AuxF);
+						if((zAbs < NewRadAccessData.zWfrMin - DistAbsTol) || (zAbs > NewRadAccessData.zWfrMax + DistAbsTol)) FieldShouldBeZeroedDueToZ = 1;
+					}
 
-						SetupCellDataI(AuxF, AuxFI);
-						UseLowOrderInterp_PolCompX = CheckForLowOrderInterp(AuxF, AuxFI, ixcOld_mi_ixStOld, izcOld_mi_izStOld, &InterpolAux01, InterpolAux02, InterpolAux02I);
+					int izcOld = int((zAbs - OldRadAccessData.zStart) * zStepInvOld + 1.E-06);
 
-						if(!UseLowOrderInterp_PolCompX)
+					double zRel = zAbs - (OldRadAccessData.zStart + izcOld * OldRadAccessData.zStep);
+
+					if(izcOld == nz_mi_1Old) { izStOld = izcOld - 3; zRel += 2. * OldRadAccessData.zStep; }
+					else if(izcOld == nz_mi_2Old) { izStOld = izcOld - 2; zRel += OldRadAccessData.zStep; }
+					else if(izcOld == 0) { izStOld = izcOld; zRel -= OldRadAccessData.zStep; }
+					else izStOld = izcOld - 1;
+
+					zRel *= zStepInvOld;
+
+					int izcOld_mi_izStOld = izcOld - izStOld;
+					//long izPerZ_New = iz*PerZ_New;
+					long long izPerZ_New = iz * PerZ_New;
+
+					float* pEX_StartForX_New = 0, * pEZ_StartForX_New = 0;
+					if(TreatPolCompX) pEX_StartForX_New = pEX0_New + izPerZ_New;
+					if(TreatPolCompZ) pEZ_StartForX_New = pEZ0_New + izPerZ_New;
+
+					for(int ix=ixStart; ix<=ixEnd; ix++)
+					{
+						//long ixPerX_New_p_Two_ie = ix*PerX_New + Two_ie;
+						long long ixPerX_New_p_Two_ie = ix * PerX_New + Two_ie;
+						float* pEX_New = 0, * pEZ_New = 0;
+						if(TreatPolCompX) pEX_New = pEX_StartForX_New + ixPerX_New_p_Two_ie;
+						if(TreatPolCompZ) pEZ_New = pEZ_StartForX_New + ixPerX_New_p_Two_ie;
+
+						double xAbs = NewRadAccessData.xStart + ix * NewRadAccessData.xStep;
+
+						char FieldShouldBeZeroedDueToX = 0;
+						if(NewRadAccessData.WfrEdgeCorrShouldBeDone)
 						{
-							for(int i=0; i<2; i++) 
+							if((xAbs < NewRadAccessData.xWfrMin - DistAbsTol) || (xAbs > NewRadAccessData.xWfrMax + DistAbsTol)) FieldShouldBeZeroedDueToX = 1;
+						}
+						char FieldShouldBeZeroed = (FieldShouldBeZeroedDueToX || FieldShouldBeZeroedDueToZ);
+
+						int ixcOld = int((xAbs - OldRadAccessData.xStart) * xStepInvOld + 1.E-06);
+						double xRel = xAbs - (OldRadAccessData.xStart + ixcOld * OldRadAccessData.xStep);
+
+						if(ixcOld == nx_mi_1Old) { ixStOld = ixcOld - 3; xRel += 2. * OldRadAccessData.xStep; }
+						else if(ixcOld == nx_mi_2Old) { ixStOld = ixcOld - 2; xRel += OldRadAccessData.xStep; }
+						else if(ixcOld == 0) { ixStOld = ixcOld; xRel -= OldRadAccessData.xStep; }
+						else ixStOld = ixcOld - 1;
+
+						xRel *= xStepInvOld;
+
+						int ixcOld_mi_ixStOld = ixcOld - ixStOld;
+
+						if((izStOld != izStOldPrev) || (ixStOld != ixStOldPrev))
+						{
+							UseLowOrderInterp_PolCompX = 0; UseLowOrderInterp_PolCompZ = 0;
+
+							//long TotOffsetOld = izStOld*PerZ_Old + ixStOld*PerX_Old + Two_ie;
+							long long TotOffsetOld = izStOld * PerZ_Old + ixStOld * PerX_Old + Two_ie;
+
+							if(TreatPolCompX)
 							{
-								SetupInterpolAux02(AuxF + i, &InterpolAux01, InterpolAux02 + i);
+								float* pExSt_Old = pEX0_Old + TotOffsetOld;
+								GetCellDataForInterpol(pExSt_Old, PerX_Old, PerZ_Old, AuxF);
+
+								SetupCellDataI(AuxF, AuxFI);
+								UseLowOrderInterp_PolCompX = CheckForLowOrderInterp(AuxF, AuxFI, ixcOld_mi_ixStOld, izcOld_mi_izStOld, &InterpolAux01, InterpolAux02, InterpolAux02I);
+
+								if(!UseLowOrderInterp_PolCompX)
+								{
+									for(int i=0; i<2; i++)
+									{
+										SetupInterpolAux02(AuxF + i, &InterpolAux01, InterpolAux02 + i);
+									}
+									SetupInterpolAux02(AuxFI, &InterpolAux01, InterpolAux02I);
+								}
 							}
-							SetupInterpolAux02(AuxFI, &InterpolAux01, InterpolAux02I);
+							if(TreatPolCompZ)
+							{
+								float* pEzSt_Old = pEZ0_Old + TotOffsetOld;
+								GetCellDataForInterpol(pEzSt_Old, PerX_Old, PerZ_Old, AuxF + 2);
+
+								SetupCellDataI(AuxF + 2, AuxFI + 1);
+								UseLowOrderInterp_PolCompZ = CheckForLowOrderInterp(AuxF + 2, AuxFI + 1, ixcOld_mi_ixStOld, izcOld_mi_izStOld, &InterpolAux01, InterpolAux02 + 2, InterpolAux02I + 1);
+
+								if(!UseLowOrderInterp_PolCompZ)
+								{
+									for(int i=0; i<2; i++)
+									{
+										SetupInterpolAux02(AuxF + 2 + i, &InterpolAux01, InterpolAux02 + 2 + i);
+									}
+									SetupInterpolAux02(AuxFI + 1, &InterpolAux01, InterpolAux02I + 1);
+								}
+							}
+
+							ixStOldPrev = ixStOld; izStOldPrev = izStOld;
+						}
+
+						if(TreatPolCompX)
+						{
+							if(UseLowOrderInterp_PolCompX)
+							{
+								InterpolF_LowOrder(InterpolAux02, xRel, zRel, BufF, 0);
+								InterpolFI_LowOrder(InterpolAux02I, xRel, zRel, BufFI, 0);
+							}
+							else
+							{
+								InterpolF(InterpolAux02, xRel, zRel, BufF, 0);
+								InterpolFI(InterpolAux02I, xRel, zRel, BufFI, 0);
+							}
+
+							(*BufFI) *= AuxFI->fNorm;
+							ImproveReAndIm(BufF, BufFI);
+
+							if(FieldShouldBeZeroed)
+							{
+								*BufF = 0.; *(BufF + 1) = 0.;
+							}
+
+							*pEX_New = *BufF;
+							*(pEX_New + 1) = *(BufF + 1);
+						}
+						if(TreatPolCompZ)
+						{
+							if(UseLowOrderInterp_PolCompZ)
+							{
+								InterpolF_LowOrder(InterpolAux02, xRel, zRel, BufF, 2);
+								InterpolFI_LowOrder(InterpolAux02I, xRel, zRel, BufFI, 1);
+							}
+							else
+							{
+								InterpolF(InterpolAux02, xRel, zRel, BufF, 2);
+								InterpolFI(InterpolAux02I, xRel, zRel, BufFI, 1);
+							}
+
+							(*(BufFI + 1)) *= (AuxFI + 1)->fNorm;
+							ImproveReAndIm(BufF + 2, BufFI + 1);
+
+							if(FieldShouldBeZeroed)
+							{
+								*(BufF + 2) = 0.; *(BufF + 3) = 0.;
+							}
+
+							*pEZ_New = *(BufF + 2);
+							*(pEZ_New + 1) = *(BufF + 3);
 						}
 					}
-					if(TreatPolCompZ)
-					{
-						float* pEzSt_Old = OldRadAccessData.pBaseRadZ + TotOffsetOld;
-						GetCellDataForInterpol(pEzSt_Old, PerX_Old, PerZ_Old, AuxF+2);
-
-						SetupCellDataI(AuxF+2, AuxFI+1);
-						UseLowOrderInterp_PolCompZ = CheckForLowOrderInterp(AuxF+2, AuxFI+1, ixcOld_mi_ixStOld, izcOld_mi_izStOld, &InterpolAux01, InterpolAux02+2, InterpolAux02I+1);
-
-						if(!UseLowOrderInterp_PolCompZ)
-						{
-							for(int i=0; i<2; i++) 
-							{
-								SetupInterpolAux02(AuxF+2+i, &InterpolAux01, InterpolAux02+2+i);
-							}
-							SetupInterpolAux02(AuxFI+1, &InterpolAux01, InterpolAux02I+1);
-						}
-					}
-
-					ixStOldPrev = ixStOld; izStOldPrev = izStOld;
-				}
-
-				if(TreatPolCompX)
-				{
-					if(UseLowOrderInterp_PolCompX) 
-					{
-						InterpolF_LowOrder(InterpolAux02, xRel, zRel, BufF, 0);
-						InterpolFI_LowOrder(InterpolAux02I, xRel, zRel, BufFI, 0);
-					}
-					else
-					{
-						InterpolF(InterpolAux02, xRel, zRel, BufF, 0);
-						InterpolFI(InterpolAux02I, xRel, zRel, BufFI, 0);
-					}
-
-					(*BufFI) *= AuxFI->fNorm;
-					ImproveReAndIm(BufF, BufFI);
-
-					if(FieldShouldBeZeroed)
-					{
-						*BufF = 0.; *(BufF+1) = 0.;
-					}
-
-					*pEX_New = *BufF;
-					*(pEX_New+1) = *(BufF+1);
-				}
-				if(TreatPolCompZ)
-				{
-					if(UseLowOrderInterp_PolCompZ) 
-					{
-						InterpolF_LowOrder(InterpolAux02, xRel, zRel, BufF, 2);
-						InterpolFI_LowOrder(InterpolAux02I, xRel, zRel, BufFI, 1);
-					}
-					else
-					{
-						InterpolF(InterpolAux02, xRel, zRel, BufF, 2);
-						InterpolFI(InterpolAux02I, xRel, zRel, BufFI, 1);
-					}
-
-					(*(BufFI+1)) *= (AuxFI+1)->fNorm;
-					ImproveReAndIm(BufF+2, BufFI+1);
-
-					if(FieldShouldBeZeroed)
-					{
-						*(BufF+2) = 0.; *(BufF+3) = 0.;
-					}
-
-					*pEZ_New = *(BufF+2);
-					*(pEZ_New+1) = *(BufF+3);
 				}
 			}
 		}
@@ -3062,7 +3141,7 @@ int srTGenOptElem::RadResizeCore(srTSRWRadStructAccessData& OldRadAccessData, sr
 	//sprintf(str,"%s %d",":RadResizeCore: cycles:",NewRadAccessData.ne);
 	//srwlPrintTime(str,&start);
 
-	if(WaveFrontTermWasTreated) TreatStronglyOscillatingTerm(NewRadAccessData, 'a', PolComp);
+	if(WaveFrontTermWasTreated) TreatStronglyOscillatingTerm(NewRadAccessData, 'a', PolComp, -1, pGpuUsage);
 
 	//OC31102018: added by SY (for profiling?) at parallelizing SRW via OpenMP
 	//srwlPrintTime(":RadResizeCore: TreatStronglyOscillatingTerm 2",&start);
@@ -4476,7 +4555,7 @@ char srTGenOptElem::WaveFrontTermCanBeTreated(srTSRWRadStructAccessData& RadAcce
 
 //*************************************************************************
 
-void srTGenOptElem::TreatStronglyOscillatingTerm(srTSRWRadStructAccessData& RadAccessData, char AddOrRem, char PolComp, int ieOnly)
+void srTGenOptElem::TreatStronglyOscillatingTerm(srTSRWRadStructAccessData& RadAccessData, char AddOrRem, char PolComp, int ieOnly, gpuUsageArg_t* pGpuUsage)
 {
 	//Later treat X and Z coordinates separately here!!!
 
@@ -4599,6 +4678,7 @@ void srTGenOptElem::TreatStronglyOscillatingTerm(srTSRWRadStructAccessData& RadA
 	//long PerZ = PerX*RadAccessData.nx;
 	long long PerX = RadAccessData.ne << 1;
 	long long PerZ = PerX*RadAccessData.nx;
+	long long PerWfr = PerZ*RadAccessData.nz;
 
 	//srTFFT2D AuxFFT2D;
 	int ieStart=0, ieBefEnd=RadAccessData.ne;
@@ -4607,100 +4687,119 @@ void srTGenOptElem::TreatStronglyOscillatingTerm(srTSRWRadStructAccessData& RadA
 		ieStart = ieOnly; ieBefEnd = ieOnly + 1;
 	}
 
+	GPU_COND(pGpuUsage,
+		{
+//#if _DEBUG
+//			printf("GPU: srTSRWRadStructAccessData::TreatStronglyOscillatingTerm\n");
+//#endif
+		TreatStronglyOscillatingTerm_GPU(RadAccessData, TreatPolCompX, TreatPolCompZ, ieStart, ieBefEnd, ConstRx, ConstRz, pGpuUsage);
+	})
+	else
+	{
+
 #ifdef _WITH_OMP //OC31102018: added by SY at parallelizing SRW via OpenMP
 	#pragma omp parallel for
 #endif
 
 	//for(int ie=0; ie<RadAccessData.ne; ie++)
-	for(int ie=ieStart; ie<ieBefEnd; ie++) //OC161008
-	{
-		//OC31102018: moved by SY at parallelizing SRW via OpenMP
-		double Phase;
-		float CosPh, SinPh;
-		double ConstRxE, ConstRzE;
-		double x, z, zE2;
-
-		//SY: to have one-to-one with previous version (so that tests do no fail)
-		//double ePh = RadAccessData.eStart;
-		//for (int i = ieStart; i<ie; i++) ePh += RadAccessData.eStep;
-		//SY: can be replaced with this
-		double ePh = RadAccessData.eStart + RadAccessData.eStep*(ie - ieStart);
-
-		if(RadAccessData.PresT == 1)
+		for(int ie=ieStart; ie<ieBefEnd; ie++) //OC161008
 		{
-			ePh = RadAccessData.avgPhotEn; //?? OC041108
-		}
+			//OC31102018: moved by SY at parallelizing SRW via OpenMP
+			double Phase;
+			float CosPh, SinPh;
+			double ConstRxE, ConstRzE;
+			double x, z, zE2;
 
-		//long Two_ie = ie << 1;
-		long long Two_ie = ie << 1;
+			//SY: to have one-to-one with previous version (so that tests do no fail)
+			//double ePh = RadAccessData.eStart;
+			//for (int i = ieStart; i<ie; i++) ePh += RadAccessData.eStep;
+			//SY: can be replaced with this
+			double ePh = RadAccessData.eStart + RadAccessData.eStep*(ie - ieStart);
 
-		ConstRxE = ConstRx*ePh;
-		ConstRzE = ConstRz*ePh;
-
-		if(RadAccessData.Pres == 1)
-		{
-			//double Lambda_m = 1.239854e-06/ePh;
-			double Lambda_m = 1.239842e-06/ePh;
-			if(RadAccessData.PhotEnergyUnit == 1) Lambda_m *= 0.001; // if keV
-
-			double Lambda_me2 = Lambda_m*Lambda_m;
-			ConstRxE *= Lambda_me2;
-			ConstRzE *= Lambda_me2;
-		}
-
-		z = RadAccessData.zStart - RadAccessData.zc; //To check: this is probably not correct in Angular representation?
-
-		zE2 = z*z;
-		double PhaseAddZ = 0.;
-		if(RadAccessData.WfrQuadTermCanBeTreatedAtResizeZ) PhaseAddZ = ConstRzE*zE2;
-
-		for(int iz=0; iz<RadAccessData.nz; iz++)
-		{
-			//long izPerZ = iz*PerZ;
-			long long izPerZ = iz*PerZ;
-			float *pEX_StartForX = pEX0 + izPerZ;
-			float *pEZ_StartForX = pEZ0 + izPerZ;
-
-			x = RadAccessData.xStart - RadAccessData.xc; //To check: this is probably not correct in Angular representation?
-
-			for(int ix=0; ix<RadAccessData.nx; ix++)
+			if(RadAccessData.PresT == 1)
 			{
-				//long ixPerX_p_Two_ie = ix*PerX + Two_ie;
-				long long ixPerX_p_Two_ie = ix*PerX + Two_ie;
-
-				//Phase = ConstRxE*x*x + ConstRzE*zE2;
-				Phase = PhaseAddZ;
-				if(RadAccessData.WfrQuadTermCanBeTreatedAtResizeX) Phase += ConstRxE*x*x;
-
-				//AuxFFT2D.CosAndSin(Phase, CosPh, SinPh);
-				CosAndSin(Phase, CosPh, SinPh);
-
-				if(TreatPolCompX)
-				{
-					float *pExRe = pEX_StartForX + ixPerX_p_Two_ie;
-					float *pExIm = pExRe + 1;
-					double ExReNew = (*pExRe)*CosPh - (*pExIm)*SinPh;
-					double ExImNew = (*pExRe)*SinPh + (*pExIm)*CosPh;
-					*pExRe = (float)ExReNew; *pExIm = (float)ExImNew;
-				}
-				if(TreatPolCompZ)
-				{
-					float *pEzRe = pEZ_StartForX + ixPerX_p_Two_ie;
-					float *pEzIm = pEzRe + 1;
-					double EzReNew = (*pEzRe)*CosPh - (*pEzIm)*SinPh;
-					double EzImNew = (*pEzRe)*SinPh + (*pEzIm)*CosPh;
-					*pEzRe = (float)EzReNew; *pEzIm = (float)EzImNew;
-				}
-
-				x += RadAccessData.xStep;
+				ePh = RadAccessData.avgPhotEn; //?? OC041108
 			}
-			z += RadAccessData.zStep;
+
+			//long Two_ie = ie << 1;
+			long long Two_ie = ie << 1;
+
+			ConstRxE = ConstRx*ePh;
+			ConstRzE = ConstRz*ePh;
+
+			if(RadAccessData.Pres == 1)
+			{
+				//double Lambda_m = 1.239854e-06/ePh;
+				double Lambda_m = 1.239842e-06/ePh;
+				if(RadAccessData.PhotEnergyUnit == 1) Lambda_m *= 0.001; // if keV
+
+				double Lambda_me2 = Lambda_m*Lambda_m;
+				ConstRxE *= Lambda_me2;
+				ConstRzE *= Lambda_me2;
+			}
+
+			z = RadAccessData.zStart - RadAccessData.zc; //To check: this is probably not correct in Angular representation?
+
 			zE2 = z*z;
-			PhaseAddZ = 0.;
+			double PhaseAddZ = 0.;
 			if(RadAccessData.WfrQuadTermCanBeTreatedAtResizeZ) PhaseAddZ = ConstRzE*zE2;
+
+			for(int iz=0; iz<RadAccessData.nz; iz++)
+			{
+				//long izPerZ = iz*PerZ;
+				long long izPerZ = iz*PerZ;
+				float *pEX_StartForX = pEX0 + izPerZ;
+				float *pEZ_StartForX = pEZ0 + izPerZ;
+
+				x = RadAccessData.xStart - RadAccessData.xc; //To check: this is probably not correct in Angular representation?
+
+				for(int ix=0; ix<RadAccessData.nx; ix++)
+				{
+					//long ixPerX_p_Two_ie = ix*PerX + Two_ie;
+					long long ixPerX_p_Two_ie = ix*PerX + Two_ie;
+
+					//Phase = ConstRxE*x*x + ConstRzE*zE2;
+					Phase = PhaseAddZ;
+					if(RadAccessData.WfrQuadTermCanBeTreatedAtResizeX) Phase += ConstRxE*x*x;
+
+					//AuxFFT2D.CosAndSin(Phase, CosPh, SinPh);
+					CosAndSin(Phase, CosPh, SinPh);
+
+					float* pEX_StartForWfr = pEX_StartForX + ixPerX_p_Two_ie;
+					float* pEZ_StartForWfr = pEZ_StartForX + ixPerX_p_Two_ie;
+
+					for(int iwfr=0; iwfr<RadAccessData.nwfr; iwfr++)
+					{
+						long long iwfrPerWfr = iwfr * PerWfr;
+
+						if(TreatPolCompX)
+						{
+							float* pExRe = pEX_StartForWfr + iwfrPerWfr;
+							float* pExIm = pExRe + 1;
+							double ExReNew = (*pExRe) * CosPh - (*pExIm) * SinPh;
+							double ExImNew = (*pExRe) * SinPh + (*pExIm) * CosPh;
+							*pExRe = (float)ExReNew; *pExIm = (float)ExImNew;
+						}
+						if(TreatPolCompZ)
+						{
+							float* pEzRe = pEZ_StartForWfr + iwfrPerWfr;
+							float* pEzIm = pEzRe + 1;
+							double EzReNew = (*pEzRe) * CosPh - (*pEzIm) * SinPh;
+							double EzImNew = (*pEzRe) * SinPh + (*pEzIm) * CosPh;
+							*pEzRe = (float)EzReNew; *pEzIm = (float)EzImNew;
+						}
+					}
+
+					x += RadAccessData.xStep;
+				}
+				z += RadAccessData.zStep;
+				zE2 = z*z;
+				PhaseAddZ = 0.;
+				if(RadAccessData.WfrQuadTermCanBeTreatedAtResizeZ) PhaseAddZ = ConstRzE*zE2;
+			}
+			//OC31102018: removed by SY at parallelizing SRW via OPenMP
+			//ePh += RadAccessData.eStep;
 		}
-		//OC31102018: removed by SY at parallelizing SRW via OPenMP
-		//ePh += RadAccessData.eStep;
 	}
 }
 

@@ -907,7 +907,7 @@ int srTGenOptElem::TryToRemoveUndersamplingByResizing(srTSRWRadStructAccessData*
 	{
 		PrevMemForResize = MemForResize;
 		long nxCurRad = pRadAccessData->nx, nzCurRad = pRadAccessData->nz;
-		MemForResize = ExtraMemSizeForResize(nxCurRad, nzCurRad, pxm, pxd, pzm, pzd, 0);
+		MemForResize = ExtraMemSizeForResize(nxCurRad, nzCurRad, pxm, pxd, pzm, pzd, 0)*pRadAccessData->nwfr;
 
 		if(MemForResize >= PrevMemForResize) break;
 

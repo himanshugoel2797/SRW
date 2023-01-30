@@ -34,7 +34,7 @@ public:
 	srTCompositeOptElem() {}
 
 	int PropagateRadiationTest(srTSRWRadStructAccessData*, srTSRWRadStructAccessData*);
-	int PropagateRadiationGuided(srTSRWRadStructAccessData& wfr, int nInt=0, char** arID=0, SRWLRadMesh* arIM=0, char** arI=0); //OC15082018
+	int PropagateRadiationGuided(srTSRWRadStructAccessData& wfr, int nInt=0, char** arID=0, SRWLRadMesh* arIM=0, char** arI=0, gpuUsageArg_t* pGpuUsage =0); //OC15082018
 	//int PropagateRadiationGuided(srTSRWRadStructAccessData& wfr);
 	int ExtractPropagatedIntensity(srTSRWRadStructAccessData& wfr, int nInt, char** arID, SRWLRadMesh* arIM, char** arI, int elCnt, int indIntSartSearch=0); //27082018
 
@@ -47,7 +47,7 @@ public:
 		GenOptElemList.push_back(OptElemHndl);
 	}
 
-	int PropagateRadiation(srTSRWRadStructAccessData* pRadAccessData, srTParPrecWfrPropag& ParPrecWfrPropag, srTRadResizeVect& ResizeBeforeAndAfterVect)
+	int PropagateRadiation(srTSRWRadStructAccessData* pRadAccessData, srTParPrecWfrPropag& ParPrecWfrPropag, srTRadResizeVect& ResizeBeforeAndAfterVect, gpuUsageArg_t* pGpuUsage)
 	{
 		int AmOfElem = (int)GenOptElemList.size(); //OC110104
 		int ElemCount = 0; //OC110104
@@ -65,7 +65,7 @@ public:
 			}
 
 			//if(result = ((srTGenOptElem*)((*iter).rep))->PropagateRadiation(pRadAccessData, MethNo, ResizeBeforeAndAfterVect)) return result;
-			if(result = ((srTGenOptElem*)((*iter).rep))->PropagateRadiation(pRadAccessData, ParPrecWfrPropag, ResizeBeforeAndAfterVect)) return result;
+			if(result = ((srTGenOptElem*)((*iter).rep))->PropagateRadiation(pRadAccessData, ParPrecWfrPropag, ResizeBeforeAndAfterVect, pGpuUsage)) return result;
 		}
 		ParPrecWfrPropag.UseResAfter = GenUseResAfter; //OC110104
 		return 0;

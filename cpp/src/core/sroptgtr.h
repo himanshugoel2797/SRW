@@ -37,6 +37,7 @@ protected: //OC29012021
 	double DxContin, DzContin; // Minimal intervals between discontinuties
 
 public:
+	int SupportedFeatures() override { return 1; }
 
 	srTGenTransmission(srTStringVect* pElemInfo, srTDataMD* pExtraData);
 	srTGenTransmission(const SRWLOptT& tr);
@@ -79,7 +80,7 @@ public:
 	}
 
 	//int PropagateRadiation(srTSRWRadStructAccessData* pRadAccessData, int MethNo, srTRadResizeVect& ResBeforeAndAfterArr)
-	int PropagateRadiation(srTSRWRadStructAccessData* pRadAccessData, srTParPrecWfrPropag& ParPrecWfrPropag, srTRadResizeVect& ResBeforeAndAfterArr)
+	int PropagateRadiation(srTSRWRadStructAccessData* pRadAccessData, srTParPrecWfrPropag& ParPrecWfrPropag, srTRadResizeVect& ResBeforeAndAfterArr, gpuUsageArg_t* pGpuUsage =0)
 	{
 		//if(ParPrecWfrPropag.AnalTreatment == 1)
 		//{// Treating linear terms analytically
@@ -90,7 +91,7 @@ public:
 		
 		int result = 0;
 
-		if(MethNo == 0) result = PropagateRadiationMeth_0(pRadAccessData);
+		if(MethNo == 0) result = PropagateRadiationMeth_0(pRadAccessData, pGpuUsage);
 		else result = PropagateRadiationMeth_2(pRadAccessData, ParPrecWfrPropag, ResBeforeAndAfterArr);
 		
 		//if(ParPrecWfrPropag.AnalTreatment == 1)
@@ -104,25 +105,25 @@ public:
 	//int PropagateRadiationMeth_0(srTSRWRadStructAccessData* pRadAccessData)
 	//int PropagateRadiationSingleE_Meth_0(srTSRWRadStructAccessData* pRadAccessData, srTSRWRadStructAccessData* pPrevRadDataSingleE, void* pBuf=0) //OC06092019
 	//OC01102019 (restored)
-	int PropagateRadiationSingleE_Meth_0(srTSRWRadStructAccessData* pRadAccessData, srTSRWRadStructAccessData* pPrevRadDataSingleE)
+	int PropagateRadiationSingleE_Meth_0(srTSRWRadStructAccessData* pRadAccessData, srTSRWRadStructAccessData* pPrevRadDataSingleE, gpuUsageArg_t* pGpuUsage =0)
 	{
 		int result;
 		if(result = PropagateRadMoments(pRadAccessData, 0)) return result;
 		if(result = PropagateWaveFrontRadius(pRadAccessData)) return result;
 		//if(result = PropagateRadiationSimple(pRadAccessData, pBuf)) return result; //OC06092019
 		//OC01102019 (restored)
-		if(result = PropagateRadiationSimple(pRadAccessData)) return result;
+		if(result = PropagateRadiationSimple(pRadAccessData, pGpuUsage)) return result;
 		if(result = Propagate4x4PropMatr(pRadAccessData)) return result;
 		return 0;
 	}
 
 	//int PropagateRadiationSimple(srTSRWRadStructAccessData* pRadAccessData, void* pBuf=0) //OC06092019
 	//OC01102019 (restored)
-	int PropagateRadiationSimple(srTSRWRadStructAccessData* pRadAccessData)
+	int PropagateRadiationSimple(srTSRWRadStructAccessData* pRadAccessData, gpuUsageArg_t* pGpuUsage)
 	{
 		int result;
-		if(pRadAccessData->Pres != 0) if(result = SetRadRepres(pRadAccessData, 0)) return result;
-		return TraverseRadZXE(pRadAccessData);
+		if(pRadAccessData->Pres != 0) if(result = SetRadRepres(pRadAccessData, 0, 0, 0, pGpuUsage)) return result;
+		return TraverseRadZXE(pRadAccessData, 0, 0, pGpuUsage);
 	}
   	int PropagateRadiationSimple1D(srTRadSect1D* pSect1D)
 	{
@@ -131,10 +132,16 @@ public:
 		return TraverseRad1D(pSect1D);
 	}
 
-	void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf=0); //OC29082019
+	void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf=0) //OC29082019
+	{
+		RadPointModifierPortable(EXZ, EPtrs, pBuf);
+	}
+	GPU_PORTABLE void RadPointModifierPortable(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf=0);
 	//void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs);
   	void RadPointModifier1D(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf=0); //OC06092019
   	//void RadPointModifier1D(srTEXZ& EXZ, srTEFieldPtrs& EPtrs);
+
+	int RadPointModifierParallel(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars=0, long pBufVarsSz=0, gpuUsageArg_t* pGpuUsage=0) override;
 
 	int EstimateMinNpToResolveOptElem(srTSRWRadStructAccessData* pRadAccessData, double& MinNx, double& MinNz);
 

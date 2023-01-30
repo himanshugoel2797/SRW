@@ -352,7 +352,7 @@ int srTDriftSpace::PropagateRadiationMeth_1(srTSRWRadStructAccessData* pRadAcces
 
 //int srTDriftSpace::PropagateRadiationSimple_PropToWaist(srTSRWRadStructAccessData* pRadAccessData, srTDriftPropBufVars* pBufVars) //OC06092019
 //OC01102019 (restored)
-int srTDriftSpace::PropagateRadiationSimple_PropToWaist(srTSRWRadStructAccessData* pRadAccessData)
+int srTDriftSpace::PropagateRadiationSimple_PropToWaist(srTSRWRadStructAccessData* pRadAccessData, gpuUsageArg_t *pGpuUsage)
 {// e in eV; Length in m !!!
 	int result;
 
@@ -365,7 +365,7 @@ int srTDriftSpace::PropagateRadiationSimple_PropToWaist(srTSRWRadStructAccessDat
 	SetupPropBufVars_PropToWaist(pRadAccessData, &BufVars);
 	//SetupPropBufVars_PropToWaist(pRadAccessData);
 
-	if(pRadAccessData->Pres != 0) if(result = SetRadRepres(pRadAccessData, 0)) return result;
+	if(pRadAccessData->Pres != 0) if(result = SetRadRepres(pRadAccessData, 0, 0, 0, pGpuUsage)) return result;
 
 	//pBufVars->PassNo = 1; //OC06092019
 	//OC01102019 (restored)
@@ -373,7 +373,7 @@ int srTDriftSpace::PropagateRadiationSimple_PropToWaist(srTSRWRadStructAccessDat
 	//PropBufVars.PassNo = 1;
 	//if(result = TraverseRadZXE(pRadAccessData, pBufVars)) return result; //OC06092019
 	//OC01102019 (restored)
-	if(result = TraverseRadZXE(pRadAccessData, &BufVars)) return result; //OC29082019
+	if(result = TraverseRadZXE(pRadAccessData, &BufVars, sizeof(srTDriftPropBufVars), pGpuUsage)) return result; //OC29082019
 	//if(result = TraverseRadZXE(pRadAccessData)) return result;
 
 	//OC240114 (commented-out)
@@ -402,7 +402,7 @@ int srTDriftSpace::PropagateRadiationSimple_PropToWaist(srTSRWRadStructAccessDat
 
 	//To remove this?
 	srTDataPtrsForWfrEdgeCorr DataPtrsForWfrEdgeCorr;
-	if(result = SetupWfrEdgeCorrData(pRadAccessData, pRadAccessData->pBaseRadX, pRadAccessData->pBaseRadZ, DataPtrsForWfrEdgeCorr)) return result;
+	if(result = SetupWfrEdgeCorrData(pRadAccessData, pRadAccessData->pBaseRadX, pRadAccessData->pBaseRadZ, DataPtrsForWfrEdgeCorr, pGpuUsage)) return result;
 
 #if !defined(_FFTW3) && defined(_WITH_OMP) //OC29082019
 	//OC04062020
@@ -423,9 +423,9 @@ int srTDriftSpace::PropagateRadiationSimple_PropToWaist(srTSRWRadStructAccessDat
 #else
 //OCTEST01102019: commented-out the above (to see if this will fix problem of TD calcs)
 	FFT2DInfo.pData = pRadAccessData->pBaseRadX;
-	if(result = FFT2D.Make2DFFT(FFT2DInfo)) return result;
+	if(result = FFT2D.Make2DFFT(FFT2DInfo, 0, 0, pGpuUsage)) return result;
 	FFT2DInfo.pData = pRadAccessData->pBaseRadZ;
-	if(result = FFT2D.Make2DFFT(FFT2DInfo)) return result;
+	if(result = FFT2D.Make2DFFT(FFT2DInfo, 0, 0, pGpuUsage)) return result;
 #endif
 
 	//FFT2DInfo.pData = pRadAccessData->pBaseRadX;
@@ -436,7 +436,7 @@ int srTDriftSpace::PropagateRadiationSimple_PropToWaist(srTSRWRadStructAccessDat
 	//To remove this?
 	if(DataPtrsForWfrEdgeCorr.WasSetup)
 	{
-		MakeWfrEdgeCorrection(pRadAccessData, pRadAccessData->pBaseRadX, pRadAccessData->pBaseRadZ, DataPtrsForWfrEdgeCorr);
+		MakeWfrEdgeCorrection(pRadAccessData, pRadAccessData->pBaseRadX, pRadAccessData->pBaseRadZ, DataPtrsForWfrEdgeCorr, pGpuUsage);
 		DataPtrsForWfrEdgeCorr.DisposeData();
 	}
 
@@ -455,7 +455,7 @@ int srTDriftSpace::PropagateRadiationSimple_PropToWaist(srTSRWRadStructAccessDat
 	//PropBufVars.PassNo = 2;
 	//if(result = TraverseRadZXE(pRadAccessData, pBufVars)) return result; //OC06092019
 	//OC01102019 (restored)
-	if(result = TraverseRadZXE(pRadAccessData, &BufVars)) return result; //OC30082019
+	if(result = TraverseRadZXE(pRadAccessData, &BufVars, sizeof(srTDriftPropBufVars), pGpuUsage)) return result; //OC30082019
 	//if(result = TraverseRadZXE(pRadAccessData)) return result;
 
 	pRadAccessData->UnderSamplingX = 1; // Assuming successful propagation to waist
@@ -465,7 +465,7 @@ int srTDriftSpace::PropagateRadiationSimple_PropToWaist(srTSRWRadStructAccessDat
 }
 
 //*************************************************************************
-int srTDriftSpace::PropagateRadiationSimple_PropToWaistBeyondParax(srTSRWRadStructAccessData* pRadAccessData) //OC10112019
+int srTDriftSpace::PropagateRadiationSimple_PropToWaistBeyondParax(srTSRWRadStructAccessData* pRadAccessData, gpuUsageArg_t *pGpuUsage) //OC10112019
 {// e in eV; Length in m !!!
 	int result = 0;
 
@@ -474,7 +474,7 @@ int srTDriftSpace::PropagateRadiationSimple_PropToWaistBeyondParax(srTSRWRadStru
 	srTDriftPropBufVars BufVars;
 	SetupPropBufVars_PropToWaistBeyondParax(pRadAccessData, &BufVars);
 
-	if(pRadAccessData->Pres != 0) if(result = SetRadRepres(pRadAccessData, 0)) return result;
+	if(pRadAccessData->Pres != 0) if(result = SetRadRepres(pRadAccessData, 0, 0, 0, pGpuUsage)) return result;
 
 	pRadAccessData->TreatQuadPhaseTerm('r'); //OC17122019
 	//pRadAccessData->TreatQuadPhaseTermTerm('r');
@@ -495,7 +495,7 @@ int srTDriftSpace::PropagateRadiationSimple_PropToWaistBeyondParax(srTSRWRadStru
 	//pRadAccessData->xStart = (pRadAccessData->xStart)*InvLambdaM_d_Rx;
 	//pRadAccessData->zStart = (pRadAccessData->zStart)*InvLambdaM_d_Rz;
 
-	if(result = TraverseRadZXE(pRadAccessData, &BufVars)) return result;
+	if(result = TraverseRadZXE(pRadAccessData, &BufVars, sizeof(srTDriftPropBufVars), pGpuUsage)) return result;
 
 	CGenMathFFT2DInfo FFT2DInfo;
 	FFT2DInfo.xStep = pRadAccessData->xStep;
@@ -533,9 +533,9 @@ int srTDriftSpace::PropagateRadiationSimple_PropToWaistBeyondParax(srTSRWRadStru
 #else
 //OCTEST01102019: commented-out the above (to see if this will fix problem of TD calcs)
 	FFT2DInfo.pData = pRadAccessData->pBaseRadX;
-	if(result = FFT2D.Make2DFFT(FFT2DInfo)) return result;
+	if(result = FFT2D.Make2DFFT(FFT2DInfo, 0, 0, pGpuUsage)) return result;
 	FFT2DInfo.pData = pRadAccessData->pBaseRadZ;
-	if(result = FFT2D.Make2DFFT(FFT2DInfo)) return result;
+	if(result = FFT2D.Make2DFFT(FFT2DInfo, 0, 0, pGpuUsage)) return result;
 #endif
 
 	//To remove this?
@@ -583,7 +583,7 @@ int srTDriftSpace::PropagateRadiationSimple_PropToWaistBeyondParax(srTSRWRadStru
 
 //int srTDriftSpace::PropagateRadiationSimple_PropFromWaist(srTSRWRadStructAccessData* pRadAccessData, srTDriftPropBufVars* pBufVars) //OC06092019
 //OC01102019 (restored)
-int srTDriftSpace::PropagateRadiationSimple_PropFromWaist(srTSRWRadStructAccessData* pRadAccessData)
+int srTDriftSpace::PropagateRadiationSimple_PropFromWaist(srTSRWRadStructAccessData* pRadAccessData, gpuUsageArg_t *pGpuUsage)
 {//Should be very similar to PropagateRadiationSimple_PropToWaist, consider merging
 	int result = 0;
 	
@@ -602,7 +602,7 @@ int srTDriftSpace::PropagateRadiationSimple_PropFromWaist(srTSRWRadStructAccessD
 	//if(result = TraverseRadZXE(pRadAccessData)) return result;
 	//OC01102019 (restored)
 	BufVars.PassNo = 1;
-	if(result = TraverseRadZXE(pRadAccessData, &BufVars)) return result;
+	if(result = TraverseRadZXE(pRadAccessData, &BufVars, sizeof(srTDriftPropBufVars), pGpuUsage)) return result;
 	//OC06092019
 	//pBufVars->PassNo = 1;
 	//if(result = TraverseRadZXE(pRadAccessData, pBufVars)) return result;
@@ -618,13 +618,14 @@ int srTDriftSpace::PropagateRadiationSimple_PropFromWaist(srTSRWRadStructAccessD
 	FFT2DInfo.yStart = pRadAccessData->zStart;
 	FFT2DInfo.Nx = pRadAccessData->nx;
 	FFT2DInfo.Ny = pRadAccessData->nz;
+	FFT2DInfo.howMany = pRadAccessData->nwfr;
 	FFT2DInfo.Dir = 1;
 	FFT2DInfo.UseGivenStartTrValues = 0;
 
 	//OCTEST (commented-out "edge correction")
 	//OC01102019 (uncommented)
 	srTDataPtrsForWfrEdgeCorr DataPtrsForWfrEdgeCorr;
-	if(result = SetupWfrEdgeCorrData(pRadAccessData, pRadAccessData->pBaseRadX, pRadAccessData->pBaseRadZ, DataPtrsForWfrEdgeCorr)) return result;
+	if(result = SetupWfrEdgeCorrData(pRadAccessData, pRadAccessData->pBaseRadX, pRadAccessData->pBaseRadZ, DataPtrsForWfrEdgeCorr, pGpuUsage)) return result;
 
 	CGenMathFFT2D FFT2D;
 
@@ -652,16 +653,16 @@ int srTDriftSpace::PropagateRadiationSimple_PropFromWaist(srTSRWRadStructAccessD
 	//}
 #else
 	FFT2DInfo.pData = pRadAccessData->pBaseRadX;
-	if(result = FFT2D.Make2DFFT(FFT2DInfo)) return result;
+	if(result = FFT2D.Make2DFFT(FFT2DInfo, 0, 0, pGpuUsage)) return result;
 	FFT2DInfo.pData = pRadAccessData->pBaseRadZ;
-	if(result = FFT2D.Make2DFFT(FFT2DInfo)) return result;
+	if(result = FFT2D.Make2DFFT(FFT2DInfo, 0, 0, pGpuUsage)) return result;
 #endif
 
 	//OCTEST (commented-out "edge correction")
 	//OC01102019 (uncommented)
 	if(DataPtrsForWfrEdgeCorr.WasSetup)
 	{
-		MakeWfrEdgeCorrection(pRadAccessData, pRadAccessData->pBaseRadX, pRadAccessData->pBaseRadZ, DataPtrsForWfrEdgeCorr);
+		MakeWfrEdgeCorrection(pRadAccessData, pRadAccessData->pBaseRadX, pRadAccessData->pBaseRadZ, DataPtrsForWfrEdgeCorr, pGpuUsage);
 		DataPtrsForWfrEdgeCorr.DisposeData();
 	}
 
@@ -675,7 +676,7 @@ int srTDriftSpace::PropagateRadiationSimple_PropFromWaist(srTSRWRadStructAccessD
 	//if(result = TraverseRadZXE(pRadAccessData)) return result;
 	//OC01102019 (restored)
 	BufVars.PassNo = 2;
-	if(result = TraverseRadZXE(pRadAccessData, &BufVars)) return result;
+	if(result = TraverseRadZXE(pRadAccessData, &BufVars, sizeof(srTDriftPropBufVars), pGpuUsage)) return result;
 	//OC06092019
 	//pBufVars->PassNo = 2;
 	//if(result = TraverseRadZXE(pRadAccessData, pBufVars)) return result;
@@ -687,7 +688,7 @@ int srTDriftSpace::PropagateRadiationSimple_PropFromWaist(srTSRWRadStructAccessD
 
 //int srTDriftSpace::PropagateRadiationSimple_AnalytTreatQuadPhaseTerm(srTSRWRadStructAccessData* pRadAccessData, srTDriftPropBufVars* pBufVars) //OC06092019
 //OC01102019 (restored)
-int srTDriftSpace::PropagateRadiationSimple_AnalytTreatQuadPhaseTerm(srTSRWRadStructAccessData* pRadAccessData)
+int srTDriftSpace::PropagateRadiationSimple_AnalytTreatQuadPhaseTerm(srTSRWRadStructAccessData* pRadAccessData, gpuUsageArg_t *pGpuUsage)
 {// e in eV; Length in m !!!
 	int result = 0;
 
@@ -706,7 +707,7 @@ int srTDriftSpace::PropagateRadiationSimple_AnalytTreatQuadPhaseTerm(srTSRWRadSt
 	//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
 	//srwlPrintTime(":PropagateRadiationSimple_AnalytTreatQuadPhaseTerm:SetupPropBufVars_AnalytTreatQuadPhaseTerm",&start);
 
-	if(pRadAccessData->Pres != 0) if(result = SetRadRepres(pRadAccessData, 0)) return result;
+	if(pRadAccessData->Pres != 0) if(result = SetRadRepres(pRadAccessData, 0, 0, 0, pGpuUsage)) return result;
 
 	//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
 	//srwlPrintTime(":PropagateRadiationSimple_AnalytTreatQuadPhaseTerm:SetRadRepres 1",&start);
@@ -717,7 +718,7 @@ int srTDriftSpace::PropagateRadiationSimple_AnalytTreatQuadPhaseTerm(srTSRWRadSt
 	//PropBufVars.PassNo = 1; //Remove quadratic term from the Phase in coord. repres.
 	//if(result = TraverseRadZXE(pRadAccessData, pBufVars)) return result; //OC06092019
 	//OC01102019 (restored)
-	if(result = TraverseRadZXE(pRadAccessData, &BufVars)) return result; //OC30082019
+	if(result = TraverseRadZXE(pRadAccessData, &BufVars, sizeof(srTDriftPropBufVars), pGpuUsage)) return result; //OC30082019
 	//if(result = TraverseRadZXE(pRadAccessData)) return result;
 
 	//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
@@ -736,7 +737,7 @@ int srTDriftSpace::PropagateRadiationSimple_AnalytTreatQuadPhaseTerm(srTSRWRadSt
 
 		pRadAccessData->WfrEdgeCorrShouldBeDone = 0;
 
-	if(result = SetRadRepres(pRadAccessData, 1)) return result; //To angular repres.
+	if(result = SetRadRepres(pRadAccessData, 1, 0, 0, pGpuUsage)) return result; //To angular repres.
 
 	//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
 	//srwlPrintTime(":PropagateRadiationSimple_AnalytTreatQuadPhaseTerm:SetRadRepres 2",&start);
@@ -747,7 +748,7 @@ int srTDriftSpace::PropagateRadiationSimple_AnalytTreatQuadPhaseTerm(srTSRWRadSt
 	//PropBufVars.PassNo = 2; //Loop in angular repres.
 	//if(result = TraverseRadZXE(pRadAccessData, pBufVars)) return result; //OC06092019
 	//OC01102019 (restored)
-	if(result = TraverseRadZXE(pRadAccessData, &BufVars)) return result; //OC30082019
+	if(result = TraverseRadZXE(pRadAccessData, &BufVars, sizeof(srTDriftPropBufVars), pGpuUsage)) return result; //OC30082019
 	//if(result = TraverseRadZXE(pRadAccessData)) return result;
 
 	//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
@@ -759,7 +760,7 @@ int srTDriftSpace::PropagateRadiationSimple_AnalytTreatQuadPhaseTerm(srTSRWRadSt
 			pRadAccessData->zStartTr += zShift;
 		}
 
-	if(result = SetRadRepres(pRadAccessData, 0)) return result; //Back to coord. repres.
+	if(result = SetRadRepres(pRadAccessData, 0, 0, 0, pGpuUsage)) return result; //Back to coord. repres.
 
 	//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
 	//srwlPrintTime(":PropagateRadiationSimple_AnalytTreatQuadPhaseTerm:SetRadRepres 3",&start);
@@ -802,7 +803,7 @@ int srTDriftSpace::PropagateRadiationSimple_AnalytTreatQuadPhaseTerm(srTSRWRadSt
 	//PropBufVars.PassNo = 3; //Add new quadratic term to the Phase in coord. repres.
 	//if(result = TraverseRadZXE(pRadAccessData, pBufVars)) return result; //OC06092019
 	//OC01102019 (restored)
-	if(result = TraverseRadZXE(pRadAccessData, &BufVars)) return result; //OC30082019
+	if(result = TraverseRadZXE(pRadAccessData, &BufVars, sizeof(srTDriftPropBufVars), pGpuUsage)) return result; //OC30082019
 	//if(result = TraverseRadZXE(pRadAccessData)) return result;
 
 	//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
@@ -1399,8 +1400,8 @@ void srTDriftSpace::EstimateTrueWfrRadAndMaxLeff_AnalytTreatQuadPhaseTerm(srTSRW
 }
 
 //*************************************************************************
-
-int srTDriftSpace::PropagateRadiationSimple_NumIntFresnel(srTSRWRadStructAccessData* pRadAccessData) 
+#pragma message("PropagateRadiationSimple_NumIntFresnel needs proper CUDA port")
+int srTDriftSpace::PropagateRadiationSimple_NumIntFresnel(srTSRWRadStructAccessData* pRadAccessData, gpuUsageArg_t *pGpuUsage) 
 {//OC100914 Aux. method for testing / benchmarking
 //This method attempts to calculate 2D Fresnel integral using the standard numerical integration
 //(e.g. for testing accuracy of the FTT-based integration)

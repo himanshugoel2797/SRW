@@ -90,6 +90,7 @@ public:
 	double Length;
 	//OC06092019 (commented-out)
 	//srTDriftPropBufVars PropBufVars;
+	int SupportedFeatures() override { return 1; }
 
 	srTDriftSpace(double InLength =0., char InTreatPath =0) 
 	{ 
@@ -109,7 +110,7 @@ public:
 	}
 
 	//int PropagateRadiation(srTSRWRadStructAccessData* pRadAccessData, int MethNo, srTRadResizeVect& ResizeBeforeAndAfterVect)
-	int PropagateRadiation(srTSRWRadStructAccessData* pRadAccessData, srTParPrecWfrPropag& ParPrecWfrPropag, srTRadResizeVect& ResizeBeforeAndAfterVect)
+	int PropagateRadiation(srTSRWRadStructAccessData* pRadAccessData, srTParPrecWfrPropag& ParPrecWfrPropag, srTRadResizeVect& ResizeBeforeAndAfterVect, gpuUsageArg_t* pGpuUsage =0)
 	{
 		//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
 		//double start;
@@ -159,7 +160,7 @@ public:
 
 		//if(MethNo == 0) result = PropagateRadiationMeth_0(pRadAccessData, &BufVars); //OC06092019
 		//OC01102019 (restored)
-		if(MethNo == 0) result = PropagateRadiationMeth_0(pRadAccessData);
+		if(MethNo == 0) result = PropagateRadiationMeth_0(pRadAccessData, pGpuUsage);
 		else if(MethNo == 1) result = PropagateRadiationMeth_1(pRadAccessData);
 		else if(MethNo == 2) result = PropagateRadiationMeth_2(pRadAccessData, ParPrecWfrPropag, ResizeBeforeAndAfterVect);
 		
@@ -175,12 +176,12 @@ public:
 	//int PropagateRadiationMeth_0(srTSRWRadStructAccessData* pRadAccessData)
 	//int PropagateRadiationSingleE_Meth_0(srTSRWRadStructAccessData* pRadAccessData, srTSRWRadStructAccessData* pPrevRadAccessData, void* pBuf=0) //OC06092019
 	//OC01102019 (restored)
-	int PropagateRadiationSingleE_Meth_0(srTSRWRadStructAccessData* pRadAccessData, srTSRWRadStructAccessData* pPrevRadAccessData)
+	int PropagateRadiationSingleE_Meth_0(srTSRWRadStructAccessData* pRadAccessData, srTSRWRadStructAccessData* pPrevRadAccessData, gpuUsageArg_t* pGpuUsage)
 	{//it works for many photon energies too!
 		int result;
 		//if(result = PropagateRadiationSimple(pRadAccessData, pBuf)) return result; //OC06092019
 		//OC01102019 (restored)
-		if(result = PropagateRadiationSimple(pRadAccessData)) return result;
+		if(result = PropagateRadiationSimple(pRadAccessData, pGpuUsage)) return result;
 		if(result = PropagateRadMoments(pRadAccessData, 0)) return result;
 		if(result = PropagateWaveFrontRadius(pRadAccessData)) return result;
 		if(result = Propagate4x4PropMatr(pRadAccessData)) return result;
@@ -189,7 +190,7 @@ public:
 
 	//int PropagateRadiationMeth_0(srTSRWRadStructAccessData* pRadAccessData, void* pBuf) //OC06092019
 	//OC01102019 (restored)
-	int PropagateRadiationMeth_0(srTSRWRadStructAccessData* pRadAccessData) //virtual in srTGenOptElem
+	int PropagateRadiationMeth_0(srTSRWRadStructAccessData* pRadAccessData, gpuUsageArg_t* pGpuUsage) //virtual in srTGenOptElem
 	{//because for the Drift, the following works for many photon energies too!
 		//return PropagateRadiationSingleE_Meth_0(pRadAccessData, 0);
 		//OC251214
@@ -198,7 +199,7 @@ public:
 		//srTDriftPropBufVars* pBufVars = (srTDriftPropBufVars*)pBuf; //OC06092019
 		//if((pBufVars->LocalPropMode == 0) || (pBufVars->LocalPropMode == 3) || (pRadAccessData->ne == 1)) return PropagateRadiationSingleE_Meth_0(pRadAccessData, 0, pBuf); //OC06092019
 		//OC01102019 (restored)
-		if((LocalPropMode == 0) || (LocalPropMode == 3) || (pRadAccessData->ne == 1)) return PropagateRadiationSingleE_Meth_0(pRadAccessData, 0);
+		if((LocalPropMode == 0) || (LocalPropMode == 3) || (pRadAccessData->ne == 1)) return PropagateRadiationSingleE_Meth_0(pRadAccessData, 0, pGpuUsage);
 		else
 		{
 			pRadAccessData->SetNonZeroWavefrontLimitsToFullRange();
@@ -304,32 +305,32 @@ public:
 
 	//int PropagateRadiationSimple(srTSRWRadStructAccessData* pRadAccessData, void* pBuf=0) //OC06092019
 	//OC01102019 (restored)
-	int PropagateRadiationSimple(srTSRWRadStructAccessData* pRadAccessData)
+	int PropagateRadiationSimple(srTSRWRadStructAccessData* pRadAccessData, gpuUsageArg_t* pGpuUsage)
 	{
 		//srTDriftPropBufVars* pBufVars = (srTDriftPropBufVars*)pBuf; //OC06092019
 		//char LocalPropMode = pBufVars->LocalPropMode; //OC06092019
 		//OC01102019 (commented-out / restored)
 
-		if(LocalPropMode == 0) return PropagateRadiationSimple_AngRepres(pRadAccessData);
+		if(LocalPropMode == 0) return PropagateRadiationSimple_AngRepres(pRadAccessData, pGpuUsage);
 		//OC01102019 (restored)
-		else if(LocalPropMode == 1) return PropagateRadiationSimple_PropToWaist(pRadAccessData);
+		else if(LocalPropMode == 1) return PropagateRadiationSimple_PropToWaist(pRadAccessData, pGpuUsage);
 
-		else if(LocalPropMode == 11) return PropagateRadiationSimple_PropToWaistBeyondParax(pRadAccessData); //OC10112019
+		else if(LocalPropMode == 11) return PropagateRadiationSimple_PropToWaistBeyondParax(pRadAccessData, pGpuUsage); //OC10112019
 
-		else if(LocalPropMode == 2) return PropagateRadiationSimple_PropFromWaist(pRadAccessData); //OC240114 (added)
-		else if(LocalPropMode == 3) return PropagateRadiationSimple_AnalytTreatQuadPhaseTerm(pRadAccessData);
+		else if(LocalPropMode == 2) return PropagateRadiationSimple_PropFromWaist(pRadAccessData, pGpuUsage); //OC240114 (added)
+		else if(LocalPropMode == 3) return PropagateRadiationSimple_AnalytTreatQuadPhaseTerm(pRadAccessData, pGpuUsage);
 		//OC06092019
 		//else if(LocalPropMode == 1) return PropagateRadiationSimple_PropToWaist(pRadAccessData, pBufVars);
 		//else if(LocalPropMode == 2) return PropagateRadiationSimple_PropFromWaist(pRadAccessData, pBufVars); //OC240114 (added)
 		//else if(LocalPropMode == 3) return PropagateRadiationSimple_AnalytTreatQuadPhaseTerm(pRadAccessData, pBufVars);
 
 		//OC100914 Aux. methods for testing / benchmarking
-		else if(LocalPropMode == 100) return PropagateRadiationSimple_NumIntFresnel(pRadAccessData);
+		else if(LocalPropMode == 100) return PropagateRadiationSimple_NumIntFresnel(pRadAccessData, pGpuUsage);
 
 		else return 0;
 	}
 
-	int PropagateRadiationSimple_AngRepres(srTSRWRadStructAccessData* pRadAccessData)
+	int PropagateRadiationSimple_AngRepres(srTSRWRadStructAccessData* pRadAccessData, gpuUsageArg_t* pGpuUsage = 0)
 	{
 		//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
 		//double start;
@@ -351,13 +352,13 @@ public:
 
 		if(pRadAccessData->Pres != 1) 
 		{
-			if(result = SetRadRepres(pRadAccessData, 1)) return result;
+			if(result = SetRadRepres(pRadAccessData, 1, 0, 0, pGpuUsage)) return result;
 		}
 
 		//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
 		//srwlPrintTime(":PropagateRadiationSimple_AngRepres:SetRadRepres 1",&start);
 
-		if(result = TraverseRadZXE(pRadAccessData)) return result;
+		if(result = TraverseRadZXE(pRadAccessData, 0, 0, pGpuUsage)) return result;
 
 		//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
 		//srwlPrintTime(":PropagateRadiationSimple_AngRepres:TraverseRadZXE",&start);
@@ -368,7 +369,7 @@ public:
 				pRadAccessData->zStartTr += zShift;
 			}
 
-		if(result = SetRadRepres(pRadAccessData, 0)) return result;
+		if(result = SetRadRepres(pRadAccessData, 0, 0, 0, pGpuUsage)) return result;
 
 		//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
 		//srwlPrintTime(":PropagateRadiationSimple_AngRepres:SetRadRepres 2",&start);
@@ -390,17 +391,17 @@ public:
 	}
 
 	//OC01102019 (restored)
-	int PropagateRadiationSimple_PropToWaist(srTSRWRadStructAccessData* pRadAccessData);
-	int PropagateRadiationSimple_PropToWaistBeyondParax(srTSRWRadStructAccessData* pRadAccessData); //OC10112019
+	int PropagateRadiationSimple_PropToWaist(srTSRWRadStructAccessData* pRadAccessData, gpuUsageArg_t* pGpuUsage = 0);
+	int PropagateRadiationSimple_PropToWaistBeyondParax(srTSRWRadStructAccessData* pRadAccessData, gpuUsageArg_t* pGpuUsage = 0); //OC10112019
 
-	int PropagateRadiationSimple_PropFromWaist(srTSRWRadStructAccessData* pRadAccessData);
-	int PropagateRadiationSimple_AnalytTreatQuadPhaseTerm(srTSRWRadStructAccessData* pRadAccessData);
+	int PropagateRadiationSimple_PropFromWaist(srTSRWRadStructAccessData* pRadAccessData, gpuUsageArg_t* pGpuUsage =0);
+	int PropagateRadiationSimple_AnalytTreatQuadPhaseTerm(srTSRWRadStructAccessData* pRadAccessData, gpuUsageArg_t* pGpuUsage = 0);
 	//OC06092019
 	//int PropagateRadiationSimple_PropToWaist(srTSRWRadStructAccessData* pRadAccessData, srTDriftPropBufVars* pBufVars=0);
 	//int PropagateRadiationSimple_PropFromWaist(srTSRWRadStructAccessData* pRadAccessData, srTDriftPropBufVars* pBufVars=0);
 	//int PropagateRadiationSimple_AnalytTreatQuadPhaseTerm(srTSRWRadStructAccessData* pRadAccessData, srTDriftPropBufVars* pBufVars=0);
 
-	int PropagateRadiationSimple_NumIntFresnel(srTSRWRadStructAccessData* pRadAccessData); //OC100914 Aux. method for testing / benchmarking
+	int PropagateRadiationSimple_NumIntFresnel(srTSRWRadStructAccessData* pRadAccessData, gpuUsageArg_t* pGpuUsage = 0); //OC100914 Aux. method for testing / benchmarking
 
 	//int PropagateRadiationSimple1D(srTRadSect1D* pSect1D, void* pBuf=0) //OC06092019
 	//OC01102019 (restored)
@@ -554,6 +555,10 @@ public:
 	void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf=0) //OC29082019
 	//void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs)
 	{
+		RadPointModifierPortable(EXZ, EPtrs, pBuf);
+	}
+	GPU_PORTABLE void RadPointModifierPortable(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf=0)
+	{
 		srTDriftPropBufVars* pBufVars = (srTDriftPropBufVars*)pBuf;
 		//char LocalPropMode = pBufVars->LocalPropMode;
 		//OC01102019 (commented-out)
@@ -567,8 +572,9 @@ public:
 		else if(LocalPropMode == 3) { RadPointModifier_AnalytTreatQuadPhaseTerm(EXZ, EPtrs, pBufVars); return;} //OC06092019
 		//else if(LocalPropMode == 3) { RadPointModifier_AnalytTreatQuadPhaseTerm(EXZ, EPtrs); return;}
 	}
+	int RadPointModifierParallel(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars=0, long pBufVarsSz=0, gpuUsageArg_t* pGpuUsage=0) override;
 
-	void RadPointModifier_AngRepres(srTEXZ& EXZ, srTEFieldPtrs& EPtrs)
+	GPU_PORTABLE void RadPointModifier_AngRepres(srTEXZ& EXZ, srTEFieldPtrs& EPtrs)
 	{// e in eV; Length in m !!!
 	 // Operates on Angles side !!!
 		//double Lambda_m = 1.239854e-06/EXZ.e;
@@ -599,7 +605,7 @@ public:
 		*(EPtrs.pEzRe) = NewEzRe; *(EPtrs.pEzIm) = NewEzIm; 
 	}
 
-	void RadPointModifier_PropToWaist(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, srTDriftPropBufVars* pBufVars) //OC29082019
+	GPU_PORTABLE void RadPointModifier_PropToWaist(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, srTDriftPropBufVars* pBufVars) //OC29082019
 	//void RadPointModifier_PropToWaist(srTEXZ& EXZ, srTEFieldPtrs& EPtrs)
 	{
 		double rx = EXZ.x, rz = EXZ.z;
@@ -661,7 +667,7 @@ public:
 		}
 	}
 
-	void RadPointModifier_PropToWaistBeyondParax(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, srTDriftPropBufVars* pBufVars) //OC10112019
+	GPU_PORTABLE void RadPointModifier_PropToWaistBeyondParax(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, srTDriftPropBufVars* pBufVars) //OC10112019
 	{
 		double rx = EXZ.x, rz = EXZ.z;
 		double PhaseShift = -((pBufVars->Pi_MultLambdaM_Rx)*rx*rx + (pBufVars->Pi_MultLambdaM_Rz)*rz*rz)/EXZ.e;
@@ -695,7 +701,7 @@ public:
 		*(EPtrs.pEzRe) = NewEzRe; *(EPtrs.pEzIm) = NewEzIm; 
 	}
 
-	void RadPointModifier_PropFromWaist(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, srTDriftPropBufVars* pBufVars) //OC30082019
+	GPU_PORTABLE void RadPointModifier_PropFromWaist(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, srTDriftPropBufVars* pBufVars) //OC30082019
 	//void RadPointModifier_PropFromWaist(srTEXZ& EXZ, srTEFieldPtrs& EPtrs)
 	{
 		double rx = EXZ.x, rz = EXZ.z;
@@ -742,7 +748,7 @@ public:
 		}
 	}
 
-	void RadPointModifier_AnalytTreatQuadPhaseTerm(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, srTDriftPropBufVars* pBufVars) //OC30082019
+	GPU_PORTABLE void RadPointModifier_AnalytTreatQuadPhaseTerm(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, srTDriftPropBufVars* pBufVars) //OC30082019
 	//void RadPointModifier_AnalytTreatQuadPhaseTerm(srTEXZ& EXZ, srTEFieldPtrs& EPtrs)
 	{//don't use RobsX, RobsZ directly here!
 

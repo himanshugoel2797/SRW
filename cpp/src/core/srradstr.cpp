@@ -449,7 +449,7 @@ void srTSRWRadStructAccessData::InSRWRadPtrs(srTSRWRadInData* p, bool DataShould
 	eStep = p->eStep; eStart = p->eStart; 
 	xStep = p->xStep; xStart = p->xStart; 
 	zStep = p->zStep; zStart = p->zStart;
-	ne = p->ne; nx = p->nx; nz = p->nz;
+	ne = p->ne; nx = p->nx; nz = p->nz; nwfr = p->nwfr;
 
 	RobsX = p->RobsX; RobsZ = p->RobsZ;
 	RobsXAbsErr = p->RobsXAbsErr; RobsZAbsErr = p->RobsZAbsErr;
@@ -551,6 +551,7 @@ void srTSRWRadStructAccessData::InSRWRadPtrs(SRWLWfr& srwlWfr)
 	RobsX = srwlWfr.Rx; RobsZ = srwlWfr.Ry;
 	RobsXAbsErr = srwlWfr.dRx; RobsZAbsErr = srwlWfr.dRy;
 	xc = srwlWfr.xc; zc = srwlWfr.yc;
+	nwfr = srwlWfr.nwfr;
 
 	//xWfrMin = srwlWfr.xStart; xWfrMax = srwlWfr.xFin;
 	//zWfrMin = srwlWfr.yStart; zWfrMax = srwlWfr.yFin;
@@ -649,6 +650,7 @@ void srTSRWRadStructAccessData::OutSRWRadPtrs(srTSRWRadInData* p)
 	p->RobsX = RobsX; p->RobsZ = RobsZ;
 	p->RobsXAbsErr = RobsXAbsErr; p->RobsZAbsErr = RobsZAbsErr;
 	p->xc = xc; p->zc = zc;
+	p->nwfr = nwfr;
 	p->xWfrMin = xWfrMin; p->xWfrMax = xWfrMax;
 	p->zWfrMin = zWfrMin; p->zWfrMax = zWfrMax;
 
@@ -706,6 +708,7 @@ void srTSRWRadStructAccessData::OutSRWRadPtrs(SRWLWfr& srwlWfr)
 	srwlWfr.Rx = RobsX; srwlWfr.Ry = RobsZ;
 	srwlWfr.dRx = RobsXAbsErr; srwlWfr.dRy = RobsZAbsErr;
 	srwlWfr.xc = xc; srwlWfr.yc = zc;
+	srwlWfr.nwfr = nwfr;
 
 	//p->xWfrMin = xWfrMin; p->xWfrMax = xWfrMax;
 	//p->zWfrMin = zWfrMin; p->zWfrMax = zWfrMax;
@@ -2700,7 +2703,7 @@ void srTSRWRadStructAccessData::CheckAndResetPhaseTermsLin()
 
 //*************************************************************************
 
-void srTSRWRadStructAccessData::MirrorFieldData(int sx, int sz)
+void srTSRWRadStructAccessData::MirrorFieldData(int sx, int sz, gpuUsageArg_t *pGpuUsage)
 {// sx < 0 means mirroring should be done vs x 
  // sz < 0 means mirroring should be done vs z 
 	//long PerX = ne << 1;
@@ -2711,175 +2714,185 @@ void srTSRWRadStructAccessData::MirrorFieldData(int sx, int sz)
 	float *pEX0 = pBaseRadX;
 	float *pEZ0 = pBaseRadZ;
 
-	if((sx > 0) && (sz > 0)) return; //no mirroring is necessary 
-	else if((sx < 0) && (sz > 0)) //mirroring with respect to x
+	GPU_COND(pGpuUsage,
 	{
-		//long nx_mi_1 = nx - 1;
-		long long nx_mi_1 = nx - 1; //OC26042019
-		for(long long ie=0; ie<ne; ie++)
-		//for(long ie=0; ie<ne; ie++)
-		{
-			//long Two_ie = ie << 1;
-			long long Two_ie = ie << 1; //OC26042019
-			for(long long iz=0; iz<nz; iz++)
-			//for(long iz=0; iz<nz; iz++)
-			{
-				//long izPerZ = iz*PerZ;
-				long long izPerZ = iz*PerZ;
-				float *pEX_StartForX = pEX0 + izPerZ;
-				float *pEZ_StartForX = pEZ0 + izPerZ;
-
-				for(long long ix=0; ix<(nx >> 1); ix++) //OC26042019
-				//for(long ix=0; ix<(nx >> 1); ix++)
-				{
-					//long ixPerX_p_Two_ie = ix*PerX + Two_ie;
-					long long ixPerX_p_Two_ie = ix*PerX + Two_ie;
-					float *pEX = pEX_StartForX + ixPerX_p_Two_ie;
-					float *pEZ = pEZ_StartForX + ixPerX_p_Two_ie;
-
-					//long rev_ixPerX_p_Two_ie = (nx_mi_1 - ix)*PerX + Two_ie;
-					long long rev_ixPerX_p_Two_ie = (nx_mi_1 - ix)*PerX + Two_ie;
-					float *rev_pEX = pEX_StartForX + rev_ixPerX_p_Two_ie;
-					float *rev_pEZ = pEZ_StartForX + rev_ixPerX_p_Two_ie;
-
-					if(pEX0 != 0)
-					{
-						buf = *rev_pEX; *(rev_pEX++) = *pEX; *(pEX++) = buf;
-						buf = *rev_pEX; *rev_pEX = *pEX; *pEX = buf;
-					}
-					if(pEZ0 != 0)
-					{
-						buf = *rev_pEZ; *(rev_pEZ++) = *pEZ; *(pEZ++) = buf;
-						buf = *rev_pEZ; *rev_pEZ = *pEZ; *pEZ = buf;
-					}
-				}
-			}
-		}
-	}
-	else if((sx > 0) && (sz < 0))
-	{
-		//long nz_mi_1 = nz - 1;
-		//for(long ie=0; ie<ne; ie++)
-		long long nz_mi_1 = nz - 1; //OC26042019
-		for(long long ie=0; ie<ne; ie++)
-		{
-			//long Two_ie = ie << 1;
-			long long Two_ie = ie << 1;
-			for(long long iz=0; iz<(nz >> 1); iz++)
-			//for(long iz=0; iz<(nz >> 1); iz++)
-			{
-				//long izPerZ = iz*PerZ;
-				long long izPerZ = iz*PerZ;
-				float *pEX_StartForX = pEX0 + izPerZ;
-				float *pEZ_StartForX = pEZ0 + izPerZ;
-
-				//long rev_izPerZ = (nz_mi_1 - iz)*PerZ;
-				long long rev_izPerZ = (nz_mi_1 - iz)*PerZ;
-				float *rev_pEX_StartForX = pEX0 + rev_izPerZ;
-				float *rev_pEZ_StartForX = pEZ0 + rev_izPerZ;
-
-				for(long long ix=0; ix<nx; ix++)
-				//for(long ix=0; ix<nx; ix++)
-				{
-					//long ixPerX_p_Two_ie = ix*PerX + Two_ie;
-					long long ixPerX_p_Two_ie = ix*PerX + Two_ie;
-					float *pEX = pEX_StartForX + ixPerX_p_Two_ie;
-					float *pEZ = pEZ_StartForX + ixPerX_p_Two_ie;
-
-					float *rev_pEX = rev_pEX_StartForX + ixPerX_p_Two_ie;
-					float *rev_pEZ = rev_pEZ_StartForX + ixPerX_p_Two_ie;
-
-					if(pEX0 != 0)
-					{
-						buf = *rev_pEX; *(rev_pEX++) = *pEX; *(pEX++) = buf;
-						buf = *rev_pEX; *rev_pEX = *pEX; *pEX = buf;
-					}
-					if(pEZ0 != 0)
-					{
-						buf = *rev_pEZ; *(rev_pEZ++) = *pEZ; *(pEZ++) = buf;
-						buf = *rev_pEZ; *rev_pEZ = *pEZ; *pEZ = buf;
-					}
-				}
-			}
-		}
-	}
+		if ((sx > 0) && (sz > 0))return;
+		else if ((sx < 0) && (sz > 0)) MirrorFieldData_GPU(ne, nx, nz, nwfr, pEX0, pEZ0, 0, pGpuUsage);
+		else if ((sx > 0) && (sz < 0)) MirrorFieldData_GPU(ne, nx, nz, nwfr, pEX0, pEZ0, 1, pGpuUsage);
+		else MirrorFieldData_GPU(ne, nx, nz, nwfr, pEX0, pEZ0, 2, pGpuUsage);
+	})
 	else
 	{
-		//long nx_mi_1 = nx - 1;
-		//long nz_mi_1 = nz - 1;
-		long long nx_mi_1 = nx - 1; //OC26042019
-		long long nz_mi_1 = nz - 1;
-		for(long long ie=0; ie<ne; ie++) //OC26042019
-		//for(long ie=0; ie<ne; ie++)
+		if ((sx > 0) && (sz > 0)) return; //no mirroring is necessary 
+		else if ((sx < 0) && (sz > 0)) //mirroring with respect to x
 		{
-			//long Two_ie = ie << 1;
-			//for(long iz=0; iz<(nz >> 1); iz++)
-			long long Two_ie = ie << 1; //OC26042019
-			for(long long iz=0; iz<(nz >> 1); iz++)
+			//long nx_mi_1 = nx - 1;
+			long long nx_mi_1 = nx - 1; //OC26042019
+			for (long long ie = 0; ie < ne; ie++)
+				//for(long ie=0; ie<ne; ie++)
 			{
-				//long izPerZ = iz*PerZ;
-				long long izPerZ = iz*PerZ;
-				float *pEX_StartForX = pEX0 + izPerZ;
-				float *pEZ_StartForX = pEZ0 + izPerZ;
-
-				//long rev_izPerZ = (nz_mi_1 - iz)*PerZ;
-				long long rev_izPerZ = (nz_mi_1 - iz)*PerZ;
-				float *rev_pEX_StartForX = pEX0 + rev_izPerZ;
-				float *rev_pEZ_StartForX = pEZ0 + rev_izPerZ;
-
-				for(long long ix=0; ix<nx; ix++) //OC26042019
-				//for(long ix=0; ix<nx; ix++)
+				//long Two_ie = ie << 1;
+				long long Two_ie = ie << 1; //OC26042019
+				for (long long iz = 0; iz < nz; iz++)
+					//for(long iz=0; iz<nz; iz++)
 				{
-					//long ixPerX_p_Two_ie = ix*PerX + Two_ie;
-					long long ixPerX_p_Two_ie = ix*PerX + Two_ie;
-					float *pEX = pEX_StartForX + ixPerX_p_Two_ie;
-					float *pEZ = pEZ_StartForX + ixPerX_p_Two_ie;
+					//long izPerZ = iz*PerZ;
+					long long izPerZ = iz * PerZ;
+					float* pEX_StartForX = pEX0 + izPerZ;
+					float* pEZ_StartForX = pEZ0 + izPerZ;
 
-					//long rev_ixPerX_p_Two_ie = (nx_mi_1 - ix)*PerX + Two_ie;
-					long long rev_ixPerX_p_Two_ie = (nx_mi_1 - ix)*PerX + Two_ie;
-					float *rev_pEX = rev_pEX_StartForX + rev_ixPerX_p_Two_ie;
-					float *rev_pEZ = rev_pEZ_StartForX + rev_ixPerX_p_Two_ie;
+					for (long long ix = 0; ix < (nx >> 1); ix++) //OC26042019
+						//for(long ix=0; ix<(nx >> 1); ix++)
+					{
+						//long ixPerX_p_Two_ie = ix*PerX + Two_ie;
+						long long ixPerX_p_Two_ie = ix * PerX + Two_ie;
+						float* pEX = pEX_StartForX + ixPerX_p_Two_ie;
+						float* pEZ = pEZ_StartForX + ixPerX_p_Two_ie;
 
-					if(pEX0 != 0)
-					{
-						buf = *rev_pEX; *(rev_pEX++) = *pEX; *(pEX++) = buf;
-						buf = *rev_pEX; *rev_pEX = *pEX; *pEX = buf;
-					}
-					if(pEZ0 != 0)
-					{
-						buf = *rev_pEZ; *(rev_pEZ++) = *pEZ; *(pEZ++) = buf;
-						buf = *rev_pEZ; *rev_pEZ = *pEZ; *pEZ = buf;
+						//long rev_ixPerX_p_Two_ie = (nx_mi_1 - ix)*PerX + Two_ie;
+						long long rev_ixPerX_p_Two_ie = (nx_mi_1 - ix) * PerX + Two_ie;
+						float* rev_pEX = pEX_StartForX + rev_ixPerX_p_Two_ie;
+						float* rev_pEZ = pEZ_StartForX + rev_ixPerX_p_Two_ie;
+
+						if (pEX0 != 0)
+						{
+							buf = *rev_pEX; *(rev_pEX++) = *pEX; *(pEX++) = buf;
+							buf = *rev_pEX; *rev_pEX = *pEX; *pEX = buf;
+						}
+						if (pEZ0 != 0)
+						{
+							buf = *rev_pEZ; *(rev_pEZ++) = *pEZ; *(pEZ++) = buf;
+							buf = *rev_pEZ; *rev_pEZ = *pEZ; *pEZ = buf;
+						}
 					}
 				}
 			}
-			if(((nz >> 1) << 1) != nz)
+		}
+		else if ((sx > 0) && (sz < 0))
+		{
+			//long nz_mi_1 = nz - 1;
+			//for(long ie=0; ie<ne; ie++)
+			long long nz_mi_1 = nz - 1; //OC26042019
+			for (long long ie = 0; ie < ne; ie++)
 			{
-				//long izPerZ = ((nz >> 1) + 1)*PerZ;
-				long long izPerZ = ((nz >> 1) + 1)*PerZ;
-				float *pEX_StartForX = pEX0 + izPerZ;
-				float *pEZ_StartForX = pEZ0 + izPerZ;
-
-				for(long ix=0; ix<(nx >> 1); ix++)
+				//long Two_ie = ie << 1;
+				long long Two_ie = ie << 1;
+				for (long long iz = 0; iz < (nz >> 1); iz++)
+					//for(long iz=0; iz<(nz >> 1); iz++)
 				{
-					//long ixPerX_p_Two_ie = ix*PerX + Two_ie;
-					long long ixPerX_p_Two_ie = ix*PerX + Two_ie;
-					float *pEX = pEX_StartForX + ixPerX_p_Two_ie;
-					float *pEZ = pEZ_StartForX + ixPerX_p_Two_ie;
+					//long izPerZ = iz*PerZ;
+					long long izPerZ = iz * PerZ;
+					float* pEX_StartForX = pEX0 + izPerZ;
+					float* pEZ_StartForX = pEZ0 + izPerZ;
 
-					//long rev_ixPerX_p_Two_ie = (nx_mi_1 - ix)*PerX + Two_ie;
-					long long rev_ixPerX_p_Two_ie = (nx_mi_1 - ix)*PerX + Two_ie;
-					float *rev_pEX = pEX_StartForX + rev_ixPerX_p_Two_ie;
-					float *rev_pEZ = pEZ_StartForX + rev_ixPerX_p_Two_ie;
+					//long rev_izPerZ = (nz_mi_1 - iz)*PerZ;
+					long long rev_izPerZ = (nz_mi_1 - iz) * PerZ;
+					float* rev_pEX_StartForX = pEX0 + rev_izPerZ;
+					float* rev_pEZ_StartForX = pEZ0 + rev_izPerZ;
 
-					if(pEX0 != 0)
+					for (long long ix = 0; ix < nx; ix++)
+						//for(long ix=0; ix<nx; ix++)
 					{
-						buf = *rev_pEX; *(rev_pEX++) = *pEX; *(pEX++) = buf;
-						buf = *rev_pEX; *rev_pEX = *pEX; *pEX = buf;
+						//long ixPerX_p_Two_ie = ix*PerX + Two_ie;
+						long long ixPerX_p_Two_ie = ix * PerX + Two_ie;
+						float* pEX = pEX_StartForX + ixPerX_p_Two_ie;
+						float* pEZ = pEZ_StartForX + ixPerX_p_Two_ie;
+
+						float* rev_pEX = rev_pEX_StartForX + ixPerX_p_Two_ie;
+						float* rev_pEZ = rev_pEZ_StartForX + ixPerX_p_Two_ie;
+
+						if (pEX0 != 0)
+						{
+							buf = *rev_pEX; *(rev_pEX++) = *pEX; *(pEX++) = buf;
+							buf = *rev_pEX; *rev_pEX = *pEX; *pEX = buf;
+						}
+						if (pEZ0 != 0)
+						{
+							buf = *rev_pEZ; *(rev_pEZ++) = *pEZ; *(pEZ++) = buf;
+							buf = *rev_pEZ; *rev_pEZ = *pEZ; *pEZ = buf;
+						}
 					}
-					if(pEZ0 != 0)
+				}
+			}
+		}
+		else
+		{
+			//long nx_mi_1 = nx - 1;
+			//long nz_mi_1 = nz - 1;
+			long long nx_mi_1 = nx - 1; //OC26042019
+			long long nz_mi_1 = nz - 1;
+			for (long long ie = 0; ie < ne; ie++) //OC26042019
+				//for(long ie=0; ie<ne; ie++)
+			{
+				//long Two_ie = ie << 1;
+				//for(long iz=0; iz<(nz >> 1); iz++)
+				long long Two_ie = ie << 1; //OC26042019
+				for (long long iz = 0; iz < (nz >> 1); iz++)
+				{
+					//long izPerZ = iz*PerZ;
+					long long izPerZ = iz * PerZ;
+					float* pEX_StartForX = pEX0 + izPerZ;
+					float* pEZ_StartForX = pEZ0 + izPerZ;
+
+					//long rev_izPerZ = (nz_mi_1 - iz)*PerZ;
+					long long rev_izPerZ = (nz_mi_1 - iz) * PerZ;
+					float* rev_pEX_StartForX = pEX0 + rev_izPerZ;
+					float* rev_pEZ_StartForX = pEZ0 + rev_izPerZ;
+
+					for (long long ix = 0; ix < nx; ix++) //OC26042019
+						//for(long ix=0; ix<nx; ix++)
 					{
-						buf = *rev_pEZ; *(rev_pEZ++) = *pEZ; *(pEZ++) = buf;
-						buf = *rev_pEZ; *rev_pEZ = *pEZ; *pEZ = buf;
+						//long ixPerX_p_Two_ie = ix*PerX + Two_ie;
+						long long ixPerX_p_Two_ie = ix * PerX + Two_ie;
+						float* pEX = pEX_StartForX + ixPerX_p_Two_ie;
+						float* pEZ = pEZ_StartForX + ixPerX_p_Two_ie;
+
+						//long rev_ixPerX_p_Two_ie = (nx_mi_1 - ix)*PerX + Two_ie;
+						long long rev_ixPerX_p_Two_ie = (nx_mi_1 - ix) * PerX + Two_ie;
+						float* rev_pEX = rev_pEX_StartForX + rev_ixPerX_p_Two_ie;
+						float* rev_pEZ = rev_pEZ_StartForX + rev_ixPerX_p_Two_ie;
+
+						if (pEX0 != 0)
+						{
+							buf = *rev_pEX; *(rev_pEX++) = *pEX; *(pEX++) = buf;
+							buf = *rev_pEX; *rev_pEX = *pEX; *pEX = buf;
+						}
+						if (pEZ0 != 0)
+						{
+							buf = *rev_pEZ; *(rev_pEZ++) = *pEZ; *(pEZ++) = buf;
+							buf = *rev_pEZ; *rev_pEZ = *pEZ; *pEZ = buf;
+						}
+					}
+				}
+				if (((nz >> 1) << 1) != nz)
+				{
+					//long izPerZ = ((nz >> 1) + 1)*PerZ;
+					long long izPerZ = ((nz >> 1) + 1) * PerZ;
+					float* pEX_StartForX = pEX0 + izPerZ;
+					float* pEZ_StartForX = pEZ0 + izPerZ;
+
+					for (long ix = 0; ix < (nx >> 1); ix++)
+					{
+						//long ixPerX_p_Two_ie = ix*PerX + Two_ie;
+						long long ixPerX_p_Two_ie = ix * PerX + Two_ie;
+						float* pEX = pEX_StartForX + ixPerX_p_Two_ie;
+						float* pEZ = pEZ_StartForX + ixPerX_p_Two_ie;
+
+						//long rev_ixPerX_p_Two_ie = (nx_mi_1 - ix)*PerX + Two_ie;
+						long long rev_ixPerX_p_Two_ie = (nx_mi_1 - ix) * PerX + Two_ie;
+						float* rev_pEX = pEX_StartForX + rev_ixPerX_p_Two_ie;
+						float* rev_pEZ = pEZ_StartForX + rev_ixPerX_p_Two_ie;
+
+						if (pEX0 != 0)
+						{
+							buf = *rev_pEX; *(rev_pEX++) = *pEX; *(pEX++) = buf;
+							buf = *rev_pEX; *rev_pEX = *pEX; *pEX = buf;
+						}
+						if (pEZ0 != 0)
+						{
+							buf = *rev_pEZ; *(rev_pEZ++) = *pEZ; *(pEZ++) = buf;
+							buf = *rev_pEZ; *rev_pEZ = *pEZ; *pEZ = buf;
+						}
 					}
 				}
 			}
@@ -3071,18 +3084,18 @@ int srTSRWRadStructAccessData::SetupWfrEdgeCorrData(float* pDataEx, float* pData
 			if(dzSt != 0.)
 			{
 				long jzSt2 = (izWfrMinLower + 1) << 1;
-				DataPtrsForWfrEdgeCorr.fxStzSt[0] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEx + jzSt2);
-				DataPtrsForWfrEdgeCorr.fxStzSt[1] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEx + jzSt2 + 1);
-				DataPtrsForWfrEdgeCorr.fxStzSt[2] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEz + jzSt2);
-				DataPtrsForWfrEdgeCorr.fxStzSt[3] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEz + jzSt2 + 1);
+				DataPtrsForWfrEdgeCorr.fxStzSt[0] = (jzSt2);
+				DataPtrsForWfrEdgeCorr.fxStzSt[1] = (jzSt2 + 1);
+				DataPtrsForWfrEdgeCorr.fxStzSt[2] = (jzSt2);
+				DataPtrsForWfrEdgeCorr.fxStzSt[3] = (jzSt2 + 1);
 			}
 			if(dzFi != 0.)
 			{
 				long jzFi2 = izWfrMaxLower << 1;
-				DataPtrsForWfrEdgeCorr.fxStzFi[0] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEx + jzFi2);
-				DataPtrsForWfrEdgeCorr.fxStzFi[1] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEx + jzFi2 + 1);
-				DataPtrsForWfrEdgeCorr.fxStzFi[2] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEz + jzFi2);
-				DataPtrsForWfrEdgeCorr.fxStzFi[3] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEz + jzFi2 + 1);
+				DataPtrsForWfrEdgeCorr.fxStzFi[0] = (jzFi2);
+				DataPtrsForWfrEdgeCorr.fxStzFi[1] = (jzFi2 + 1);
+				DataPtrsForWfrEdgeCorr.fxStzFi[2] = (jzFi2);
+				DataPtrsForWfrEdgeCorr.fxStzFi[3] = (jzFi2 + 1);
 			}
 
 			FFT1DInfo.pInData = DataPtrsForWfrEdgeCorr.FFTArrXStEx;
@@ -3110,18 +3123,18 @@ int srTSRWRadStructAccessData::SetupWfrEdgeCorrData(float* pDataEx, float* pData
 			if(dzSt != 0.)
 			{
 				long jzSt2 = (izWfrMinLower + 1) << 1;
-				DataPtrsForWfrEdgeCorr.fxFizSt[0] = *(DataPtrsForWfrEdgeCorr.FFTArrXFiEx + jzSt2);
-				DataPtrsForWfrEdgeCorr.fxFizSt[1] = *(DataPtrsForWfrEdgeCorr.FFTArrXFiEx + jzSt2 + 1);
-				DataPtrsForWfrEdgeCorr.fxFizSt[2] = *(DataPtrsForWfrEdgeCorr.FFTArrXFiEz + jzSt2);
-				DataPtrsForWfrEdgeCorr.fxFizSt[3] = *(DataPtrsForWfrEdgeCorr.FFTArrXFiEz + jzSt2 + 1);
+				DataPtrsForWfrEdgeCorr.fxFizSt[0] = (jzSt2);
+				DataPtrsForWfrEdgeCorr.fxFizSt[1] = (jzSt2 + 1);
+				DataPtrsForWfrEdgeCorr.fxFizSt[2] = (jzSt2);
+				DataPtrsForWfrEdgeCorr.fxFizSt[3] = (jzSt2 + 1);
 			}
 			if(dzFi != 0.)
 			{
 				long jzFi2 = izWfrMaxLower << 1;
-				DataPtrsForWfrEdgeCorr.fxFizFi[0] = *(DataPtrsForWfrEdgeCorr.FFTArrXFiEx + jzFi2);
-				DataPtrsForWfrEdgeCorr.fxFizFi[1] = *(DataPtrsForWfrEdgeCorr.FFTArrXFiEx + jzFi2 + 1);
-				DataPtrsForWfrEdgeCorr.fxFizFi[2] = *(DataPtrsForWfrEdgeCorr.FFTArrXFiEz + jzFi2);
-				DataPtrsForWfrEdgeCorr.fxFizFi[3] = *(DataPtrsForWfrEdgeCorr.FFTArrXFiEz + jzFi2 + 1);
+				DataPtrsForWfrEdgeCorr.fxFizFi[0] = (jzFi2);
+				DataPtrsForWfrEdgeCorr.fxFizFi[1] = (jzFi2 + 1);
+				DataPtrsForWfrEdgeCorr.fxFizFi[2] = (jzFi2);
+				DataPtrsForWfrEdgeCorr.fxFizFi[3] = (jzFi2 + 1);
 			}
 
 			FFT1DInfo.pInData = DataPtrsForWfrEdgeCorr.FFTArrXFiEx;
@@ -3192,10 +3205,27 @@ void srTSRWRadStructAccessData::MakeWfrEdgeCorrection(float* pDataEx, float* pDa
 	double dxSt_dzFi = DataPtrs.dxSt*DataPtrs.dzFi;
 	double dxFi_dzSt = DataPtrs.dxFi*DataPtrs.dzSt;
 	double dxFi_dzFi = DataPtrs.dxFi*DataPtrs.dzFi;
-	float fSSExRe = DataPtrs.fxStzSt[0], fSSExIm = DataPtrs.fxStzSt[1], fSSEzRe = DataPtrs.fxStzSt[2], fSSEzIm = DataPtrs.fxStzSt[3];
-	float fFSExRe = DataPtrs.fxFizSt[0], fFSExIm = DataPtrs.fxFizSt[1], fFSEzRe = DataPtrs.fxFizSt[2], fFSEzIm = DataPtrs.fxFizSt[3];
-	float fSFExRe = DataPtrs.fxStzFi[0], fSFExIm = DataPtrs.fxStzFi[1], fSFEzRe = DataPtrs.fxStzFi[2], fSFEzIm = DataPtrs.fxStzFi[3];
-	float fFFExRe = DataPtrs.fxFizFi[0], fFFExIm = DataPtrs.fxFizFi[1], fFFEzRe = DataPtrs.fxFizFi[2], fFFEzIm = DataPtrs.fxFizFi[3];
+#define DATAPTR_CHECK(x, a) ((x >= 0) ? a[x] : 0.)
+	float fSSExRe = DATAPTR_CHECK(DataPtrs.fxStzSt[0], DataPtrs.FFTArrXStEx);
+	float fSSExIm = DATAPTR_CHECK(DataPtrs.fxStzSt[1], DataPtrs.FFTArrXStEx);
+	float fSSEzRe = DATAPTR_CHECK(DataPtrs.fxStzSt[2], DataPtrs.FFTArrXStEz);
+	float fSSEzIm = DATAPTR_CHECK(DataPtrs.fxStzSt[3], DataPtrs.FFTArrXStEz);
+	
+	float fFSExRe = DATAPTR_CHECK(DataPtrs.fxFizSt[0], DataPtrs.FFTArrXFiEx);
+	float fFSExIm = DATAPTR_CHECK(DataPtrs.fxFizSt[1], DataPtrs.FFTArrXFiEx);
+	float fFSEzRe = DATAPTR_CHECK(DataPtrs.fxFizSt[2], DataPtrs.FFTArrXFiEz);
+	float fFSEzIm = DATAPTR_CHECK(DataPtrs.fxFizSt[3], DataPtrs.FFTArrXFiEz);
+	
+	float fSFExRe = DATAPTR_CHECK(DataPtrs.fxStzFi[0], DataPtrs.FFTArrXStEx);
+	float fSFExIm = DATAPTR_CHECK(DataPtrs.fxStzFi[1], DataPtrs.FFTArrXStEx);
+	float fSFEzRe = DATAPTR_CHECK(DataPtrs.fxStzFi[2], DataPtrs.FFTArrXStEz);
+	float fSFEzIm = DATAPTR_CHECK(DataPtrs.fxStzFi[3], DataPtrs.FFTArrXStEz);
+	
+	float fFFExRe = DATAPTR_CHECK(DataPtrs.fxFizFi[0], DataPtrs.FFTArrXFiEx);
+	float fFFExIm = DATAPTR_CHECK(DataPtrs.fxFizFi[1], DataPtrs.FFTArrXFiEx);
+	float fFFEzRe = DATAPTR_CHECK(DataPtrs.fxFizFi[2], DataPtrs.FFTArrXFiEz);
+	float fFFEzIm = DATAPTR_CHECK(DataPtrs.fxFizFi[3], DataPtrs.FFTArrXFiEz);
+
 
 	float bRe, bIm, cRe, cIm;
 	for(long iz=0; iz<nz; iz++)
