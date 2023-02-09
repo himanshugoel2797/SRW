@@ -84,7 +84,7 @@ public:
 	//	if(m_arIndEforCSD != 0) delete[] m_arIndEforCSD;
 	//}
 
-	void ExtractRadiation(int PolarizCompon, int Int_or_Phase, int SectID, int TransvPres, double e, double x, double z, char* pData, double* pMeth=0, srTTrjDat* pTrjDat=0, gpuUsageArg_t* pGpuUsage=0) //OC23022020
+	void ExtractRadiation(int PolarizCompon, int Int_or_Phase, int SectID, int TransvPres, double e, double x, double z, char* pData, double* pMeth=0, srTTrjDat* pTrjDat=0, gpuUsageArg* pGpuUsage=0) //OC23022020
 	//void ExtractRadiation(int PolarizCompon, int Int_or_Phase, int SectID, int TransvPres, double e, double x, double z, char* pData, double* pMeth=0) //OC16122019
 	//void ExtractRadiation(int PolarizCompon, int Int_or_Phase, int SectID, int TransvPres, double e, double x, double z, char* pData, int* pMeth=0) //OC13122019
 	//void ExtractRadiation(int PolarizCompon, int Int_or_Phase, int SectID, int TransvPres, double e, double x, double z, char* pData);
@@ -178,7 +178,7 @@ public:
 		return 0;
 	}
 
-	int ExtractSingleElecIntensity(srTRadExtract& RadExtract, gpuUsageArg_t *pGpuUsage=0)
+	int ExtractSingleElecIntensity(srTRadExtract& RadExtract, gpuUsageArg *pGpuUsage=0)
 	{
 		if(RadExtract.PlotType == 0) return ExtractSingleElecIntensity1DvsE(RadExtract);
 		else if(RadExtract.PlotType == 1) return ExtractSingleElecIntensity1DvsX(RadExtract);
@@ -232,7 +232,7 @@ public:
 	int ExtractSingleElecIntensity1DvsE(srTRadExtract&);
 	int ExtractSingleElecIntensity1DvsX(srTRadExtract&);
 	int ExtractSingleElecIntensity1DvsZ(srTRadExtract&);
-	int ExtractSingleElecIntensity2DvsXZ(srTRadExtract&, gpuUsageArg_t* pGpuUsage=0);
+	int ExtractSingleElecIntensity2DvsXZ(srTRadExtract&, gpuUsageArg* pGpuUsage=0);
 	int ExtractSingleElecIntensity2DvsEX(srTRadExtract&);
 	int ExtractSingleElecIntensity2DvsEZ(srTRadExtract&);
 	int ExtractSingleElecIntensity3D(srTRadExtract&);
@@ -242,7 +242,7 @@ public:
 	int ExtractSingleElecMutualIntensityVsXZ(srTRadExtract&);
 
 #ifdef _OFFLOAD_GPU
-	int ExtractSingleElecIntensity2DvsXZ_GPU(srTRadExtract& RadExtract, double* arAuxInt, long long ie0, long long ie1, double InvStepRelArg, gpuUsageArg_t *pGpuUsage);
+	int ExtractSingleElecIntensity2DvsXZ_GPU(srTRadExtract& RadExtract, double* arAuxInt, long long ie0, long long ie1, double InvStepRelArg, gpuUsageArg *pGpuUsage);
 #endif
 
 	//int ComputeMultiElecMutualIntensityVsXZ(srTRadExtract&, srTTrjDat* pTrjDat=0); //23022020

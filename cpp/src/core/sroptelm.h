@@ -17,7 +17,7 @@
 #include <stdlib.h> //required by some (buggy?) version of GCC
 #include <cstdlib> //required?
 
-#include "utidev.h"
+#include "auxgpu.h"
 #include "gmtrans.h"
 #include "gmvect.h"
 
@@ -45,7 +45,7 @@
 #endif
 
 #ifdef _OFFLOAD_GPU
-#include "sroptelmgpu.h"
+#include "sroptelm_gpu.h"
 #endif
 
 //*************************************************************************
@@ -128,11 +128,12 @@ public:
 		return 0; //(1 << 0) = GPU, (1 << 1) = Wavefront Batching
 	}
 
-	virtual int PropagateRadiation(srTSRWRadStructAccessData*, srTParPrecWfrPropag&, srTRadResizeVect&, gpuUsageArg_t* =0)
+	virtual int PropagateRadiation(srTSRWRadStructAccessData*, srTParPrecWfrPropag&, srTRadResizeVect&, gpuUsageArg* =0)
 	{
-#if _DEBUG
-		printf("Using empty PropagateRadiation function, this is likely a bug!\r\n");
-#endif
+//HG03092022 Debugging instrumentation useful when testing GPU code
+//#if _DEBUG
+//		printf("Using empty PropagateRadiation function!\r\n");
+//#endif
 		return 0;
 	}
 
@@ -143,29 +144,38 @@ public:
 
 	//virtual int PropagateRadiationSimple(srTSRWRadStructAccessData*, void* pBuf=0) { return 0;} //OC06092019
 	//OC01102019 (restored)
-	virtual int PropagateRadiationSimple(srTSRWRadStructAccessData*, gpuUsageArg_t* =0) 
+	virtual int PropagateRadiationSimple(srTSRWRadStructAccessData*, gpuUsageArg* =0) 
 	{
-#if _DEBUG
-		printf("Using empty PropagateRadiationSimple function, this is likely a bug!\r\n");
-#endif
+//HG03092022 Debugging instrumentation useful when testing GPU code
+//#if _DEBUG
+//		printf("Using empty PropagateRadiationSimple function!\r\n");
+//#endif
 		return 0;
 	}
 	virtual int PropagateRadiationSimple1D(srTRadSect1D*) { return 0;}
 	
 	//virtual int PropagateRadiationSingleE_Meth_0(srTSRWRadStructAccessData* pRadAccessData, srTSRWRadStructAccessData* pPrevRadData, void* pBuf=0) { return 0;} //OC06092019
 	//OC01102019 (restored)
-	virtual int PropagateRadiationSingleE_Meth_0(srTSRWRadStructAccessData* pRadAccessData, srTSRWRadStructAccessData* pPrevRadData, gpuUsageArg_t* pGpuUsage=0)
+	virtual int PropagateRadiationSingleE_Meth_0(srTSRWRadStructAccessData* pRadAccessData, srTSRWRadStructAccessData* pPrevRadData, gpuUsageArg* pGpuUsage=0)
 	{
-#if _DEBUG
-		printf("Using empty PropagateRadiationSingleE_Meth_0 function, this is likely a bug!\r\n");
-#endif
+//HG03092022 Debugging instrumentation useful when testing GPU code
+//#if _DEBUG
+//		printf("Using empty PropagateRadiationSingleE_Meth_0 function!\r\n");
+//#endif
 		return 0;
 	}
 
 	virtual int RangeShouldBeAdjustedAtPropag() { return 1;}
 	virtual int ResolutionShouldBeAdjustedAtPropag() { return 1;}
 
-	virtual int RadPointModifierParallel(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars=0, long pBufVarsSz=0, gpuUsageArg_t* pGpuUsage=0) { printf("RadPointModifierParallel Not Implemented\n"); return -1;} //HG03092022
+	virtual int RadPointModifierParallel(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars=0, long pBufVarsSz=0, gpuUsageArg* pGpuUsage=0) 
+	{ 
+//HG03092022 Debugging instrumentation useful when testing GPU code
+//#if _DEBUG
+//		printf("RadPointModifierParallel Not Implemented\n"); 
+//#endif
+		return -1;
+	}
 	virtual void RadPointModifier(srTEXZ&, srTEFieldPtrs&, void* pBufVars=0) {} //OC29082019
 	//virtual void RadPointModifier(srTEXZ&, srTEFieldPtrs&) {}
 	virtual void RadPointModifier1D(srTEXZ&, srTEFieldPtrs&, void* pBufVars=0) {}//OC06092019
@@ -210,7 +220,7 @@ public:
 
 	//virtual int PropagateRadiationMeth_0(srTSRWRadStructAccessData* pRadAccessData, void* pBuf=0); //OC06092019
 	//OC01102019 (restored)
-	virtual int PropagateRadiationMeth_0(srTSRWRadStructAccessData* pRadAccessData, gpuUsageArg_t* pGpuUsage=0); //moved from derived classes: loops over E, calls derived PropagateRadiationSingleE_Meth_0
+	virtual int PropagateRadiationMeth_0(srTSRWRadStructAccessData* pRadAccessData, gpuUsageArg* pGpuUsage=0); //moved from derived classes: loops over E, calls derived PropagateRadiationSingleE_Meth_0
 
 	void FindWidestWfrMeshParam(vector<srTSRWRadStructAccessData>& vRadSlices, srTSRWRadStructAccessData* pRad, bool keepConstNumPoints);
 	int ReInterpolateWfrDataOnNewTransvMesh(vector<srTSRWRadStructAccessData>& vRadSlices, srTSRWRadStructAccessData* pAuxRadSingleE, srTSRWRadStructAccessData* pRadRes);
@@ -264,7 +274,7 @@ public:
 
 	int FillOutRadFromInRad(srTSRWRadStructAccessData*, srTSRWRadStructAccessData*);
 
-	int TraverseRadZXE(srTSRWRadStructAccessData*, void* pBufVars=0, long pBufVarSz=0, gpuUsageArg_t* pGpuUsage=0); //OC29082019
+	int TraverseRadZXE(srTSRWRadStructAccessData*, void* pBufVars=0, long pBufVarSz=0, gpuUsageArg* pGpuUsage=0); //OC29082019
 	//int TraverseRadZXE(srTSRWRadStructAccessData*);
 	int TraverseRad1D(srTRadSect1D*, void* pBufVars=0); //OC29082019
 	//int TraverseRad1D(srTRadSect1D*);
@@ -286,24 +296,24 @@ public:
 	int RemoveSliceConstE_FromGenRadStruct(srTSRWRadStructAccessData*, long);
 
 	//int SetRadRepres(srTSRWRadStructAccessData*, char);
-	int SetRadRepres(srTSRWRadStructAccessData*, char, double* ar_xStartInSlicesE=0, double* ar_zStartInSlicesE=0, gpuUsageArg_t* =0);
+	int SetRadRepres(srTSRWRadStructAccessData*, char, double* ar_xStartInSlicesE=0, double* ar_zStartInSlicesE=0, gpuUsageArg* =0);
 	int SetRadRepres1D(srTRadSect1D*, char);
 
-	int SetupWfrEdgeCorrData(srTSRWRadStructAccessData*, float*, float*, srTDataPtrsForWfrEdgeCorr&, gpuUsageArg_t* =0);
+	int SetupWfrEdgeCorrData(srTSRWRadStructAccessData*, float*, float*, srTDataPtrsForWfrEdgeCorr&, gpuUsageArg* =0);
 	//inline void SetupExpCorrArray(float*, long, double, double, double);
 	inline void SetupExpCorrArray(float*, long long, double, double, double);
-	void MakeWfrEdgeCorrection(srTSRWRadStructAccessData*, float*, float*, srTDataPtrsForWfrEdgeCorr&, gpuUsageArg_t* =0);
+	void MakeWfrEdgeCorrection(srTSRWRadStructAccessData*, float*, float*, srTDataPtrsForWfrEdgeCorr&, gpuUsageArg* =0);
 
 	int SetupWfrEdgeCorrData1D(srTRadSect1D*, float*, float*, srTDataPtrsForWfrEdgeCorr1D&);
 	void MakeWfrEdgeCorrection1D(srTRadSect1D*, float*, float*, srTDataPtrsForWfrEdgeCorr1D&);
 
 	int ComputeRadMoments(srTSRWRadStructAccessData*);
 
-	int RadResizeGen(srTSRWRadStructAccessData&, srTRadResize&, gpuUsageArg_t* =0);
+	int RadResizeGen(srTSRWRadStructAccessData&, srTRadResize&, gpuUsageArg* =0);
 	int RadResizeGenE(srTSRWRadStructAccessData&, srTRadResize&);
-	int RadResizeCore(srTSRWRadStructAccessData&, srTSRWRadStructAccessData&, srTRadResize&, char =0, gpuUsageArg_t* =0);
+	int RadResizeCore(srTSRWRadStructAccessData&, srTSRWRadStructAccessData&, srTRadResize&, char =0, gpuUsageArg* =0);
 #ifdef _OFFLOAD_GPU
-	int RadResizeCore_GPU(srTSRWRadStructAccessData&, srTSRWRadStructAccessData&, gpuUsageArg_t*, char=0);
+	int RadResizeCore_GPU(srTSRWRadStructAccessData&, srTSRWRadStructAccessData&, gpuUsageArg*, char=0);
 #endif
 	int RadResizeCoreE(srTSRWRadStructAccessData&, srTSRWRadStructAccessData&, srTRadResize&, char =0);
 	int RadResizeCore_OnlyLargerRange(srTSRWRadStructAccessData& OldRadAccessData, srTSRWRadStructAccessData& NewRadAccessData, srTRadResize& RadResizeStruct, char PolComp);
@@ -318,7 +328,7 @@ public:
 	//char WaveFrontTermCanBeTreated(srTSRWRadStructAccessData&, bool checkBenefit=false); //OC05012017 (changed to checkBenefit=false to resolve problem of resizing in near field at strong under-sampling)
 	char WaveFrontTermCanBeTreated(srTSRWRadStructAccessData&, bool checkBenefit=false); //OC29032017 (changed again to checkBenefit=false to resolve problem of resizing of wiggler radiation at strong under-sampling, the ELETTRA SCW case)
 
-	void TreatStronglyOscillatingTerm(srTSRWRadStructAccessData&, char, char =0, int ieOnly =-1, gpuUsageArg_t* =0);
+	void TreatStronglyOscillatingTerm(srTSRWRadStructAccessData&, char, char =0, int ieOnly =-1, gpuUsageArg* =0);
 	//void TreatStronglyOscillatingTermIrregMesh(srTSRWRadStructAccessData&, float*, float, float, float, float, char, char =0, int =-1);
 	void TreatStronglyOscillatingTermIrregMesh(srTSRWRadStructAccessData&, double*, double, double, double, double, char, char =0, int =-1); //OC260114
 	//void TreatStronglyOscillatingTermIrregMesh(srTSRWRadStructAccessData&, double*, double, double, double, double, char, char =0, int =-1, double =1, double =1); //OC220214

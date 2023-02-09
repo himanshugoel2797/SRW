@@ -33,7 +33,7 @@ public:
 	srTAperture () {}
 
 	//int PropagateRadiation(srTSRWRadStructAccessData* pRadAccessData, int MethNo, srTRadResizeVect& ResBeforeAndAfterVect)
-	int PropagateRadiation(srTSRWRadStructAccessData* pRadAccessData, srTParPrecWfrPropag& ParPrecWfrPropag, srTRadResizeVect& ResBeforeAndAfterVect, gpuUsageArg_t* pGpuUsage)
+	int PropagateRadiation(srTSRWRadStructAccessData* pRadAccessData, srTParPrecWfrPropag& ParPrecWfrPropag, srTRadResizeVect& ResBeforeAndAfterVect, gpuUsageArg* pGpuUsage)
 	{
 		char &MethNo = ParPrecWfrPropag.MethNo;
 
@@ -47,7 +47,7 @@ public:
 	//int PropagateRadiationMeth_0(srTSRWRadStructAccessData* pRadAccessData)
 	//int PropagateRadiationSingleE_Meth_0(srTSRWRadStructAccessData* pRadAccessData, srTSRWRadStructAccessData* pPrevRadAccessData, void* pBuf = 0) //OC06092019
 	//OC01102019 (restored)
-	int PropagateRadiationSingleE_Meth_0(srTSRWRadStructAccessData* pRadAccessData, srTSRWRadStructAccessData* pPrevRadAccessData, gpuUsageArg_t* pGpuUsage)
+	int PropagateRadiationSingleE_Meth_0(srTSRWRadStructAccessData* pRadAccessData, srTSRWRadStructAccessData* pPrevRadAccessData, gpuUsageArg* pGpuUsage)
 	{
 		int result;
 		if(pRadAccessData->Pres != 0) if(result = SetRadRepres(pRadAccessData, 0)) return result;
@@ -76,7 +76,7 @@ public:
 
 	//int PropagateRadiationSimple(srTSRWRadStructAccessData* pRadAccessData, void* pBuf=0) //OC06092019
 	//OC01102019 (restored)
-	int PropagateRadiationSimple(srTSRWRadStructAccessData* pRadAccessData, gpuUsageArg_t* pGpuUsage)
+	int PropagateRadiationSimple(srTSRWRadStructAccessData* pRadAccessData, gpuUsageArg* pGpuUsage)
 	{
 		int result;
 		if(pRadAccessData->Pres != 0) if(result = SetRadRepres(pRadAccessData, 0)) return result;

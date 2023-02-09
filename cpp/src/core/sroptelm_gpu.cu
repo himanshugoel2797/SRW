@@ -1,4 +1,16 @@
-//#define _OFFLOAD_GPU
+/************************************************************************//**
+ * File: sroptelm_gpu.cu
+ * Description: Optical element (general CUDA functions)
+ * Project: Synchrotron Radiation Workshop
+ * First release: 2023
+ *
+ * Copyright (C) Brookhaven National Laboratory
+ * All Rights Reserved
+ *
+ * @author H.Goel
+ * @version 1.0
+ ***************************************************************************/
+
 #ifdef _OFFLOAD_GPU
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
@@ -7,7 +19,7 @@
 #include <iostream>
 #include <chrono>
 #include "sroptelm.h"
-#include "sroptelmgpu.h"
+#include "sroptelm_gpu.h"
 
 
 __global__ void TreatStronglyOscillatingTerm_Kernel(srTSRWRadStructAccessData RadAccessData, bool TreatPolCompX, bool TreatPolCompZ, int ieStart, double ConstRx, double ConstRz) {
@@ -79,17 +91,17 @@ __global__ void TreatStronglyOscillatingTerm_Kernel(srTSRWRadStructAccessData Ra
     }
 }
 
-void TreatStronglyOscillatingTerm_GPU(srTSRWRadStructAccessData& RadAccessData, bool TreatPolCompX, bool TreatPolCompZ, int ieStart, int ieBefEnd, double ConstRx, double ConstRz, gpuUsageArg_t* pGpuUsage)
+void TreatStronglyOscillatingTerm_GPU(srTSRWRadStructAccessData& RadAccessData, bool TreatPolCompX, bool TreatPolCompZ, int ieStart, int ieBefEnd, double ConstRx, double ConstRz, gpuUsageArg* pGpuUsage)
 {
 	if (RadAccessData.pBaseRadX != NULL)
 	{
-		RadAccessData.pBaseRadX = (float*)UtiDev::ToDevice(pGpuUsage, RadAccessData.pBaseRadX, 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz*RadAccessData.nwfr*sizeof(float));
-		UtiDev::EnsureDeviceMemoryReady(pGpuUsage, RadAccessData.pBaseRadX);
+		RadAccessData.pBaseRadX = (float*)AuxGpu::ToDevice(pGpuUsage, RadAccessData.pBaseRadX, 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz*RadAccessData.nwfr*sizeof(float));
+		AuxGpu::EnsureDeviceMemoryReady(pGpuUsage, RadAccessData.pBaseRadX);
 	}
 	if (RadAccessData.pBaseRadZ != NULL)
 	{
-		RadAccessData.pBaseRadZ = (float*)UtiDev::ToDevice(pGpuUsage, RadAccessData.pBaseRadZ, 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz*RadAccessData.nwfr*sizeof(float));
-		UtiDev::EnsureDeviceMemoryReady(pGpuUsage, RadAccessData.pBaseRadZ);
+		RadAccessData.pBaseRadZ = (float*)AuxGpu::ToDevice(pGpuUsage, RadAccessData.pBaseRadZ, 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz*RadAccessData.nwfr*sizeof(float));
+		AuxGpu::EnsureDeviceMemoryReady(pGpuUsage, RadAccessData.pBaseRadZ);
 	}
 
     const int bs = 256;
@@ -97,21 +109,21 @@ void TreatStronglyOscillatingTerm_GPU(srTSRWRadStructAccessData& RadAccessData, 
     dim3 threads(bs, 1);
     TreatStronglyOscillatingTerm_Kernel<< <blocks, threads >> > (RadAccessData, TreatPolCompX, TreatPolCompZ, ieStart, ConstRx, ConstRz);
 	
-	UtiDev::MarkUpdated(pGpuUsage, RadAccessData.pBaseRadX, true, false);
-	UtiDev::MarkUpdated(pGpuUsage, RadAccessData.pBaseRadZ, true, false);
+	AuxGpu::MarkUpdated(pGpuUsage, RadAccessData.pBaseRadX, true, false);
+	AuxGpu::MarkUpdated(pGpuUsage, RadAccessData.pBaseRadZ, true, false);
 
 #ifndef _DEBUG
 	if (RadAccessData.pBaseRadX != NULL)
-		RadAccessData.pBaseRadX = (float*)UtiDev::GetHostPtr(pGpuUsage, RadAccessData.pBaseRadX);
+		RadAccessData.pBaseRadX = (float*)AuxGpu::GetHostPtr(pGpuUsage, RadAccessData.pBaseRadX);
 	if (RadAccessData.pBaseRadZ != NULL)
-		RadAccessData.pBaseRadZ = (float*)UtiDev::GetHostPtr(pGpuUsage, RadAccessData.pBaseRadZ);
+		RadAccessData.pBaseRadZ = (float*)AuxGpu::GetHostPtr(pGpuUsage, RadAccessData.pBaseRadZ);
 #endif
 
 #ifdef _DEBUG
 	if (RadAccessData.pBaseRadX != NULL)
-		RadAccessData.pBaseRadX = (float*)UtiDev::ToHostAndFree(pGpuUsage, RadAccessData.pBaseRadX, 2 * RadAccessData.ne * RadAccessData.nx * RadAccessData.nz * RadAccessData.nwfr * sizeof(float));
+		RadAccessData.pBaseRadX = (float*)AuxGpu::ToHostAndFree(pGpuUsage, RadAccessData.pBaseRadX, 2 * RadAccessData.ne * RadAccessData.nx * RadAccessData.nz * RadAccessData.nwfr * sizeof(float));
 	if (RadAccessData.pBaseRadZ != NULL)
-		RadAccessData.pBaseRadZ = (float*)UtiDev::ToHostAndFree(pGpuUsage, RadAccessData.pBaseRadZ, 2 * RadAccessData.ne * RadAccessData.nx * RadAccessData.nz * RadAccessData.nwfr * sizeof(float));
+		RadAccessData.pBaseRadZ = (float*)AuxGpu::ToHostAndFree(pGpuUsage, RadAccessData.pBaseRadZ, 2 * RadAccessData.ne * RadAccessData.nx * RadAccessData.nz * RadAccessData.nwfr * sizeof(float));
 	cudaStreamSynchronize(0);
 	auto err = cudaGetLastError();
 	printf("%s\r\n", cudaGetErrorString(err));
@@ -268,62 +280,62 @@ __global__ void MakeWfrEdgeCorrection_Kernel(srTSRWRadStructAccessData RadAccess
     }
 }
 
-void MakeWfrEdgeCorrection_GPU(srTSRWRadStructAccessData& RadAccessData, float* pDataEx, float* pDataEz, srTDataPtrsForWfrEdgeCorr& DataPtrs, gpuUsageArg_t* pGpuUsage)
+void MakeWfrEdgeCorrection_GPU(srTSRWRadStructAccessData& RadAccessData, float* pDataEx, float* pDataEz, srTDataPtrsForWfrEdgeCorr& DataPtrs, gpuUsageArg* pGpuUsage)
 {
-	pDataEx = (float*)UtiDev::ToDevice(pGpuUsage, pDataEx, 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz*RadAccessData.nwfr*sizeof(float));
-	pDataEz = (float*)UtiDev::ToDevice(pGpuUsage, pDataEz, 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz*RadAccessData.nwfr*sizeof(float));
-	DataPtrs.FFTArrXStEx = (float*)UtiDev::ToDevice(pGpuUsage, DataPtrs.FFTArrXStEx, 2*RadAccessData.nz*RadAccessData.nwfr*sizeof(float));
-	DataPtrs.FFTArrXStEz = (float*)UtiDev::ToDevice(pGpuUsage, DataPtrs.FFTArrXStEz, 2*RadAccessData.nz*RadAccessData.nwfr*sizeof(float));
-	DataPtrs.FFTArrXFiEx = (float*)UtiDev::ToDevice(pGpuUsage, DataPtrs.FFTArrXFiEx, 2*RadAccessData.nz*RadAccessData.nwfr*sizeof(float));
-	DataPtrs.FFTArrXFiEz = (float*)UtiDev::ToDevice(pGpuUsage, DataPtrs.FFTArrXFiEz, 2*RadAccessData.nz*RadAccessData.nwfr*sizeof(float));
-	DataPtrs.FFTArrZStEx = (float*)UtiDev::ToDevice(pGpuUsage, DataPtrs.FFTArrZStEx, 2*RadAccessData.nx*RadAccessData.nwfr*sizeof(float));
-	DataPtrs.FFTArrZStEz = (float*)UtiDev::ToDevice(pGpuUsage, DataPtrs.FFTArrZStEz, 2*RadAccessData.nx*RadAccessData.nwfr*sizeof(float));
-	DataPtrs.FFTArrZFiEx = (float*)UtiDev::ToDevice(pGpuUsage, DataPtrs.FFTArrZFiEx, 2*RadAccessData.nx*RadAccessData.nwfr*sizeof(float));
-	DataPtrs.FFTArrZFiEz = (float*)UtiDev::ToDevice(pGpuUsage, DataPtrs.FFTArrZFiEz, 2*RadAccessData.nx*RadAccessData.nwfr*sizeof(float));
-	DataPtrs.ExpArrXSt = (float*)UtiDev::ToDevice(pGpuUsage, DataPtrs.ExpArrXSt, 2*RadAccessData.nx*sizeof(float));
-	DataPtrs.ExpArrXFi = (float*)UtiDev::ToDevice(pGpuUsage, DataPtrs.ExpArrXFi, 2*RadAccessData.nx*sizeof(float));
-	DataPtrs.ExpArrZSt = (float*)UtiDev::ToDevice(pGpuUsage, DataPtrs.ExpArrZSt, 2*RadAccessData.nz*sizeof(float));
-	DataPtrs.ExpArrZFi = (float*)UtiDev::ToDevice(pGpuUsage, DataPtrs.ExpArrZFi, 2*RadAccessData.nz*sizeof(float));
+	pDataEx = (float*)AuxGpu::ToDevice(pGpuUsage, pDataEx, 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz*RadAccessData.nwfr*sizeof(float));
+	pDataEz = (float*)AuxGpu::ToDevice(pGpuUsage, pDataEz, 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz*RadAccessData.nwfr*sizeof(float));
+	DataPtrs.FFTArrXStEx = (float*)AuxGpu::ToDevice(pGpuUsage, DataPtrs.FFTArrXStEx, 2*RadAccessData.nz*RadAccessData.nwfr*sizeof(float));
+	DataPtrs.FFTArrXStEz = (float*)AuxGpu::ToDevice(pGpuUsage, DataPtrs.FFTArrXStEz, 2*RadAccessData.nz*RadAccessData.nwfr*sizeof(float));
+	DataPtrs.FFTArrXFiEx = (float*)AuxGpu::ToDevice(pGpuUsage, DataPtrs.FFTArrXFiEx, 2*RadAccessData.nz*RadAccessData.nwfr*sizeof(float));
+	DataPtrs.FFTArrXFiEz = (float*)AuxGpu::ToDevice(pGpuUsage, DataPtrs.FFTArrXFiEz, 2*RadAccessData.nz*RadAccessData.nwfr*sizeof(float));
+	DataPtrs.FFTArrZStEx = (float*)AuxGpu::ToDevice(pGpuUsage, DataPtrs.FFTArrZStEx, 2*RadAccessData.nx*RadAccessData.nwfr*sizeof(float));
+	DataPtrs.FFTArrZStEz = (float*)AuxGpu::ToDevice(pGpuUsage, DataPtrs.FFTArrZStEz, 2*RadAccessData.nx*RadAccessData.nwfr*sizeof(float));
+	DataPtrs.FFTArrZFiEx = (float*)AuxGpu::ToDevice(pGpuUsage, DataPtrs.FFTArrZFiEx, 2*RadAccessData.nx*RadAccessData.nwfr*sizeof(float));
+	DataPtrs.FFTArrZFiEz = (float*)AuxGpu::ToDevice(pGpuUsage, DataPtrs.FFTArrZFiEz, 2*RadAccessData.nx*RadAccessData.nwfr*sizeof(float));
+	DataPtrs.ExpArrXSt = (float*)AuxGpu::ToDevice(pGpuUsage, DataPtrs.ExpArrXSt, 2*RadAccessData.nx*sizeof(float));
+	DataPtrs.ExpArrXFi = (float*)AuxGpu::ToDevice(pGpuUsage, DataPtrs.ExpArrXFi, 2*RadAccessData.nx*sizeof(float));
+	DataPtrs.ExpArrZSt = (float*)AuxGpu::ToDevice(pGpuUsage, DataPtrs.ExpArrZSt, 2*RadAccessData.nz*sizeof(float));
+	DataPtrs.ExpArrZFi = (float*)AuxGpu::ToDevice(pGpuUsage, DataPtrs.ExpArrZFi, 2*RadAccessData.nz*sizeof(float));
 
-	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, pDataEx);
-	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, pDataEz);
-	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, DataPtrs.FFTArrXStEx);
-	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, DataPtrs.FFTArrXStEz);
-	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, DataPtrs.FFTArrXFiEx);
-	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, DataPtrs.FFTArrXFiEz);
-	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, DataPtrs.FFTArrZStEx);
-	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, DataPtrs.FFTArrZStEz);
-	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, DataPtrs.FFTArrZFiEx);
-	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, DataPtrs.FFTArrZFiEz);
-	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, DataPtrs.ExpArrXSt);
-	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, DataPtrs.ExpArrXFi);
-	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, DataPtrs.ExpArrZSt);
-	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, DataPtrs.ExpArrZFi);
+	AuxGpu::EnsureDeviceMemoryReady(pGpuUsage, pDataEx);
+	AuxGpu::EnsureDeviceMemoryReady(pGpuUsage, pDataEz);
+	AuxGpu::EnsureDeviceMemoryReady(pGpuUsage, DataPtrs.FFTArrXStEx);
+	AuxGpu::EnsureDeviceMemoryReady(pGpuUsage, DataPtrs.FFTArrXStEz);
+	AuxGpu::EnsureDeviceMemoryReady(pGpuUsage, DataPtrs.FFTArrXFiEx);
+	AuxGpu::EnsureDeviceMemoryReady(pGpuUsage, DataPtrs.FFTArrXFiEz);
+	AuxGpu::EnsureDeviceMemoryReady(pGpuUsage, DataPtrs.FFTArrZStEx);
+	AuxGpu::EnsureDeviceMemoryReady(pGpuUsage, DataPtrs.FFTArrZStEz);
+	AuxGpu::EnsureDeviceMemoryReady(pGpuUsage, DataPtrs.FFTArrZFiEx);
+	AuxGpu::EnsureDeviceMemoryReady(pGpuUsage, DataPtrs.FFTArrZFiEz);
+	AuxGpu::EnsureDeviceMemoryReady(pGpuUsage, DataPtrs.ExpArrXSt);
+	AuxGpu::EnsureDeviceMemoryReady(pGpuUsage, DataPtrs.ExpArrXFi);
+	AuxGpu::EnsureDeviceMemoryReady(pGpuUsage, DataPtrs.ExpArrZSt);
+	AuxGpu::EnsureDeviceMemoryReady(pGpuUsage, DataPtrs.ExpArrZFi);
 
 	const int bs = 256;
 	dim3 blocks(RadAccessData.nx / bs + ((RadAccessData.nx & (bs - 1)) != 0), RadAccessData.nz, RadAccessData.nwfr);
 	dim3 threads(bs, 1);
 	MakeWfrEdgeCorrection_Kernel << <blocks, threads >> > (RadAccessData, pDataEx, pDataEz, DataPtrs, (float)DataPtrs.dxSt, (float)DataPtrs.dxFi, (float)DataPtrs.dzSt, (float)DataPtrs.dzFi);
 
-	DataPtrs.FFTArrXStEx = (float*)UtiDev::ToHostAndFree(pGpuUsage, DataPtrs.FFTArrXStEx, 2*RadAccessData.nz*RadAccessData.nwfr*sizeof(float), true);
-	DataPtrs.FFTArrXStEz = (float*)UtiDev::ToHostAndFree(pGpuUsage, DataPtrs.FFTArrXStEz, 2*RadAccessData.nz*RadAccessData.nwfr*sizeof(float), true);
-	DataPtrs.FFTArrXFiEx = (float*)UtiDev::ToHostAndFree(pGpuUsage, DataPtrs.FFTArrXFiEx, 2*RadAccessData.nz*RadAccessData.nwfr*sizeof(float), true);
-	DataPtrs.FFTArrXFiEz = (float*)UtiDev::ToHostAndFree(pGpuUsage, DataPtrs.FFTArrXFiEz, 2*RadAccessData.nz*RadAccessData.nwfr*sizeof(float), true);
-	DataPtrs.FFTArrZStEx = (float*)UtiDev::ToHostAndFree(pGpuUsage, DataPtrs.FFTArrZStEx, 2*RadAccessData.nx*RadAccessData.nwfr*sizeof(float), true);
-	DataPtrs.FFTArrZStEz = (float*)UtiDev::ToHostAndFree(pGpuUsage, DataPtrs.FFTArrZStEz, 2*RadAccessData.nx*RadAccessData.nwfr*sizeof(float), true);
-	DataPtrs.FFTArrZFiEx = (float*)UtiDev::ToHostAndFree(pGpuUsage, DataPtrs.FFTArrZFiEx, 2*RadAccessData.nx*RadAccessData.nwfr*sizeof(float), true);
-	DataPtrs.FFTArrZFiEz = (float*)UtiDev::ToHostAndFree(pGpuUsage, DataPtrs.FFTArrZFiEz, 2*RadAccessData.nx*RadAccessData.nwfr*sizeof(float), true);
-	DataPtrs.ExpArrXSt = (float*)UtiDev::ToHostAndFree(pGpuUsage, DataPtrs.ExpArrXSt, 2*RadAccessData.nx*sizeof(float), true);
-	DataPtrs.ExpArrXFi = (float*)UtiDev::ToHostAndFree(pGpuUsage, DataPtrs.ExpArrXFi, 2*RadAccessData.nx*sizeof(float), true);
-	DataPtrs.ExpArrZSt = (float*)UtiDev::ToHostAndFree(pGpuUsage, DataPtrs.ExpArrZSt, 2*RadAccessData.nz*sizeof(float), true);
-	DataPtrs.ExpArrZFi = (float*)UtiDev::ToHostAndFree(pGpuUsage, DataPtrs.ExpArrZFi, 2*RadAccessData.nz*sizeof(float), true);
+	DataPtrs.FFTArrXStEx = (float*)AuxGpu::ToHostAndFree(pGpuUsage, DataPtrs.FFTArrXStEx, 2*RadAccessData.nz*RadAccessData.nwfr*sizeof(float), true);
+	DataPtrs.FFTArrXStEz = (float*)AuxGpu::ToHostAndFree(pGpuUsage, DataPtrs.FFTArrXStEz, 2*RadAccessData.nz*RadAccessData.nwfr*sizeof(float), true);
+	DataPtrs.FFTArrXFiEx = (float*)AuxGpu::ToHostAndFree(pGpuUsage, DataPtrs.FFTArrXFiEx, 2*RadAccessData.nz*RadAccessData.nwfr*sizeof(float), true);
+	DataPtrs.FFTArrXFiEz = (float*)AuxGpu::ToHostAndFree(pGpuUsage, DataPtrs.FFTArrXFiEz, 2*RadAccessData.nz*RadAccessData.nwfr*sizeof(float), true);
+	DataPtrs.FFTArrZStEx = (float*)AuxGpu::ToHostAndFree(pGpuUsage, DataPtrs.FFTArrZStEx, 2*RadAccessData.nx*RadAccessData.nwfr*sizeof(float), true);
+	DataPtrs.FFTArrZStEz = (float*)AuxGpu::ToHostAndFree(pGpuUsage, DataPtrs.FFTArrZStEz, 2*RadAccessData.nx*RadAccessData.nwfr*sizeof(float), true);
+	DataPtrs.FFTArrZFiEx = (float*)AuxGpu::ToHostAndFree(pGpuUsage, DataPtrs.FFTArrZFiEx, 2*RadAccessData.nx*RadAccessData.nwfr*sizeof(float), true);
+	DataPtrs.FFTArrZFiEz = (float*)AuxGpu::ToHostAndFree(pGpuUsage, DataPtrs.FFTArrZFiEz, 2*RadAccessData.nx*RadAccessData.nwfr*sizeof(float), true);
+	DataPtrs.ExpArrXSt = (float*)AuxGpu::ToHostAndFree(pGpuUsage, DataPtrs.ExpArrXSt, 2*RadAccessData.nx*sizeof(float), true);
+	DataPtrs.ExpArrXFi = (float*)AuxGpu::ToHostAndFree(pGpuUsage, DataPtrs.ExpArrXFi, 2*RadAccessData.nx*sizeof(float), true);
+	DataPtrs.ExpArrZSt = (float*)AuxGpu::ToHostAndFree(pGpuUsage, DataPtrs.ExpArrZSt, 2*RadAccessData.nz*sizeof(float), true);
+	DataPtrs.ExpArrZFi = (float*)AuxGpu::ToHostAndFree(pGpuUsage, DataPtrs.ExpArrZFi, 2*RadAccessData.nz*sizeof(float), true);
 
-	UtiDev::MarkUpdated(pGpuUsage, pDataEx, true, false);
-	UtiDev::MarkUpdated(pGpuUsage, pDataEz, true, false);
+	AuxGpu::MarkUpdated(pGpuUsage, pDataEx, true, false);
+	AuxGpu::MarkUpdated(pGpuUsage, pDataEz, true, false);
 
 #ifdef _DEBUG
-	UtiDev::ToHostAndFree(pGpuUsage, pDataEx, 2 * RadAccessData.ne * RadAccessData.nx * RadAccessData.nz * RadAccessData.nwfr * sizeof(float));
-	UtiDev::ToHostAndFree(pGpuUsage, pDataEz, 2 * RadAccessData.ne * RadAccessData.nx * RadAccessData.nz * RadAccessData.nwfr * sizeof(float));
+	AuxGpu::ToHostAndFree(pGpuUsage, pDataEx, 2 * RadAccessData.ne * RadAccessData.nx * RadAccessData.nz * RadAccessData.nwfr * sizeof(float));
+	AuxGpu::ToHostAndFree(pGpuUsage, pDataEz, 2 * RadAccessData.ne * RadAccessData.nx * RadAccessData.nz * RadAccessData.nwfr * sizeof(float));
 	cudaStreamSynchronize(0);
 	auto err = cudaGetLastError();
 	printf("%s\r\n", cudaGetErrorString(err));
@@ -537,7 +549,7 @@ template<bool TreatPolCompX, bool TreatPolCompZ> __global__ void RadResizeCore_K
 	}
 }
 
-int srTGenOptElem::RadResizeCore_GPU(srTSRWRadStructAccessData& OldRadAccessData, srTSRWRadStructAccessData& NewRadAccessData, gpuUsageArg_t* pGpuUsage, char PolComp)
+int srTGenOptElem::RadResizeCore_GPU(srTSRWRadStructAccessData& OldRadAccessData, srTSRWRadStructAccessData& NewRadAccessData, gpuUsageArg* pGpuUsage, char PolComp)
 {
 	char TreatPolCompX = ((PolComp == 0) || (PolComp == 'x'));
 	char TreatPolCompZ = ((PolComp == 0) || (PolComp == 'z'));
@@ -546,15 +558,15 @@ int srTGenOptElem::RadResizeCore_GPU(srTSRWRadStructAccessData& OldRadAccessData
 	int nz = NewRadAccessData.AuxLong4 - NewRadAccessData.AuxLong3 + 1;
 	int nWfr = NewRadAccessData.nwfr;
 	int ne = NewRadAccessData.ne;
-	OldRadAccessData.pBaseRadX = (float*)UtiDev::ToDevice(pGpuUsage, OldRadAccessData.pBaseRadX, 2*OldRadAccessData.ne*OldRadAccessData.nx*OldRadAccessData.nz*OldRadAccessData.nwfr*sizeof(float));
-	OldRadAccessData.pBaseRadZ = (float*)UtiDev::ToDevice(pGpuUsage, OldRadAccessData.pBaseRadZ, 2*OldRadAccessData.ne*OldRadAccessData.nx*OldRadAccessData.nz*OldRadAccessData.nwfr*sizeof(float));
-	NewRadAccessData.pBaseRadX = (float*)UtiDev::ToDevice(pGpuUsage, NewRadAccessData.pBaseRadX, 2*NewRadAccessData.ne*NewRadAccessData.nx*NewRadAccessData.nz*NewRadAccessData.nwfr*sizeof(float), true);
-	NewRadAccessData.pBaseRadZ = (float*)UtiDev::ToDevice(pGpuUsage, NewRadAccessData.pBaseRadZ, 2*NewRadAccessData.ne*NewRadAccessData.nx*NewRadAccessData.nz*NewRadAccessData.nwfr*sizeof(float), true);
+	OldRadAccessData.pBaseRadX = (float*)AuxGpu::ToDevice(pGpuUsage, OldRadAccessData.pBaseRadX, 2*OldRadAccessData.ne*OldRadAccessData.nx*OldRadAccessData.nz*OldRadAccessData.nwfr*sizeof(float));
+	OldRadAccessData.pBaseRadZ = (float*)AuxGpu::ToDevice(pGpuUsage, OldRadAccessData.pBaseRadZ, 2*OldRadAccessData.ne*OldRadAccessData.nx*OldRadAccessData.nz*OldRadAccessData.nwfr*sizeof(float));
+	NewRadAccessData.pBaseRadX = (float*)AuxGpu::ToDevice(pGpuUsage, NewRadAccessData.pBaseRadX, 2*NewRadAccessData.ne*NewRadAccessData.nx*NewRadAccessData.nz*NewRadAccessData.nwfr*sizeof(float), true);
+	NewRadAccessData.pBaseRadZ = (float*)AuxGpu::ToDevice(pGpuUsage, NewRadAccessData.pBaseRadZ, 2*NewRadAccessData.ne*NewRadAccessData.nx*NewRadAccessData.nz*NewRadAccessData.nwfr*sizeof(float), true);
 	
-	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, OldRadAccessData.pBaseRadX);
-	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, OldRadAccessData.pBaseRadZ);
-	//UtiDev::EnsureDeviceMemoryReady(pGpuUsage, NewRadAccessData.pBaseRadX);
-	//UtiDev::EnsureDeviceMemoryReady(pGpuUsage, NewRadAccessData.pBaseRadZ);
+	AuxGpu::EnsureDeviceMemoryReady(pGpuUsage, OldRadAccessData.pBaseRadX);
+	AuxGpu::EnsureDeviceMemoryReady(pGpuUsage, OldRadAccessData.pBaseRadZ);
+	//AuxGpu::EnsureDeviceMemoryReady(pGpuUsage, NewRadAccessData.pBaseRadX);
+	//AuxGpu::EnsureDeviceMemoryReady(pGpuUsage, NewRadAccessData.pBaseRadZ);
 
 	const int bs = 32;
 	dim3 blocks(nx / bs + ((nx & (bs - 1)) != 0), nz, ne);
@@ -567,20 +579,20 @@ int srTGenOptElem::RadResizeCore_GPU(srTSRWRadStructAccessData& OldRadAccessData
 		else if (TreatPolCompZ) RadResizeCore_Kernel<false, true> << <blocks, threads >> > (OldRadAccessData, NewRadAccessData, iWfr);
 	}
 
-	OldRadAccessData.pBaseRadX = (float*)UtiDev::ToHostAndFree(pGpuUsage, OldRadAccessData.pBaseRadX, 2*OldRadAccessData.ne*OldRadAccessData.nx*OldRadAccessData.nz*OldRadAccessData.nwfr*sizeof(float), true);
-	OldRadAccessData.pBaseRadZ = (float*)UtiDev::ToHostAndFree(pGpuUsage, OldRadAccessData.pBaseRadZ, 2*OldRadAccessData.ne*OldRadAccessData.nx*OldRadAccessData.nz*OldRadAccessData.nwfr*sizeof(float), true);
-	//NewRadAccessData.pBaseRadX = UtiDev::ToHostAndFree(pGpuUsage, NewRadAccessData.pBaseRadX, 2*NewRadAccessData.ne*NewRadAccessData.nx*NewRadAccessData.nz*NewRadAccessData.nwfr*sizeof(float));
-	//NewRadAccessData.pBaseRadZ = UtiDev::ToHostAndFree(pGpuUsage, NewRadAccessData.pBaseRadZ, 2*NewRadAccessData.ne*NewRadAccessData.nx*NewRadAccessData.nz*NewRadAccessData.nwfr*sizeof(float));
-	UtiDev::MarkUpdated(pGpuUsage, NewRadAccessData.pBaseRadX, true, false);
-	UtiDev::MarkUpdated(pGpuUsage, NewRadAccessData.pBaseRadZ, true, false);
+	OldRadAccessData.pBaseRadX = (float*)AuxGpu::ToHostAndFree(pGpuUsage, OldRadAccessData.pBaseRadX, 2*OldRadAccessData.ne*OldRadAccessData.nx*OldRadAccessData.nz*OldRadAccessData.nwfr*sizeof(float), true);
+	OldRadAccessData.pBaseRadZ = (float*)AuxGpu::ToHostAndFree(pGpuUsage, OldRadAccessData.pBaseRadZ, 2*OldRadAccessData.ne*OldRadAccessData.nx*OldRadAccessData.nz*OldRadAccessData.nwfr*sizeof(float), true);
+	//NewRadAccessData.pBaseRadX = AuxGpu::ToHostAndFree(pGpuUsage, NewRadAccessData.pBaseRadX, 2*NewRadAccessData.ne*NewRadAccessData.nx*NewRadAccessData.nz*NewRadAccessData.nwfr*sizeof(float));
+	//NewRadAccessData.pBaseRadZ = AuxGpu::ToHostAndFree(pGpuUsage, NewRadAccessData.pBaseRadZ, 2*NewRadAccessData.ne*NewRadAccessData.nx*NewRadAccessData.nz*NewRadAccessData.nwfr*sizeof(float));
+	AuxGpu::MarkUpdated(pGpuUsage, NewRadAccessData.pBaseRadX, true, false);
+	AuxGpu::MarkUpdated(pGpuUsage, NewRadAccessData.pBaseRadZ, true, false);
 #ifndef _DEBUG
-	NewRadAccessData.pBaseRadX = (float*)UtiDev::GetHostPtr(pGpuUsage, NewRadAccessData.pBaseRadX);
-	NewRadAccessData.pBaseRadZ = (float*)UtiDev::GetHostPtr(pGpuUsage, NewRadAccessData.pBaseRadZ);
+	NewRadAccessData.pBaseRadX = (float*)AuxGpu::GetHostPtr(pGpuUsage, NewRadAccessData.pBaseRadX);
+	NewRadAccessData.pBaseRadZ = (float*)AuxGpu::GetHostPtr(pGpuUsage, NewRadAccessData.pBaseRadZ);
 #endif
 
 #ifdef _DEBUG
-	NewRadAccessData.pBaseRadX = (float*)UtiDev::ToHostAndFree(pGpuUsage, NewRadAccessData.pBaseRadX, 2 * NewRadAccessData.ne * NewRadAccessData.nx * NewRadAccessData.nz * NewRadAccessData.nwfr * sizeof(float), false);
-	NewRadAccessData.pBaseRadZ = (float*)UtiDev::ToHostAndFree(pGpuUsage, NewRadAccessData.pBaseRadZ, 2 * NewRadAccessData.ne * NewRadAccessData.nx * NewRadAccessData.nz * NewRadAccessData.nwfr * sizeof(float), false);
+	NewRadAccessData.pBaseRadX = (float*)AuxGpu::ToHostAndFree(pGpuUsage, NewRadAccessData.pBaseRadX, 2 * NewRadAccessData.ne * NewRadAccessData.nx * NewRadAccessData.nz * NewRadAccessData.nwfr * sizeof(float), false);
+	NewRadAccessData.pBaseRadZ = (float*)AuxGpu::ToHostAndFree(pGpuUsage, NewRadAccessData.pBaseRadZ, 2 * NewRadAccessData.ne * NewRadAccessData.nx * NewRadAccessData.nz * NewRadAccessData.nwfr * sizeof(float), false);
 	cudaStreamSynchronize(0);
 	auto err = cudaGetLastError();
 	printf("%s\r\n", cudaGetErrorString(err));

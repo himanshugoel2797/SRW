@@ -18,7 +18,7 @@
 #include "cufft.h"
 #include "cuda_runtime.h"
 #endif 
-#include "utidev.h"
+#include "auxgpu.h"
 
 #ifdef _FFTW3 //OC28012019
 #include "fftw3.h"
@@ -193,7 +193,7 @@ public:
 	//int Make2DFFT(CGenMathFFT2DInfo&);
 	//Modification by S.Yakubov for parallelizing SRW via OpenMP:
 #ifdef _FFTW3 //28012019
-	int Make2DFFT(CGenMathFFT2DInfo&, fftwf_plan* pPrecreatedPlan2DFFT=0, fftw_plan* pdPrecreatedPlan2DFFT=0, gpuUsageArg_t *pGpuUsage = 0); //OC02022019
+	int Make2DFFT(CGenMathFFT2DInfo&, fftwf_plan* pPrecreatedPlan2DFFT=0, fftw_plan* pdPrecreatedPlan2DFFT=0, gpuUsageArg *pGpuUsage = 0); //OC02022019
 	//int Make2DFFT(CGenMathFFT2DInfo&, fftwf_plan* pPrecreatedPlan2DFFT=0);
 #else
 	int Make2DFFT(CGenMathFFT2DInfo&, fftwnd_plan* pPrecreatedPlan2DFFT=0); //OC27102018
@@ -649,8 +649,8 @@ public:
 #endif
 	}
 
-	int Make1DFFT(CGenMathFFT1DInfo& FFT1DInfo, gpuUsageArg_t *pGpuUsage=0);
-	int Make1DFFT_InPlace(CGenMathFFT1DInfo& FFT1DInfo, gpuUsageArg_t *pGpuUsage=0);
+	int Make1DFFT(CGenMathFFT1DInfo& FFT1DInfo, gpuUsageArg *pGpuUsage=0);
+	int Make1DFFT_InPlace(CGenMathFFT1DInfo& FFT1DInfo, gpuUsageArg *pGpuUsage=0);
 
 	void SetupLimitsTr(CGenMathFFT1DInfo& FFT1DInfo)
 	{ // Modify this if Make1DFFT is modified !

@@ -1,3 +1,16 @@
+/************************************************************************//**
+ * File: gmfft_gpu.cu
+ * Description: Auxiliary utilities to work with FFTW library (CUDA implementation)
+ * Project: Synchrotron Radiation Workshop
+ * First release: 2023
+ *
+ * Copyright (C) Brookhaven National Laboratory
+ * All Rights Reserved
+ *
+ * @author H.Goel
+ * @version 1.0
+ ***************************************************************************/
+
 #ifdef _OFFLOAD_GPU
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"

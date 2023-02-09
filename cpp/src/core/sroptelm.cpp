@@ -29,7 +29,7 @@
 #include "srinterf.h"
 #include "sropthck.h"
 #include "sroptgrat.h"
-#include "utidev.h"
+#include "auxgpu.h"
 
 #ifdef _WITH_OMP //Pre-processor definition for compiling with OpenMP library
 #include "omp.h"
@@ -147,7 +147,7 @@ int srTGenOptElem::ExtraDataExpected(const char* sElemID) //OC01062020
 
 //*************************************************************************
 
-int srTGenOptElem::TraverseRadZXE(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars, long pBufVarSz, gpuUsageArg_t* pGpuUsage) //OC29082019
+int srTGenOptElem::TraverseRadZXE(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars, long pBufVarSz, gpuUsageArg* pGpuUsage) //OC29082019
 //int srTGenOptElem::TraverseRadZXE(srTSRWRadStructAccessData* pRadAccessData)
 {
 	//long PerX = pRadAccessData->ne << 1;
@@ -156,6 +156,7 @@ int srTGenOptElem::TraverseRadZXE(srTSRWRadStructAccessData* pRadAccessData, voi
 	long long PerZ = PerX*pRadAccessData->nx;
 	long long PerWfr = PerZ*pRadAccessData->nz;
 
+	//HG25082022 If GPU usage is requested, attempt it, if failed, fall back to CPU
 	GPU_COND(pGpuUsage,
 	{
 //#if _DEBUG
@@ -749,7 +750,7 @@ int srTGenOptElem::RemoveSliceConstE_FromGenRadStruct(srTSRWRadStructAccessData*
 
 //*************************************************************************
 
-int srTGenOptElem::SetupWfrEdgeCorrData(srTSRWRadStructAccessData* pRadAccessData, float* pDataEx, float* pDataEz, srTDataPtrsForWfrEdgeCorr& DataPtrsForWfrEdgeCorr, gpuUsageArg_t *pGpuUsage)
+int srTGenOptElem::SetupWfrEdgeCorrData(srTSRWRadStructAccessData* pRadAccessData, float* pDataEx, float* pDataEz, srTDataPtrsForWfrEdgeCorr& DataPtrsForWfrEdgeCorr, gpuUsageArg *pGpuUsage)
 {
 	int result;
 
@@ -811,14 +812,15 @@ int srTGenOptElem::SetupWfrEdgeCorrData(srTSRWRadStructAccessData* pRadAccessDat
 	FFT2DInfo.yStart = pRadAccessData->zStart;
 	FFT2DInfo.Nx = pRadAccessData->nx;
 	FFT2DInfo.Ny = pRadAccessData->nz;
-	FFT2DInfo.howMany = pRadAccessData->nwfr;
+	FFT2DInfo.howMany = pRadAccessData->nwfr; //HG05072022
 	FFT2DInfo.UseGivenStartTrValues = 0;
 	CGenMathFFT2D FFT2D;
 	FFT2D.SetupLimitsTr(FFT2DInfo);
 
 	CGenMathFFT1DInfo FFT1DInfo;
 	FFT1DInfo.Dir = 1;
-	FFT1DInfo.HowMany = 2*pRadAccessData->nwfr;
+	//FFT1DInfo.HowMany = 2;
+	FFT1DInfo.HowMany = 2*pRadAccessData->nwfr; //HG05072022
 	FFT1DInfo.UseGivenStartTrValue = 0;
 
 	if(xWfrCorrNeeded || zWfrCorrNeeded)
@@ -833,10 +835,10 @@ int srTGenOptElem::SetupWfrEdgeCorrData(srTSRWRadStructAccessData* pRadAccessDat
 
 		if(dxSt != 0.)
 		{
-			DataPtrsForWfrEdgeCorr.ExpArrXSt = ALLOC_ARRAY(float, TwoNx);
+			DataPtrsForWfrEdgeCorr.ExpArrXSt = new float[TwoNx];
 			if(DataPtrsForWfrEdgeCorr.ExpArrXSt == 0) return MEMORY_ALLOCATION_FAILURE;
 
-			DataPtrsForWfrEdgeCorr.FFTArrXStEx = ALLOC_ARRAY(float, (TwoNz << 1)*nwfr);
+			DataPtrsForWfrEdgeCorr.FFTArrXStEx = new float[(TwoNz << 1)*nwfr];
 			if(DataPtrsForWfrEdgeCorr.FFTArrXStEx == 0) return MEMORY_ALLOCATION_FAILURE;
 			DataPtrsForWfrEdgeCorr.FFTArrXStEz = DataPtrsForWfrEdgeCorr.FFTArrXStEx + TwoNz * nwfr;
 			DataPtrsForWfrEdgeCorr.dxSt = dxSt;
@@ -851,6 +853,12 @@ int srTGenOptElem::SetupWfrEdgeCorrData(srTSRWRadStructAccessData* pRadAccessDat
 			if(dzSt != 0.)
 			{
 				long jzSt2 = (izWfrMinLower + 1) << 1;
+				//DataPtrsForWfrEdgeCorr.fxStzSt[0] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEx + jzSt2);
+				//DataPtrsForWfrEdgeCorr.fxStzSt[1] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEx + jzSt2 + 1);
+				//DataPtrsForWfrEdgeCorr.fxStzSt[2] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEz + jzSt2);
+				//DataPtrsForWfrEdgeCorr.fxStzSt[3] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEz + jzSt2 + 1);
+
+				//HG25082022 Switch to storing an offset to make a GPU port easier
 				DataPtrsForWfrEdgeCorr.fxStzSt[0] = (jzSt2);
 				DataPtrsForWfrEdgeCorr.fxStzSt[1] = (jzSt2 + 1);
 				DataPtrsForWfrEdgeCorr.fxStzSt[2] = (jzSt2);
@@ -859,6 +867,12 @@ int srTGenOptElem::SetupWfrEdgeCorrData(srTSRWRadStructAccessData* pRadAccessDat
 			if(dzFi != 0.)
 			{
 				long jzFi2 = izWfrMaxLower << 1;
+				//DataPtrsForWfrEdgeCorr.fxStzFi[0] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEx + jzFi2);
+				//DataPtrsForWfrEdgeCorr.fxStzFi[1] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEx + jzFi2 + 1);
+				//DataPtrsForWfrEdgeCorr.fxStzFi[2] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEz + jzFi2);
+				//DataPtrsForWfrEdgeCorr.fxStzFi[3] = *(DataPtrsForWfrEdgeCorr.FFTArrXStEz + jzFi2 + 1);
+
+				//HG25082022 Switch to storing an offset to make a GPU port easier
 				DataPtrsForWfrEdgeCorr.fxStzFi[0] = (jzFi2);
 				DataPtrsForWfrEdgeCorr.fxStzFi[1] = (jzFi2 + 1);
 				DataPtrsForWfrEdgeCorr.fxStzFi[2] = (jzFi2);
@@ -875,10 +889,10 @@ int srTGenOptElem::SetupWfrEdgeCorrData(srTSRWRadStructAccessData* pRadAccessDat
 		}
 		if(dxFi != 0.)
 		{
-			DataPtrsForWfrEdgeCorr.ExpArrXFi = ALLOC_ARRAY(float, TwoNx);
+			DataPtrsForWfrEdgeCorr.ExpArrXFi = new float[TwoNx];
 			if(DataPtrsForWfrEdgeCorr.ExpArrXFi == 0) return MEMORY_ALLOCATION_FAILURE;
 
-			DataPtrsForWfrEdgeCorr.FFTArrXFiEx = ALLOC_ARRAY(float, (TwoNz << 1) * nwfr);
+			DataPtrsForWfrEdgeCorr.FFTArrXFiEx = new float[(TwoNz << 1) * nwfr];
 			if(DataPtrsForWfrEdgeCorr.FFTArrXFiEx == 0) return MEMORY_ALLOCATION_FAILURE;
 			DataPtrsForWfrEdgeCorr.FFTArrXFiEz = DataPtrsForWfrEdgeCorr.FFTArrXFiEx + TwoNz * nwfr;
 			DataPtrsForWfrEdgeCorr.dxFi = dxFi;
@@ -892,6 +906,12 @@ int srTGenOptElem::SetupWfrEdgeCorrData(srTSRWRadStructAccessData* pRadAccessDat
 			if(dzSt != 0.)
 			{
 				long jzSt2 = (izWfrMinLower + 1) << 1;
+				//DataPtrsForWfrEdgeCorr.fxFizSt[0] = *(DataPtrsForWfrEdgeCorr.FFTArrXFiEx + jzSt2);
+				//DataPtrsForWfrEdgeCorr.fxFizSt[1] = *(DataPtrsForWfrEdgeCorr.FFTArrXFiEx + jzSt2 + 1);
+				//DataPtrsForWfrEdgeCorr.fxFizSt[2] = *(DataPtrsForWfrEdgeCorr.FFTArrXFiEz + jzSt2);
+				//DataPtrsForWfrEdgeCorr.fxFizSt[3] = *(DataPtrsForWfrEdgeCorr.FFTArrXFiEz + jzSt2 + 1);
+
+				//HG25082022 Switch to storing an offset to make a GPU port easier
 				DataPtrsForWfrEdgeCorr.fxFizSt[0] = (jzSt2);
 				DataPtrsForWfrEdgeCorr.fxFizSt[1] = (jzSt2 + 1);
 				DataPtrsForWfrEdgeCorr.fxFizSt[2] = (jzSt2);
@@ -900,6 +920,12 @@ int srTGenOptElem::SetupWfrEdgeCorrData(srTSRWRadStructAccessData* pRadAccessDat
 			if(dzFi != 0.)
 			{
 				long jzFi2 = izWfrMaxLower << 1;
+				//DataPtrsForWfrEdgeCorr.fxFizFi[0] = *(DataPtrsForWfrEdgeCorr.FFTArrXFiEx + jzFi2);
+				//DataPtrsForWfrEdgeCorr.fxFizFi[1] = *(DataPtrsForWfrEdgeCorr.FFTArrXFiEx + jzFi2 + 1);
+				//DataPtrsForWfrEdgeCorr.fxFizFi[2] = *(DataPtrsForWfrEdgeCorr.FFTArrXFiEz + jzFi2);
+				//DataPtrsForWfrEdgeCorr.fxFizFi[3] = *(DataPtrsForWfrEdgeCorr.FFTArrXFiEz + jzFi2 + 1);
+
+				//HG25082022 Switch to storing an offset to make a GPU port easier
 				DataPtrsForWfrEdgeCorr.fxFizFi[0] = (jzFi2);
 				DataPtrsForWfrEdgeCorr.fxFizFi[1] = (jzFi2 + 1);
 				DataPtrsForWfrEdgeCorr.fxFizFi[2] = (jzFi2);
@@ -916,10 +942,10 @@ int srTGenOptElem::SetupWfrEdgeCorrData(srTSRWRadStructAccessData* pRadAccessDat
 		}
 		if(dzSt != 0.)
 		{
-			DataPtrsForWfrEdgeCorr.ExpArrZSt = ALLOC_ARRAY(float, TwoNz);
+			DataPtrsForWfrEdgeCorr.ExpArrZSt = new float[TwoNz];
 			if(DataPtrsForWfrEdgeCorr.ExpArrZSt == 0) return MEMORY_ALLOCATION_FAILURE;
 
-			DataPtrsForWfrEdgeCorr.FFTArrZStEx = ALLOC_ARRAY(float, (TwoNx << 1) * nwfr);
+			DataPtrsForWfrEdgeCorr.FFTArrZStEx = new float[(TwoNx << 1) * nwfr];
 			if(DataPtrsForWfrEdgeCorr.FFTArrZStEx == 0) return MEMORY_ALLOCATION_FAILURE;
 			DataPtrsForWfrEdgeCorr.FFTArrZStEz = DataPtrsForWfrEdgeCorr.FFTArrZStEx + TwoNx * nwfr;
 			DataPtrsForWfrEdgeCorr.dzSt = dzSt;
@@ -941,10 +967,10 @@ int srTGenOptElem::SetupWfrEdgeCorrData(srTSRWRadStructAccessData* pRadAccessDat
 		}
 		if(dzFi != 0.)
 		{
-			DataPtrsForWfrEdgeCorr.ExpArrZFi = ALLOC_ARRAY(float, TwoNz);
+			DataPtrsForWfrEdgeCorr.ExpArrZFi = new float[TwoNz];
 			if(DataPtrsForWfrEdgeCorr.ExpArrZFi == 0) return MEMORY_ALLOCATION_FAILURE;
 
-			DataPtrsForWfrEdgeCorr.FFTArrZFiEx = ALLOC_ARRAY(float, (TwoNx << 1) * nwfr);
+			DataPtrsForWfrEdgeCorr.FFTArrZFiEx = new float[(TwoNx << 1) * nwfr];
 			if(DataPtrsForWfrEdgeCorr.FFTArrZFiEx == 0) return MEMORY_ALLOCATION_FAILURE;
 			DataPtrsForWfrEdgeCorr.FFTArrZFiEz = DataPtrsForWfrEdgeCorr.FFTArrZFiEx + TwoNx;
 			DataPtrsForWfrEdgeCorr.dzFi = dzFi;
@@ -1040,8 +1066,9 @@ int srTGenOptElem::SetupWfrEdgeCorrData1D(srTRadSect1D* pRadSect1D, float* pData
 
 //*************************************************************************
 
-void srTGenOptElem::MakeWfrEdgeCorrection(srTSRWRadStructAccessData* pRadAccessData, float* pDataEx, float* pDataEz, srTDataPtrsForWfrEdgeCorr& DataPtrs, gpuUsageArg_t *pGpuUsage)
+void srTGenOptElem::MakeWfrEdgeCorrection(srTSRWRadStructAccessData* pRadAccessData, float* pDataEx, float* pDataEz, srTDataPtrsForWfrEdgeCorr& DataPtrs, gpuUsageArg *pGpuUsage)
 {
+	//HG25082022 Use GPU if requested
 	GPU_COND(pGpuUsage,
 	{
 //#if _DEBUG
@@ -1059,10 +1086,11 @@ void srTGenOptElem::MakeWfrEdgeCorrection(srTSRWRadStructAccessData* pRadAccessD
 		long TwoNx = pRadAccessData->nx << 1;
 		long PerWfr = pRadAccessData->nx * pRadAccessData->nz * 2;
 
-		for(long iwfr=0; iwfr<pRadAccessData->nwfr; iwfr++)
+		for(long iwfr=0; iwfr<pRadAccessData->nwfr; iwfr++) //HG05072022 Support batched wavefronts
 		{
 			float *tEx = pDataEx+iwfr*PerWfr, *tEz = pDataEz+iwfr*PerWfr;
 
+			//HG25082022 Read data from the stored offsets to retain previous behavior on CPU
 #define DATAPTR_CHECK(x, a) ((x >= 0) ? a[x+TwoNz*iwfr] : 0.)
 			float fSSExRe = DATAPTR_CHECK(DataPtrs.fxStzSt[0], DataPtrs.FFTArrXStEx);
 			float fSSExIm = DATAPTR_CHECK(DataPtrs.fxStzSt[1], DataPtrs.FFTArrXStEx);
@@ -1083,6 +1111,7 @@ void srTGenOptElem::MakeWfrEdgeCorrection(srTSRWRadStructAccessData* pRadAccessD
 			float fFFExIm = DATAPTR_CHECK(DataPtrs.fxFizFi[1], DataPtrs.FFTArrXFiEx);
 			float fFFEzRe = DATAPTR_CHECK(DataPtrs.fxFizFi[2], DataPtrs.FFTArrXFiEz);
 			float fFFEzIm = DATAPTR_CHECK(DataPtrs.fxFizFi[3], DataPtrs.FFTArrXFiEz);
+#undef DATAPTR_CHECK
 
 			float bRe, bIm, cRe, cIm;
 
@@ -1261,7 +1290,7 @@ void srTGenOptElem::MakeWfrEdgeCorrection1D(srTRadSect1D* pRadSect1D, float* pDa
 //*************************************************************************
 
 //int srTGenOptElem::SetRadRepres(srTSRWRadStructAccessData* pRadAccessData, char CoordOrAng)
-int srTGenOptElem::SetRadRepres(srTSRWRadStructAccessData* pRadAccessData, char CoordOrAng, double* ar_xStartInSlicesE, double* ar_zStartInSlicesE, gpuUsageArg_t* pGpuUsage)
+int srTGenOptElem::SetRadRepres(srTSRWRadStructAccessData* pRadAccessData, char CoordOrAng, double* ar_xStartInSlicesE, double* ar_zStartInSlicesE, gpuUsageArg* pGpuUsage)
 {// 0- to coord.; 1- to ang.
 	int result;
 
@@ -1404,9 +1433,14 @@ int srTGenOptElem::SetRadRepres(srTSRWRadStructAccessData* pRadAccessData, char 
 
 		//SY: return outside of parallel regions is not allowed - we do it outside
 
-		int* results = new int[pRadAccessData->ne];
-		if(results == 0) return MEMORY_ALLOCATION_FAILURE;
-		for(long ie = 0; ie < pRadAccessData->ne; ie++) results[ie]=0;
+		int* single_results = new int[pRadAccessData->ne];
+		if(single_results == 0) return MEMORY_ALLOCATION_FAILURE;
+		for(long ie = 0; ie < pRadAccessData->ne; ie++) single_results[ie]=0;
+
+		int max_threads = omp_get_max_threads();
+		int* thread_results = new int[max_threads];
+		if(thread_results == 0) return MEMORY_ALLOCATION_FAILURE;
+		for(int tn = 0; tn < max_threads; tn++) thread_results[tn] = 0;
 
 		//SY: creation (and deletion) of FFTW plans is not thread-safe. Have to do this outside of threads.
 		//(and we don't need to recreate plans for same dimensions anyway)
@@ -1430,14 +1464,14 @@ int srTGenOptElem::SetRadRepres(srTSRWRadStructAccessData* pRadAccessData, char 
 					//members are changed inside Make2DFFT.
 					CGenMathFFT2DInfo FFT2DInfo_local = FFT2DInfo;
 
-					if(results[ie] = ExtractRadSliceConstE(pRadAccessData, ie, AuxEx, AuxEz)) continue;
+					if(single_results[ie] = ExtractRadSliceConstE(pRadAccessData, ie, AuxEx, AuxEz)) continue;
 
 					srTDataPtrsForWfrEdgeCorr DataPtrsForWfrEdgeCorr;
 					if(WfrEdgeCorrShouldBeTreated)
 					{
 						if(CoordOrAng == 1)
 						{
-							if(results[ie] = SetupWfrEdgeCorrData(pRadAccessData, AuxEx, AuxEz, DataPtrsForWfrEdgeCorr)) continue;
+							if(single_results[ie] = SetupWfrEdgeCorrData(pRadAccessData, AuxEx, AuxEz, DataPtrsForWfrEdgeCorr)) continue;
 						}
 					}
 
@@ -1446,10 +1480,10 @@ int srTGenOptElem::SetRadRepres(srTSRWRadStructAccessData* pRadAccessData, char 
 					if(ar_zStartInSlicesE != 0) FFT2DInfo_local.yStart = ar_zStartInSlicesE[ie];
 
 					FFT2DInfo_local.pData = AuxEx;
-					if(results[ie] = FFT2D.Make2DFFT(FFT2DInfo_local, &Plan2DFFT)) continue;
+					if(single_results[ie] = FFT2D.Make2DFFT(FFT2DInfo_local, &Plan2DFFT)) continue;
 
 					FFT2DInfo_local.pData = AuxEz;
-					if(results[ie] = FFT2D.Make2DFFT(FFT2DInfo_local, &Plan2DFFT)) continue;
+					if(single_results[ie] = FFT2D.Make2DFFT(FFT2DInfo_local, &Plan2DFFT)) continue;
 
 					if(WfrEdgeCorrShouldBeTreated)
 					{
@@ -1462,14 +1496,14 @@ int srTGenOptElem::SetRadRepres(srTSRWRadStructAccessData* pRadAccessData, char 
 							}
 						}
 					}
-					results[ie] = SetupRadSliceConstE(pRadAccessData, ie, AuxEx, AuxEz);
+					single_results[ie] = SetupRadSliceConstE(pRadAccessData, ie, AuxEx, AuxEz);
 					//SY: save FFT2DInfo from one of FFT2DInfo_local
 					if(ie == 0) FFT2DInfo = FFT2DInfo_local;
 				} // end for
 			}
 			else
 			{
-				results[omp_get_thread_num()] = MEMORY_ALLOCATION_FAILURE;
+				thread_results[omp_get_thread_num()] = MEMORY_ALLOCATION_FAILURE;
 			}  // end if
 			if(AuxEx != 0) delete[] AuxEx;
 			if(AuxEz != 0) delete[] AuxEz;
@@ -1478,15 +1512,15 @@ int srTGenOptElem::SetRadRepres(srTSRWRadStructAccessData* pRadAccessData, char 
 
 		fftwnd_destroy_plan(Plan2DFFT);
 
-		for(long ie = 0; ie < pRadAccessData->ne; ie++) if(results[ie]) return results[ie];
-		delete[] results;
+		// check results, free memory, exit if there was error
+		result = 0;
+		for(long ie = 0; ie < pRadAccessData->ne; ie++) if(single_results[ie]) result = single_results[ie];
+		for(int tn = 0; tn < max_threads; tn++) if(thread_results[tn]) result = thread_results[tn];
+		delete[]  single_results;
+		delete[]  thread_results;
+		if (result) return result;
 #endif
 	}
-
-	//Added by SY (for profiling?) at parallelizing SRW via OpenMP:
-	//char str[256];
-	//sprintf(str,"%s %d","::SetRadRepres : cycles:",pRadAccessData->ne);
-	//srwlPrintTime(str,&start);
 
 	pRadAccessData->xStep = FFT2DInfo.xStepTr;
 	pRadAccessData->zStep = FFT2DInfo.yStepTr;
@@ -2211,7 +2245,7 @@ void srTGenOptElem::FindMinMaxRatio(double* Arr1, double* Arr2, int n, double& M
 
 //*************************************************************************
 
-int srTGenOptElem::RadResizeGen(srTSRWRadStructAccessData& SRWRadStructAccessData, srTRadResize& RadResizeStruct, gpuUsageArg_t *pGpuUsage)
+int srTGenOptElem::RadResizeGen(srTSRWRadStructAccessData& SRWRadStructAccessData, srTRadResize& RadResizeStruct, gpuUsageArg *pGpuUsage)
 {
 	//Added by SY (for profiling?) at parallelizing SRW via OpenMP:
 	//double start;
@@ -2485,15 +2519,18 @@ int srTGenOptElem::RadResizeGen(srTSRWRadStructAccessData& SRWRadStructAccessDat
 
 	//long TotAmOfOldData = (SRWRadStructAccessData.ne*SRWRadStructAccessData.nx*SRWRadStructAccessData.nz) << 1;
 	//long TotAmOfNewData = (NewSRWRadStructAccessData.ne*NewSRWRadStructAccessData.nx*NewSRWRadStructAccessData.nz) << 1;
-	long long TotAmOfOldData = (((long long)SRWRadStructAccessData.nwfr)*((long long)SRWRadStructAccessData.ne)*((long long)SRWRadStructAccessData.nx)*((long long)SRWRadStructAccessData.nz)) << 1;
-	long long TotAmOfNewData = (((long long)SRWRadStructAccessData.nwfr)*((long long)NewSRWRadStructAccessData.ne)*((long long)NewSRWRadStructAccessData.nx)*((long long)NewSRWRadStructAccessData.nz)) << 1;
+	//long long TotAmOfOldData = (((long long)SRWRadStructAccessData.ne)*((long long)SRWRadStructAccessData.nx)*((long long)SRWRadStructAccessData.nz)) << 1;
+	//long long TotAmOfNewData = (((long long)NewSRWRadStructAccessData.ne)*((long long)NewSRWRadStructAccessData.nx)*((long long)NewSRWRadStructAccessData.nz)) << 1;
+	long long TotAmOfOldData = (((long long)SRWRadStructAccessData.nwfr)*((long long)SRWRadStructAccessData.ne)*((long long)SRWRadStructAccessData.nx)*((long long)SRWRadStructAccessData.nz)) << 1; //HG05072022
+	long long TotAmOfNewData = (((long long)SRWRadStructAccessData.nwfr)*((long long)NewSRWRadStructAccessData.ne)*((long long)NewSRWRadStructAccessData.nx)*((long long)NewSRWRadStructAccessData.nz)) << 1; //HG05072022
 
 	//char TreatPolarizSepar = 0;
 	char TreatPolarizSepar = (!ExIsOK) || (!EzIsOK); //OC13112011
 	if(!TreatPolarizSepar)
 	{
 		long nxCurRad = SRWRadStructAccessData.nx, nzCurRad = SRWRadStructAccessData.nz;
-		double ExtraMemSize = ExtraMemSizeForResize(nxCurRad, nzCurRad, pxmIn, pxdIn, pzmIn, pzdIn, 1) * SRWRadStructAccessData.nwfr;
+		//double ExtraMemSize = ExtraMemSizeForResize(nxCurRad, nzCurRad, pxmIn, pxdIn, pzmIn, pzdIn, 1);
+		double ExtraMemSize = ExtraMemSizeForResize(nxCurRad, nzCurRad, pxmIn, pxdIn, pzmIn, pzdIn, 1) * SRWRadStructAccessData.nwfr; //HG05072022
 		double MemoryAvail = CheckMemoryAvailable();
 
 		double SecurityMemResizeCoef = 0.95; //to tune
@@ -2510,9 +2547,9 @@ int srTGenOptElem::RadResizeGen(srTSRWRadStructAccessData& SRWRadStructAccessDat
 		//if((pxmIn*pxdIn*pzmIn*pzdIn >= 1.) || (SRWRadStructAccessData.m_newExtWfrCreateNotAllowed)) //OC140311
 		if(pxmIn*pxdIn*pzmIn*pzdIn >= 1.) //OC161115
 		{//Is this part really necessary?
-			OldRadXCopy = ALLOC_ARRAY(float, TotAmOfOldData);
+			OldRadXCopy = new float[TotAmOfOldData];
 			if(OldRadXCopy == 0) return MEMORY_ALLOCATION_FAILURE;
-			OldRadZCopy = ALLOC_ARRAY(float, TotAmOfOldData);
+			OldRadZCopy = new float[TotAmOfOldData];
 			if(OldRadZCopy == 0) return MEMORY_ALLOCATION_FAILURE;
 			
 			float *tOldRadXCopy = OldRadXCopy, *tOldRadZCopy = OldRadZCopy;
@@ -2554,11 +2591,11 @@ int srTGenOptElem::RadResizeGen(srTSRWRadStructAccessData& SRWRadStructAccessDat
 				tBaseRadX[j] = 0.; tBaseRadZ[j] = 0.; 
 			}
 #else
+			//HG08252022 Faster to allocate zero initialized memory
 			//for(long long j=0; j<TotAmOfNewData; j++)
 			//{
 			//	*(tBaseRadX++) = 0.; *(tBaseRadZ++) = 0.; 
 			//}
-			//HG08252022 Faster to allocate zero initialized memory
 #endif
 			
 			SRWRadStructAccessData.pBaseRadX = OldRadXCopy;
@@ -2569,8 +2606,8 @@ int srTGenOptElem::RadResizeGen(srTSRWRadStructAccessData& SRWRadStructAccessDat
 			
 			if(result = RadResizeCore(SRWRadStructAccessData, NewSRWRadStructAccessData, RadResizeStruct, 0, pGpuUsage)) return result;
 			
-			if(OldRadXCopy != 0) FREE_ARRAY(OldRadXCopy);
-			if(OldRadZCopy != 0) FREE_ARRAY(OldRadZCopy);
+			if(OldRadXCopy != 0) delete[] OldRadXCopy;
+			if(OldRadZCopy != 0) delete[] OldRadZCopy;
 
 			//Added by SY (for profiling?) at parallelizing SRW via OpenMP:
 			//srwlPrintTime(":RadResizeGen: RadResizeCore 1",&start);
@@ -2624,11 +2661,11 @@ int srTGenOptElem::RadResizeGen(srTSRWRadStructAccessData& SRWRadStructAccessDat
 				tRadX[j] = 0.; tRadZ[j] = 0.;
 			}
 #else
+			//HG08252022 Faster to allocate zero initialized memory
 			//for(long long j=0; j<TotAmOfNewData; j++)
 			//{
 			//	*(tRadX++) = 0.; *(tRadZ++) = 0.; 
 			//}
-			//HG08252022 Faster to allocate zero initialized memory
 #endif
 			//Added by SY (for profiling?) at parallelizing SRW via OpenMP:
 			//srwlPrintTime(":RadResizeGen: TreatPolarizSepar-PrepareStructs",&start);
@@ -2667,7 +2704,7 @@ int srTGenOptElem::RadResizeGen(srTSRWRadStructAccessData& SRWRadStructAccessDat
 		{//Is this part necessary at all?
 			if(ExIsOK) //OC13112011
 			{
-				OldRadXCopy = ALLOC_ARRAY(float, TotAmOfOldData);
+				OldRadXCopy = new float[TotAmOfOldData];
 				if(OldRadXCopy == 0) return MEMORY_ALLOCATION_FAILURE;
 
 				float *tOldRadXCopy = OldRadXCopy;
@@ -2694,14 +2731,14 @@ int srTGenOptElem::RadResizeGen(srTSRWRadStructAccessData& SRWRadStructAccessDat
 				}
 				SRWRadStructAccessData.pBaseRadX = OldRadXCopy;
 				if(result = RadResizeCore(SRWRadStructAccessData, NewSRWRadStructAccessData, RadResizeStruct, 'x', pGpuUsage)) return result;
-				if(OldRadXCopy != 0) FREE_ARRAY(OldRadXCopy);
+				if(OldRadXCopy != 0) delete[] OldRadXCopy;
 			}
 			//Added by SY (for profiling?) at parallelizing SRW via OpenMP:
 			//srwlPrintTime(":RadResizeGen: TreatPolarizSepar-ExIsOK1",&start);
 
 			if(EzIsOK)
 			{
-				OldRadZCopy = ALLOC_ARRAY(float, TotAmOfOldData);
+				OldRadZCopy = new float[TotAmOfOldData];
 				if(OldRadZCopy == 0) return MEMORY_ALLOCATION_FAILURE;
 
 				float *tOldRadZCopy = OldRadZCopy;
@@ -2850,7 +2887,7 @@ int srTGenOptElem::RadResizeGen(srTSRWRadStructAccessData& SRWRadStructAccessDat
 
 //*************************************************************************
 
-int srTGenOptElem::RadResizeCore(srTSRWRadStructAccessData& OldRadAccessData, srTSRWRadStructAccessData& NewRadAccessData, srTRadResize& RadResizeStruct, char PolComp, gpuUsageArg_t *pGpuUsage)
+int srTGenOptElem::RadResizeCore(srTSRWRadStructAccessData& OldRadAccessData, srTSRWRadStructAccessData& NewRadAccessData, srTRadResize& RadResizeStruct, char PolComp, gpuUsageArg *pGpuUsage)
 {
 	//Added by SY (for profiling?) at parallelizing SRW via OpenMP:
 	//double start;
@@ -2940,6 +2977,7 @@ int srTGenOptElem::RadResizeCore(srTSRWRadStructAccessData& OldRadAccessData, sr
 
 	int result = 0;
 
+	//HG25082022 Perform resize on GPU if requested
 	GPU_COND(pGpuUsage,
 	{
 //#if _DEBUG
@@ -4555,7 +4593,7 @@ char srTGenOptElem::WaveFrontTermCanBeTreated(srTSRWRadStructAccessData& RadAcce
 
 //*************************************************************************
 
-void srTGenOptElem::TreatStronglyOscillatingTerm(srTSRWRadStructAccessData& RadAccessData, char AddOrRem, char PolComp, int ieOnly, gpuUsageArg_t* pGpuUsage)
+void srTGenOptElem::TreatStronglyOscillatingTerm(srTSRWRadStructAccessData& RadAccessData, char AddOrRem, char PolComp, int ieOnly, gpuUsageArg* pGpuUsage)
 {
 	//Later treat X and Z coordinates separately here!!!
 
@@ -4687,8 +4725,9 @@ void srTGenOptElem::TreatStronglyOscillatingTerm(srTSRWRadStructAccessData& RadA
 		ieStart = ieOnly; ieBefEnd = ieOnly + 1;
 	}
 
+	//HG25082022 Use GPU implementation if requested
 	GPU_COND(pGpuUsage,
-		{
+	{
 //#if _DEBUG
 //			printf("GPU: srTSRWRadStructAccessData::TreatStronglyOscillatingTerm\n");
 //#endif

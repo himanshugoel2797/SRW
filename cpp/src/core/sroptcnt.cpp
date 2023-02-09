@@ -251,7 +251,7 @@ int srTCompositeOptElem::PropagateRadiationTest(srTSRWRadStructAccessData* pInRa
 
 //*************************************************************************
 
-int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr, int nInt, char** arID, SRWLRadMesh* arIM, char** arI, gpuUsageArg_t* pGpuUsage) //OC15082018
+int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr, int nInt, char** arID, SRWLRadMesh* arIM, char** arI, gpuUsageArg* pGpuUsage) //OC15082018
 //int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr)
 {
 	//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
@@ -311,6 +311,8 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 				(::fabs(curPropResizeInst.pzd - 1.) > tolRes) || (::fabs(curPropResizeInst.pzm - 1.) > tolRes) || (curPropResizeInst.ShiftTypeBeforeRes > 0)) //OC11072019
 			{
 				if(res = RadResizeGen(wfr, curPropResizeInst, pGpuUsage)) return res;
+				
+				//Mark data as already being on GPU if the resize was done on GPU
 				GPU_COND(pGpuUsage, {
 						dataOnDevice = true;
 					});
@@ -331,20 +333,25 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 		//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
 		//srwlPrintTime("Iteration: precParWfrPropag",&start);
 
+		//HG09112022 Check if the next propagator doesn't support GPU and if the data is on GPU, if so, transfer the data to CPU and synchronize before propagating further on CPU
 		GPU_COND(pGpuUsage, {
 			if (dataOnDevice && (((srTGenOptElem*)it->rep)->SupportedFeatures() & 1) == 0)
 			{
+#if DEBUG
 				printf("Element does not support GPU, transferring to CPU.\r\n");
+#endif
 				if (wfr.pBaseRadX != NULL)
-					wfr.pBaseRadX = (float*)UtiDev::ToHostAndFree(pGpuUsage, wfr.pBaseRadX, 2 * wfr.ne * wfr.nx * wfr.nz * wfr.nwfr * sizeof(float));
+					wfr.pBaseRadX = (float*)AuxGpu::ToHostAndFree(pGpuUsage, wfr.pBaseRadX, 2 * wfr.ne * wfr.nx * wfr.nz * wfr.nwfr * sizeof(float));
 				if (wfr.pBaseRadZ != NULL)
-					wfr.pBaseRadZ = (float*)UtiDev::ToHostAndFree(pGpuUsage, wfr.pBaseRadZ, 2 * wfr.ne * wfr.nx * wfr.nz * wfr.nwfr * sizeof(float));
+					wfr.pBaseRadZ = (float*)AuxGpu::ToHostAndFree(pGpuUsage, wfr.pBaseRadZ, 2 * wfr.ne * wfr.nx * wfr.nz * wfr.nwfr * sizeof(float));
 				dataOnDevice = false;
 			}
 			else if (!dataOnDevice && (((srTGenOptElem*)it->rep)->SupportedFeatures() & 1) == 1)
 			{
 					dataOnDevice = true;
+#if DEBUG
 					printf("Element supports GPU, transferring...\r\n");
+#endif
 			}
 		});
 
@@ -357,12 +364,13 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 
 		if (propIntIsNeeded)
 		{
+			//HG09112022 If the data is on GPU, transfer it to CPU and synchronize before extracting the intensity
 			if (dataOnDevice)
 			{
 				if (wfr.pBaseRadX != NULL)
-					wfr.pBaseRadX = (float*)UtiDev::ToHostAndFree(pGpuUsage, wfr.pBaseRadX, 2 * wfr.ne * wfr.nx * wfr.nz * wfr.nwfr * sizeof(float));
+					wfr.pBaseRadX = (float*)AuxGpu::ToHostAndFree(pGpuUsage, wfr.pBaseRadX, 2 * wfr.ne * wfr.nx * wfr.nz * wfr.nwfr * sizeof(float));
 				if (wfr.pBaseRadZ != NULL)
-					wfr.pBaseRadZ = (float*)UtiDev::ToHostAndFree(pGpuUsage, wfr.pBaseRadZ, 2 * wfr.ne * wfr.nx * wfr.nz * wfr.nwfr * sizeof(float));
+					wfr.pBaseRadZ = (float*)AuxGpu::ToHostAndFree(pGpuUsage, wfr.pBaseRadZ, 2 * wfr.ne * wfr.nx * wfr.nz * wfr.nwfr * sizeof(float));
 				dataOnDevice = false;
 			}
 			ExtractPropagatedIntensity(wfr, nInt, arID, arIM, arI, elemCount);

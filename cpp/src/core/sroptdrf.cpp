@@ -352,7 +352,7 @@ int srTDriftSpace::PropagateRadiationMeth_1(srTSRWRadStructAccessData* pRadAcces
 
 //int srTDriftSpace::PropagateRadiationSimple_PropToWaist(srTSRWRadStructAccessData* pRadAccessData, srTDriftPropBufVars* pBufVars) //OC06092019
 //OC01102019 (restored)
-int srTDriftSpace::PropagateRadiationSimple_PropToWaist(srTSRWRadStructAccessData* pRadAccessData, gpuUsageArg_t *pGpuUsage)
+int srTDriftSpace::PropagateRadiationSimple_PropToWaist(srTSRWRadStructAccessData* pRadAccessData, gpuUsageArg *pGpuUsage)
 {// e in eV; Length in m !!!
 	int result;
 
@@ -465,7 +465,7 @@ int srTDriftSpace::PropagateRadiationSimple_PropToWaist(srTSRWRadStructAccessDat
 }
 
 //*************************************************************************
-int srTDriftSpace::PropagateRadiationSimple_PropToWaistBeyondParax(srTSRWRadStructAccessData* pRadAccessData, gpuUsageArg_t *pGpuUsage) //OC10112019
+int srTDriftSpace::PropagateRadiationSimple_PropToWaistBeyondParax(srTSRWRadStructAccessData* pRadAccessData, gpuUsageArg *pGpuUsage) //OC10112019
 {// e in eV; Length in m !!!
 	int result = 0;
 
@@ -583,7 +583,7 @@ int srTDriftSpace::PropagateRadiationSimple_PropToWaistBeyondParax(srTSRWRadStru
 
 //int srTDriftSpace::PropagateRadiationSimple_PropFromWaist(srTSRWRadStructAccessData* pRadAccessData, srTDriftPropBufVars* pBufVars) //OC06092019
 //OC01102019 (restored)
-int srTDriftSpace::PropagateRadiationSimple_PropFromWaist(srTSRWRadStructAccessData* pRadAccessData, gpuUsageArg_t *pGpuUsage)
+int srTDriftSpace::PropagateRadiationSimple_PropFromWaist(srTSRWRadStructAccessData* pRadAccessData, gpuUsageArg *pGpuUsage)
 {//Should be very similar to PropagateRadiationSimple_PropToWaist, consider merging
 	int result = 0;
 	
@@ -688,7 +688,7 @@ int srTDriftSpace::PropagateRadiationSimple_PropFromWaist(srTSRWRadStructAccessD
 
 //int srTDriftSpace::PropagateRadiationSimple_AnalytTreatQuadPhaseTerm(srTSRWRadStructAccessData* pRadAccessData, srTDriftPropBufVars* pBufVars) //OC06092019
 //OC01102019 (restored)
-int srTDriftSpace::PropagateRadiationSimple_AnalytTreatQuadPhaseTerm(srTSRWRadStructAccessData* pRadAccessData, gpuUsageArg_t *pGpuUsage)
+int srTDriftSpace::PropagateRadiationSimple_AnalytTreatQuadPhaseTerm(srTSRWRadStructAccessData* pRadAccessData, gpuUsageArg *pGpuUsage)
 {// e in eV; Length in m !!!
 	int result = 0;
 
@@ -1401,7 +1401,7 @@ void srTDriftSpace::EstimateTrueWfrRadAndMaxLeff_AnalytTreatQuadPhaseTerm(srTSRW
 
 //*************************************************************************
 #pragma message("PropagateRadiationSimple_NumIntFresnel needs proper CUDA port")
-int srTDriftSpace::PropagateRadiationSimple_NumIntFresnel(srTSRWRadStructAccessData* pRadAccessData, gpuUsageArg_t *pGpuUsage) 
+int srTDriftSpace::PropagateRadiationSimple_NumIntFresnel(srTSRWRadStructAccessData* pRadAccessData, gpuUsageArg *pGpuUsage) 
 {//OC100914 Aux. method for testing / benchmarking
 //This method attempts to calculate 2D Fresnel integral using the standard numerical integration
 //(e.g. for testing accuracy of the FTT-based integration)

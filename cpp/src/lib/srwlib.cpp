@@ -28,7 +28,7 @@
 #include "srpowden.h"
 #include "srisosrc.h"
 #include "srmatsta.h"
-#include "utidev.h"
+#include "auxgpu.h"
 
 //#include <time.h> //Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP
 
@@ -752,7 +752,7 @@ EXP int CALL srwlCalcPowDenSR(SRWLStokes* pStokes, SRWLPartBeam* pElBeam, SRWLPr
 
 //-------------------------------------------------------------------------
 
-EXP int CALL srwlCalcIntFromElecField(char* pInt, SRWLWfr* pWfr, char polar, char intType, char depType, double e, double x, double y, double* pMeth, void* pFldTrj, gpuUsageArg_t* pGpuUsage) //OC23022020
+EXP int CALL srwlCalcIntFromElecField(char* pInt, SRWLWfr* pWfr, char polar, char intType, char depType, double e, double x, double y, double* pMeth, void* pFldTrj, gpuUsageArg* pGpuUsage) //OC23022020
 //EXP int CALL srwlCalcIntFromElecField(char* pInt, SRWLWfr* pWfr, char polar, char intType, char depType, double e, double x, double y, double *pMeth) //OC16122019
 //EXP int CALL srwlCalcIntFromElecField(char* pInt, SRWLWfr* pWfr, char polar, char intType, char depType, double e, double x, double y, int *pMeth) //OC13122019
 //EXP int CALL srwlCalcIntFromElecField(char* pInt, SRWLWfr* pWfr, char polar, char intType, char depType, double e, double x, double y)
@@ -995,7 +995,7 @@ EXP int CALL srwlSetRepresElecField(SRWLWfr* pWfr, char repr)
 
 //-------------------------------------------------------------------------
 
-EXP int CALL srwlPropagElecField(SRWLWfr* pWfr, SRWLOptC* pOpt, int nInt, char** arID, SRWLRadMesh* arIM, char** arI, gpuUsageArg_t* pGpuUsage) //OC15082018
+EXP int CALL srwlPropagElecField(SRWLWfr* pWfr, SRWLOptC* pOpt, int nInt, char** arID, SRWLRadMesh* arIM, char** arI, gpuUsageArg* pGpuUsage) //OC15082018
 //EXP int CALL srwlPropagElecField(SRWLWfr* pWfr, SRWLOptC* pOpt)
 {
 	if((pWfr == 0) || (pOpt == 0)) return SRWL_INCORRECT_PARAM_FOR_WFR_PROP;
@@ -1048,7 +1048,7 @@ EXP int CALL srwlCalcTransm(SRWLOptT* pOpTr, const double* pDelta, const double*
 
 //-------------------------------------------------------------------------
 
-EXP int CALL srwlUtiFFT(char* pcData, char typeData, double* arMesh, int nMesh, int dir, gpuUsageArg_t *pGpuUsage) //HG01032022
+EXP int CALL srwlUtiFFT(char* pcData, char typeData, double* arMesh, int nMesh, int dir, gpuUsageArg *pGpuUsage) //HG01032022
 {
 	if((pcData == 0) || (arMesh == 0) || ((typeData != 'f') && (typeData != 'd')) || (nMesh < 3) || (dir == 0)) return SRWL_INCORRECT_PARAM_FOR_FFT; //OC31012019
 
@@ -1543,35 +1543,35 @@ EXP int CALL srwlPropagRadMultiE(SRWLStokes* pStokes, SRWLWfr* pWfr0, SRWLOptC* 
 
 EXP bool CALL srwlUtiGPUAvailable() 
 {
-	return UtiDev::GPUAvailable();
+	return AuxGpu::GPUAvailable();
 }
 
 //-------------------------------------------------------------------------
 
 EXP bool CALL srwlUtiGPUEnabled()
 {
-	return UtiDev::GPUEnabled(nullptr);
+	return AuxGpu::GPUEnabled(nullptr);
 }
 
 //-------------------------------------------------------------------------
 
 EXP void CALL srwlUtiGPUSetStatus(bool enable)
 {
-	UtiDev::SetGPUStatus(enable);
+	AuxGpu::SetGPUStatus(enable);
 }
 
 //-------------------------------------------------------------------------
 
-EXP void CALL srwlUtiDevInit()
+EXP void CALL srwlAuxGpuInit()
 {
-	UtiDev::Init();
+	AuxGpu::Init();
 }
 
 //-------------------------------------------------------------------------
 
-EXP void CALL srwlUtiDevFini()
+EXP void CALL srwlAuxGpuFini()
 {
-	UtiDev::Fini();
+	AuxGpu::Fini();
 }
 
 //-------------------------------------------------------------------------

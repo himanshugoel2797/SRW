@@ -60,7 +60,7 @@
 #define CALL
 #endif
 
-#include "utidev.h"
+#include "auxgpu.h"
 /***************************************************************************/
 
 #ifdef __cplusplus  
@@ -734,7 +734,7 @@ EXP int CALL srwlCalcPowDenSR(SRWLStokes* pStokes, SRWLPartBeam* pElBeam, SRWLPr
  * @return	integer error (>0) or warnig (<0) code
  * @see ...
  */
-EXP int CALL srwlCalcIntFromElecField(char* pInt, SRWLWfr* pWfr, char pol, char intType, char depType, double e, double x, double y, double* arMeth=0, void* pFldTrj=0, gpuUsageArg_t* pGpuUsage=0);
+EXP int CALL srwlCalcIntFromElecField(char* pInt, SRWLWfr* pWfr, char pol, char intType, char depType, double e, double x, double y, double* arMeth=0, void* pFldTrj=0, gpuUsageArg* pGpuUsage=0);
 //EXP int CALL srwlCalcIntFromElecField(char* pInt, SRWLWfr* pWfr, char pol, char intType, char depType, double e, double x, double y, double* arMeth=0);
 //EXP int CALL srwlCalcIntFromElecField(char* pInt, SRWLWfr* pWfr, char pol, char intType, char depType, double e, double x, double y);
 
@@ -804,7 +804,7 @@ EXP int CALL srwlSetRepresElecField(SRWLWfr* pWfr, char repr);
  * @return	integer error (>0) or warnig (<0) code
  * @see ...
  */
-EXP int CALL srwlPropagElecField(SRWLWfr* pWfr, SRWLOptC* pOpt, int nInt=0, char** arID=0, SRWLRadMesh* arIM=0, char** arI=0, gpuUsageArg_t* pGpuUsage =0); //OC15082018
+EXP int CALL srwlPropagElecField(SRWLWfr* pWfr, SRWLOptC* pOpt, int nInt=0, char** arID=0, SRWLRadMesh* arIM=0, char** arI=0, gpuUsageArg* pGpuUsage =0); //OC15082018
 //EXP int CALL srwlPropagElecField(SRWLWfr* pWfr, SRWLOptC* pOpt);
 
 /** TEST
@@ -851,7 +851,7 @@ EXP int CALL srwlCalcTransm(SRWLOptT* pOpTr, const double* pDelta, const double*
  * @return	integer error (>0) or warnig (<0) code
  * @see ...
  */
-EXP int CALL srwlUtiFFT(char* pcData, char typeData, double* arMesh, int nMesh, int dir, gpuUsageArg_t *pGpuUsage=0);
+EXP int CALL srwlUtiFFT(char* pcData, char typeData, double* arMesh, int nMesh, int dir, gpuUsageArg *pGpuUsage=0);
 
 /** 
  * Convolves real data with 1D or 2D Gaussian (depending on arguments)
@@ -993,14 +993,14 @@ EXP void CALL srwlUtiGPUSetStatus(bool enable);
  * @see ...
  */
 
-EXP void CALL srwlUtiDevInit();
+EXP void CALL srwlAuxGpuInit();
 
 /**
  * Finalize device offloading
  * @see ...
  */
 
-EXP void CALL srwlUtiDevFini();
+EXP void CALL srwlAuxGpuFini();
 
 /**
  * These functions were added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP

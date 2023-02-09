@@ -26,8 +26,8 @@
 //#endif
 //#endif
 
-#include "utidev.h"
-#include "srradstrgpu.h"
+#include "auxgpu.h"
+#include "srradstr_gpu.h"
 
 #ifdef __IGOR_PRO__
 #include "XOPStandardHeaders.h"			// Include ANSI headers, Mac headers, IgorXOP.h, XOP.h and XOPSupport.h
@@ -245,7 +245,7 @@ public:
 	void CheckAndSubtractPhaseTermsLin(double newXc, double newZc);
 	void CheckAndResetPhaseTermsLin();
 	void EstimateOversamplingFactors(double& estimOverSampX, double& estimOverSampZ);
-	void MirrorFieldData(int sx, int sz, gpuUsageArg_t *pGpuUsage=0);
+	void MirrorFieldData(int sx, int sz, gpuUsageArg *pGpuUsage=0);
 
 	int SetupWfrEdgeCorrData(float* pDataEx, float* pDataEz, srTDataPtrsForWfrEdgeCorr& DataPtrsForWfrEdgeCorr);
 	void MakeWfrEdgeCorrection(float* pDataEx, float* pDataEz, srTDataPtrsForWfrEdgeCorr& DataPtrs);
@@ -494,7 +494,7 @@ public:
 		}
 	}
 
-	void MultiplyElFieldByPhaseLin(double xMult, double zMult, gpuUsageArg_t* pGpuUsage =0)
+	void MultiplyElFieldByPhaseLin(double xMult, double zMult, gpuUsageArg* pGpuUsage =0)
 	{
 		bool RadXisDefined = (pBaseRadX != 0);
 		bool RadZisDefined = (pBaseRadZ != 0);

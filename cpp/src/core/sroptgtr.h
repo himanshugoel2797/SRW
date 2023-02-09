@@ -80,7 +80,7 @@ public:
 	}
 
 	//int PropagateRadiation(srTSRWRadStructAccessData* pRadAccessData, int MethNo, srTRadResizeVect& ResBeforeAndAfterArr)
-	int PropagateRadiation(srTSRWRadStructAccessData* pRadAccessData, srTParPrecWfrPropag& ParPrecWfrPropag, srTRadResizeVect& ResBeforeAndAfterArr, gpuUsageArg_t* pGpuUsage =0)
+	int PropagateRadiation(srTSRWRadStructAccessData* pRadAccessData, srTParPrecWfrPropag& ParPrecWfrPropag, srTRadResizeVect& ResBeforeAndAfterArr, gpuUsageArg* pGpuUsage =0)
 	{
 		//if(ParPrecWfrPropag.AnalTreatment == 1)
 		//{// Treating linear terms analytically
@@ -105,7 +105,7 @@ public:
 	//int PropagateRadiationMeth_0(srTSRWRadStructAccessData* pRadAccessData)
 	//int PropagateRadiationSingleE_Meth_0(srTSRWRadStructAccessData* pRadAccessData, srTSRWRadStructAccessData* pPrevRadDataSingleE, void* pBuf=0) //OC06092019
 	//OC01102019 (restored)
-	int PropagateRadiationSingleE_Meth_0(srTSRWRadStructAccessData* pRadAccessData, srTSRWRadStructAccessData* pPrevRadDataSingleE, gpuUsageArg_t* pGpuUsage =0)
+	int PropagateRadiationSingleE_Meth_0(srTSRWRadStructAccessData* pRadAccessData, srTSRWRadStructAccessData* pPrevRadDataSingleE, gpuUsageArg* pGpuUsage =0)
 	{
 		int result;
 		if(result = PropagateRadMoments(pRadAccessData, 0)) return result;
@@ -119,7 +119,7 @@ public:
 
 	//int PropagateRadiationSimple(srTSRWRadStructAccessData* pRadAccessData, void* pBuf=0) //OC06092019
 	//OC01102019 (restored)
-	int PropagateRadiationSimple(srTSRWRadStructAccessData* pRadAccessData, gpuUsageArg_t* pGpuUsage)
+	int PropagateRadiationSimple(srTSRWRadStructAccessData* pRadAccessData, gpuUsageArg* pGpuUsage)
 	{
 		int result;
 		if(pRadAccessData->Pres != 0) if(result = SetRadRepres(pRadAccessData, 0, 0, 0, pGpuUsage)) return result;
@@ -141,7 +141,7 @@ public:
   	void RadPointModifier1D(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf=0); //OC06092019
   	//void RadPointModifier1D(srTEXZ& EXZ, srTEFieldPtrs& EPtrs);
 
-	int RadPointModifierParallel(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars=0, long pBufVarsSz=0, gpuUsageArg_t* pGpuUsage=0) override;
+	int RadPointModifierParallel(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars=0, long pBufVarsSz=0, gpuUsageArg* pGpuUsage=0) override;
 
 	int EstimateMinNpToResolveOptElem(srTSRWRadStructAccessData* pRadAccessData, double& MinNx, double& MinNz);
 

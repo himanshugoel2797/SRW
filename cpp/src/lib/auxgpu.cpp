@@ -1,8 +1,14 @@
 /************************************************************************//**
- * File: utigpu.cpp
- * Description: Auxiliary utilities to support GPU management
+ * File: auxgpu.cpp
+ * Description: Auxiliary utilities to manage GPU usage
+ * Project: Synchrotron Radiation Workshop
+ * First release: 2023
+ *
+ * Copyright (C) Brookhaven National Laboratory
+ * All Rights Reserved
  *
  * @author H.Goel
+ * @version 1.0
  ***************************************************************************/
 
 #include <cstdio>
@@ -13,7 +19,7 @@
 #include <cuda_runtime.h>
 #endif
 
-#include "utidev.h"
+#include "auxgpu.h"
 
 static bool isGPUAvailable = false;
 static bool isGPUEnabled = false;
@@ -61,13 +67,13 @@ static void CheckGPUAvailability()
 #endif
 }
 
-bool UtiDev::GPUAvailable()
+bool AuxGpu::GPUAvailable()
 {
 	CheckGPUAvailability();
 	return isGPUAvailable;
 }
 
-bool UtiDev::GPUEnabled(gpuUsageArg_t *arg) 
+bool AuxGpu::GPUEnabled(gpuUsageArg *arg) 
 {
 #ifdef _OFFLOAD_GPU
 	if (arg == NULL)
@@ -93,12 +99,12 @@ bool UtiDev::GPUEnabled(gpuUsageArg_t *arg)
 	return false;
 }
 
-void UtiDev::SetGPUStatus(bool enabled)
+void AuxGpu::SetGPUStatus(bool enabled)
 {
 	isGPUEnabled = enabled && GPUAvailable();
 }
 
-int UtiDev::GetDevice(gpuUsageArg_t* arg)
+int AuxGpu::GetDevice(gpuUsageArg* arg)
 {
 #ifdef _OFFLOAD_GPU
 	if (arg == NULL)
@@ -112,7 +118,7 @@ int UtiDev::GetDevice(gpuUsageArg_t* arg)
 #endif
 }
 
-void* UtiDev::ToDevice(gpuUsageArg_t* arg, void* hostPtr, size_t size, bool dontCopy)
+void* AuxGpu::ToDevice(gpuUsageArg* arg, void* hostPtr, size_t size, bool dontCopy)
 {
 #ifdef _OFFLOAD_GPU
 	if (arg == NULL)
@@ -167,7 +173,7 @@ void* UtiDev::ToDevice(gpuUsageArg_t* arg, void* hostPtr, size_t size, bool dont
 #endif
 }
 
-void UtiDev::EnsureDeviceMemoryReady(gpuUsageArg_t* arg, void* hostPtr)
+void AuxGpu::EnsureDeviceMemoryReady(gpuUsageArg* arg, void* hostPtr)
 {
 #ifdef _OFFLOAD_GPU
 	if (arg == NULL)
@@ -190,7 +196,7 @@ void UtiDev::EnsureDeviceMemoryReady(gpuUsageArg_t* arg, void* hostPtr)
 #endif
 }
 
-void* UtiDev::GetHostPtr(gpuUsageArg_t* arg, void* devicePtr)
+void* AuxGpu::GetHostPtr(gpuUsageArg* arg, void* devicePtr)
 {
 #ifdef _OFFLOAD_GPU
 	if (arg == NULL)
@@ -214,7 +220,7 @@ void* UtiDev::GetHostPtr(gpuUsageArg_t* arg, void* devicePtr)
 #endif
 }
 
-void* UtiDev::ToHostAndFree(gpuUsageArg_t* arg, void* devicePtr, size_t size, bool dontCopy)
+void* AuxGpu::ToHostAndFree(gpuUsageArg* arg, void* devicePtr, size_t size, bool dontCopy)
 {
 #ifdef _OFFLOAD_GPU
 	if (arg == NULL)
@@ -256,7 +262,7 @@ void* UtiDev::ToHostAndFree(gpuUsageArg_t* arg, void* devicePtr, size_t size, bo
 #endif
 }
 
-void UtiDev::FreeHost(void* ptr)
+void AuxGpu::FreeHost(void* ptr)
 {
 #ifdef _OFFLOAD_GPU
 	if (ptr == NULL)
@@ -274,14 +280,14 @@ void UtiDev::FreeHost(void* ptr)
 	cudaFreeAsync(devicePtr, 0);
 	//cudaEventDestroy(info.h2d_event);
 	//cudaEventDestroy(info.d2h_event);
-	UtiDev::free(hostPtr);
+	AuxGpu::free(hostPtr);
 	gpuMap.erase(devicePtr);
 	gpuMap.erase(hostPtr);
 #endif
 	return;
 }
 
-void UtiDev::MarkUpdated(gpuUsageArg_t* arg, void* ptr, bool devToHost, bool hostToDev)
+void AuxGpu::MarkUpdated(gpuUsageArg* arg, void* ptr, bool devToHost, bool hostToDev)
 {
 #ifdef _OFFLOAD_GPU
 	if (arg == NULL)
@@ -308,7 +314,7 @@ void UtiDev::MarkUpdated(gpuUsageArg_t* arg, void* ptr, bool devToHost, bool hos
 #endif
 }
 
-void UtiDev::Init() {
+void AuxGpu::Init() {
 	deviceOffloadInitialized = true;
 #ifdef _OFFLOAD_GPU
 	cudaGetDeviceCount(&deviceCount);
@@ -316,7 +322,7 @@ void UtiDev::Init() {
 #endif
 }
 
-void UtiDev::Fini() {
+void AuxGpu::Fini() {
 #ifdef _OFFLOAD_GPU
 	// Copy back all updated data
 	bool updated = false;

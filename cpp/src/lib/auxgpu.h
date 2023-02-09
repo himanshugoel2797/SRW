@@ -1,13 +1,13 @@
 /************************************************************************//**
- * File: utigpu.h
- * Description: GPU offloading detection and control
+ * File: auxgpu.h
+ * Description: Auxiliary utilities to manage GPU usage
  * Project: Synchrotron Radiation Workshop
- * First release: 2000
+ * First release: 2023
  *
- * Copyright (C) European Synchrotron Radiation Facility, Grenoble, France
+ * Copyright (C) Brookhaven National Laboratory
  * All Rights Reserved
  *
- * @author H. Goel
+ * @author H.Goel
  * @version 1.0
  ***************************************************************************/
 
@@ -29,14 +29,14 @@
 
 typedef struct
 {
-	int deviceIndex;
-} gpuUsageArg_t; 
+	int deviceIndex; // -1 means no device, TODO
+} gpuUsageArg; 
 
-#define ALLOC_ARRAY(type, size) (type *)UtiDev::malloc(sizeof(type)*(size))
-#define FREE_ARRAY(x) UtiDev::free(x); x=NULL
+//#define ALLOC_ARRAY(type, size) (type *)AuxGpu::malloc(sizeof(type)*(size))
+//#define FREE_ARRAY(x) AuxGpu::free(x); x=NULL
 
 #ifdef _OFFLOAD_GPU
-#define GPU_ENABLED(arg) UtiDev::GPUEnabled(arg)
+#define GPU_ENABLED(arg) AuxGpu::GPUEnabled(arg)
 #define GPU_COND(arg, code) if (GPU_ENABLED(arg)) { code }
 #define GPU_PORTABLE __device__ __host__
 #else
@@ -46,22 +46,22 @@ typedef struct
 #endif
 
  //*************************************************************************
-class UtiDev
+class AuxGpu
 {
 private:
 public:
 	static void Init();
 	static void Fini();
 	static bool GPUAvailable(); //CheckGPUAvailable etc
-	static bool GPUEnabled(gpuUsageArg_t *arg);
+	static bool GPUEnabled(gpuUsageArg *arg);
 	static void SetGPUStatus(bool enabled);
-	static int GetDevice(gpuUsageArg_t* arg);
-	static void* ToDevice(gpuUsageArg_t* arg, void* hostPtr, size_t size, bool dontCopy = false);
-	static void* GetHostPtr(gpuUsageArg_t* arg, void* devicePtr);
-	static void* ToHostAndFree(gpuUsageArg_t* arg, void* devicePtr, size_t size, bool dontCopy = false);
-	static void EnsureDeviceMemoryReady(gpuUsageArg_t* arg, void* devicePtr);
+	static int GetDevice(gpuUsageArg* arg);
+	static void* ToDevice(gpuUsageArg* arg, void* hostPtr, size_t size, bool dontCopy = false);
+	static void* GetHostPtr(gpuUsageArg* arg, void* devicePtr);
+	static void* ToHostAndFree(gpuUsageArg* arg, void* devicePtr, size_t size, bool dontCopy = false);
+	static void EnsureDeviceMemoryReady(gpuUsageArg* arg, void* devicePtr);
 	static void FreeHost(void* ptr);
-	static void MarkUpdated(gpuUsageArg_t* arg, void* ptr, bool devToHost, bool hostToDev);
+	static void MarkUpdated(gpuUsageArg* arg, void* ptr, bool devToHost, bool hostToDev);
 	static inline void* malloc(size_t sz) {
 /*#ifdef _OFFLOAD_GPU
 			void *ptr;

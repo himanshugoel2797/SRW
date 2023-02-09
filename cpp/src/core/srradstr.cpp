@@ -2703,7 +2703,7 @@ void srTSRWRadStructAccessData::CheckAndResetPhaseTermsLin()
 
 //*************************************************************************
 
-void srTSRWRadStructAccessData::MirrorFieldData(int sx, int sz, gpuUsageArg_t *pGpuUsage)
+void srTSRWRadStructAccessData::MirrorFieldData(int sx, int sz, gpuUsageArg *pGpuUsage)
 {// sx < 0 means mirroring should be done vs x 
  // sz < 0 means mirroring should be done vs z 
 	//long PerX = ne << 1;

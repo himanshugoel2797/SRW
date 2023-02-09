@@ -171,7 +171,7 @@ char* GetPyArrayBuf(PyObject* obj, vector<Py_buffer>* pvBuf, Py_ssize_t* pSizeBu
 		if(pvBuf != 0) pvBuf->push_back(pb_tmp);
 		return (char*)pb_tmp.buf;
 	}
-	else if (PyObject_HasAttrString(obj, "data")) //HG23112021
+	else if (PyObject_HasAttrString(obj, "data")) //HG23112021 Parse any python object with numpy style pointer, size and stride data (eg. numpy array, cupy array, etc.)
 	{
 		PyObject* obj_data = PyObject_GetAttrString(obj, "data");
 		PyObject* obj_data_ptr = PyObject_GetAttrString(obj_data, "ptr");
@@ -3092,7 +3092,7 @@ void ParseSructSRWLWfr(SRWLWfr* pWfr, PyObject* oWfr, vector<Py_buffer>* pvBuf, 
 	pWfr->yc = PyFloat_AsDouble(o_tmp);
 	Py_DECREF(o_tmp);
 
-	o_tmp = PyObject_GetAttrString(oWfr, "nwfr");
+	o_tmp = PyObject_GetAttrString(oWfr, "nwfr");	//HG05072022 Support batch of wavefronts
 	if(o_tmp == 0) throw strEr_BadWfr;
 	if(!PyNumber_Check(o_tmp)) throw strEr_BadWfr;
 	pWfr->nwfr = PyFloat_AsDouble(o_tmp);
@@ -3333,9 +3333,9 @@ void ParseSructSmpObj3D(double**& arObjShapeDefs, int& nObj3D, PyObject* oListSh
 }
 
 /************************************************************************//**
- * Configures device selection parameters.
+ * Convert Python device specification to C++ structure.
  ***************************************************************************/
-void ParseDeviceParam(PyObject* oDev, gpuUsageArg_t *pGpuUsage) //HG10202021
+void ParseDeviceParam(PyObject* oDev, gpuUsageArg *pGpuUsage) //HG10202021 Convert Python device specification to C++ structure
 {
 	if (oDev != 0) {
 		if (PyLong_Check(oDev)) {
@@ -3347,7 +3347,7 @@ void ParseDeviceParam(PyObject* oDev, gpuUsageArg_t *pGpuUsage) //HG10202021
 }
 
 /************************************************************************//**
- * Cleans up device selection parameters.
+ * Cleans up device parameters.
  ***************************************************************************/
 void CleanDeviceParam() //HG10202021
 {
@@ -4652,20 +4652,21 @@ static PyObject* srwlpy_CalcIntFromElecField(PyObject *self, PyObject *args)
 {
 	//PyObject *oInt=0, *oWfr=0, *oPol=0, *oIntType=0, *oDepType=0, *oE=0, *oX=0, *oY=0;
 	//PyObject *oInt=0, *oWfr=0, *oPol=0, *oIntType=0, *oDepType=0, *oE=0, *oX=0, *oY=0, *oMeth=0;
-	PyObject *oInt=0, *oWfr=0, *oPol=0, *oIntType=0, *oDepType=0, *oE=0, *oX=0, *oY=0, *oMeth=0, *oFldTrj=0, *oDev=0; //OC23022020
+	PyObject *oInt=0, *oWfr=0, *oPol=0, *oIntType=0, *oDepType=0, *oE=0, *oX=0, *oY=0, *oMeth=0, *oFldTrj=0, *oDev=0; //OC23022020 //HG22082022 Add oDev parameter for GPU usage
 	vector<Py_buffer> vBuf;
 	SRWLWfr wfr;
 	SRWLMagFldC *pMagCnt=0; //OC23022020
 	SRWLPrtTrj *pPrtTrj=0;
-	gpuUsageArg_t gpuArgs;
+	gpuUsageArg gpuArgs;
 
-	srwlUtiDevInit();
+	srwlAuxGpuInit();
 	try
 	{
 		//if(!PyArg_ParseTuple(args, "OOOOOOOO:CalcIntFromElecField", &oInt, &oWfr, &oPol, &oIntType, &oDepType, &oE, &oX, &oY)) throw strEr_BadArg_CalcIntFromElecField;
 		//if(!PyArg_ParseTuple(args, "OOOOOOOO|O:CalcIntFromElecField", &oInt, &oWfr, &oPol, &oIntType, &oDepType, &oE, &oX, &oY, &oMeth)) throw strEr_BadArg_CalcIntFromElecField; //OC13122019
 		//if(!PyArg_ParseTuple(args, "OOOOOOOO|O:CalcIntFromElecField", &oInt, &oWfr, &oPol, &oIntType, &oDepType, &oE, &oX, &oY, &oMeth, &oFldTrj)) throw strEr_BadArg_CalcIntFromElecField; //OC23022020
-		if(!PyArg_ParseTuple(args, "OOOOOOOO|OOO:CalcIntFromElecField", &oInt, &oWfr, &oPol, &oIntType, &oDepType, &oE, &oX, &oY, &oMeth, &oFldTrj, &oDev)) throw strEr_BadArg_CalcIntFromElecField; //OC03032021 (just formally corrected, according to number of arguments)
+		//if(!PyArg_ParseTuple(args, "OOOOOOOO|OO:CalcIntFromElecField", &oInt, &oWfr, &oPol, &oIntType, &oDepType, &oE, &oX, &oY, &oMeth, &oFldTrj)) throw strEr_BadArg_CalcIntFromElecField; //OC03032021 (just formally corrected, according to number of arguments)
+		if(!PyArg_ParseTuple(args, "OOOOOOOO|OOO:CalcIntFromElecField", &oInt, &oWfr, &oPol, &oIntType, &oDepType, &oE, &oX, &oY, &oMeth, &oFldTrj, &oDev)) throw strEr_BadArg_CalcIntFromElecField; //HG22082022 Add oDev parameter for GPU usage
 		if((oInt == 0) || (oWfr == 0) || (oPol == 0) || (oIntType == 0) || (oDepType == 0) || (oE == 0) || (oX == 0) || (oY == 0)) throw strEr_BadArg_CalcIntFromElecField;
 
 		//char *arInt = (char*)GetPyArrayBuf(oInt, vBuf, PyBUF_WRITABLE, 0);
@@ -4730,7 +4731,8 @@ static PyObject* srwlpy_CalcIntFromElecField(PyObject *self, PyObject *args)
 
 		//ProcRes(srwlCalcIntFromElecField(arInt, &wfr, pol, intType, depType, e, x, y));
 		//ProcRes(srwlCalcIntFromElecField(arInt, &wfr, pol, intType, depType, e, x, y, pMeth)); //OC13122019
-		ProcRes(srwlCalcIntFromElecField(arInt, &wfr, pol, intType, depType, e, x, y, pMeth, pFldTrj, &gpuArgs)); //OC23022020
+		//ProcRes(srwlCalcIntFromElecField(arInt, &wfr, pol, intType, depType, e, x, y, pMeth, pFldTrj)); //OC23022020
+		ProcRes(srwlCalcIntFromElecField(arInt, &wfr, pol, intType, depType, e, x, y, pMeth, pFldTrj, &gpuArgs)); //HG22082022
 		CleanDeviceParam();
 	}
 	catch(const char* erText) 
@@ -4740,7 +4742,7 @@ static PyObject* srwlpy_CalcIntFromElecField(PyObject *self, PyObject *args)
 		oInt = 0;
 	}
 
-	srwlUtiDevFini();
+	srwlAuxGpuFini();
 	if(pMagCnt != 0) DeallocMagCntArrays(pMagCnt);
 	ReleasePyBuffers(vBuf);
 	EraseElementFromMap(&wfr, gmWfrPyPtr);
@@ -4964,7 +4966,7 @@ static PyObject* srwlpy_SetRepresElecField(PyObject *self, PyObject *args)
 static PyObject* srwlpy_PropagElecField(PyObject *self, PyObject *args)
 {
 	//PyObject *oWfr=0, *oOptCnt=0;
-	PyObject *oWfr=0, *oOptCnt=0, *oInt=0, *oDev=0; //OC14082018
+	PyObject *oWfr=0, *oOptCnt=0, *oInt=0, *oDev=0; //OC14082018 //HG22082022 Add oDev for GPU usage
 
 	vector<Py_buffer> vBuf;
 	SRWLWfr wfr;
@@ -4976,13 +4978,14 @@ static PyObject* srwlpy_PropagElecField(PyObject *self, PyObject *args)
 	SRWLRadMesh *arIntMesh=0;
 	//float **arInts=0;
 	char **arInts=0;
-	gpuUsageArg_t gpuArgs;
+	gpuUsageArg gpuArgs;
 
-	srwlUtiDevInit();
+	srwlAuxGpuInit();
 	try
 	{
 		//if(!PyArg_ParseTuple(args, "OO:PropagElecField", &oWfr, &oOptCnt)) throw strEr_BadArg_PropagElecField;
-		if(!PyArg_ParseTuple(args, "OO|OO:PropagElecField", &oWfr, &oOptCnt, &oInt, &oDev)) throw strEr_BadArg_PropagElecField; //OC14082018
+		//if(!PyArg_ParseTuple(args, "OO|O:PropagElecField", &oWfr, &oOptCnt, &oInt)) throw strEr_BadArg_PropagElecField; //OC14082018
+		if(!PyArg_ParseTuple(args, "OO|OO:PropagElecField", &oWfr, &oOptCnt, &oInt, &oDev)) throw strEr_BadArg_PropagElecField; //HG22082022
 		if((oWfr == 0) || (oOptCnt == 0)) throw strEr_BadArg_PropagElecField;
 
 		//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
@@ -5017,7 +5020,8 @@ static PyObject* srwlpy_PropagElecField(PyObject *self, PyObject *args)
 		ParseDeviceParam(oDev, &gpuArgs);
 
 		//ProcRes(srwlPropagElecField(&wfr, &optCnt));
-		ProcRes(srwlPropagElecField(&wfr, &optCnt, nInt, arIntDescr, arIntMesh, arInts, &gpuArgs)); //OC15082018
+		//ProcRes(srwlPropagElecField(&wfr, &optCnt, nInt, arIntDescr, arIntMesh, arInts)); //OC15082018
+		ProcRes(srwlPropagElecField(&wfr, &optCnt, nInt, arIntDescr, arIntMesh, arInts, &gpuArgs)); //HG22082022
 
 		CleanDeviceParam();
 
@@ -5041,7 +5045,7 @@ static PyObject* srwlpy_PropagElecField(PyObject *self, PyObject *args)
 		oWfr = 0;
 	}
 
-	srwlUtiDevFini();
+	srwlAuxGpuFini();
 	DeallocOptCntArrays(&optCnt);
 	ReleasePyBuffers(vBuf);
 	EraseElementFromMap(&wfr, gmWfrPyPtr);
@@ -5141,13 +5145,14 @@ static PyObject* srwlpy_CalcTransm(PyObject* self, PyObject* args) //HG27012021
  ***************************************************************************/
 static PyObject* srwlpy_UtiFFT(PyObject *self, PyObject *args)
 {
-	PyObject *oData=0, *oMesh=0, *oDir=0, *oDev=0;
+	PyObject *oData=0, *oMesh=0, *oDir=0, *oDev=0; //HG22082022 Add oDev for GPU FFT
 	vector<Py_buffer> vBuf;
-	gpuUsageArg_t gpuArgs;
+	gpuUsageArg gpuArgs;
 
 	try
 	{
-		if(!PyArg_ParseTuple(args, "OOO|O:UtiFFT", &oData, &oMesh, &oDir, &oDev)) throw strEr_BadArg_UtiFFT;
+		//if(!PyArg_ParseTuple(args, "OOO:UtiFFT", &oData, &oMesh, &oDir)) throw strEr_BadArg_UtiFFT;
+		if(!PyArg_ParseTuple(args, "OOO|O:UtiFFT", &oData, &oMesh, &oDir, &oDev)) throw strEr_BadArg_UtiFFT; //HG05072022
 		if((oData == 0) || (oMesh == 0) || (oDir == 0)) throw strEr_BadArg_UtiFFT;
 
 		//int sizeVectBuf = (int)vBuf.size();
@@ -5183,10 +5188,11 @@ static PyObject* srwlpy_UtiFFT(PyObject *self, PyObject *args)
 		if(!PyNumber_Check(oDir)) throw strEr_BadArg_UtiFFT;
 		int dir = (int)PyLong_AsLong(oDir);
 
-		srwlUtiDevInit();
+		srwlAuxGpuInit();
 		ParseDeviceParam(oDev, &gpuArgs);
+		//ProcRes(srwlUtiFFT(pcData, typeData, arMesh, nMesh, dir));
 		ProcRes(srwlUtiFFT(pcData, typeData, arMesh, nMesh, dir, &gpuArgs));
-		srwlUtiDevFini();
+		srwlAuxGpuFini();
 
 		if(meshArType == 'l') UpdatePyListNum(oMesh, arMesh, nMesh); //04092016
 	}

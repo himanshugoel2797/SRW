@@ -45,7 +45,7 @@ SRW_INCLUDES += -I$(NVCOMPILERS)/$(NVARCH)/$(NVVERSION)/math_libs/include -I$(NV
 SRW_CFLAGS += -std=c++17
 LDFLAGS += -L$(NVCOMPILERS)/$(NVARCH)/$(NVVERSION)/cuda/lib64 -lcudart_static -lcudadevrt -lcufft -lrt
 NVCFLAGS = -O3 -arch=sm_80 -dlto -rdc=true
-CUDA_OBJ=gmfftgpu0.o srradstrgpu.o sroptelmgpu.o sroptdrfgpu.o sroptgtrgpu.o srradmnpgpu.o
+CUDA_OBJ=gmfft_gpu.o srradstr_gpu.o sroptelm_gpu.o sroptdrf_gpu.o sroptgtr_gpu.o srradmnp_gpu.o
 else
 ifeq ($(MODE), 0)
 SRW_CFLAGS+= -D_FFTW3 
@@ -82,7 +82,7 @@ OBJ +=  partsim.o pushp.o rpos.o scan.o source.o stepz.o string.o tdepend.o
 OBJ +=  timerec.o track.o srerror.o
 
 # src/lib
-OBJ +=  srwlib.o
+OBJ +=  srwlib.o auxgpu.o
 
 PRG= libsrw.a
 

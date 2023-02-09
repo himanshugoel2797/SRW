@@ -1,3 +1,16 @@
+/************************************************************************//**
+ * File: srradmnp_gpu.cu
+ * Description: Various "manipulations" with Radiation data (e.g. "extraction" of Intensity from Electric Field, etc.) (CUDA implementation)
+ * Project: Synchrotron Radiation Workshop
+ * First release: 2023
+ *
+ * Copyright (C) Brookhaven National Laboratory
+ * All Rights Reserved
+ *
+ * @author H.Goel
+ * @version 1.0
+ ***************************************************************************/
+
 #ifdef _OFFLOAD_GPU
 #include <stdio.h>
 #include <stdlib.h>
@@ -198,7 +211,7 @@ static inline void KernelLauncher(dim3 &blocks, dim3 &threads, srTRadExtract Rad
 	}
 }
 
-int srTRadGenManip::ExtractSingleElecIntensity2DvsXZ_GPU(srTRadExtract& RadExtract, double* arAuxInt, long long ie0, long long ie1, double InvStepRelArg, gpuUsageArg_t *pGpuUsage)
+int srTRadGenManip::ExtractSingleElecIntensity2DvsXZ_GPU(srTRadExtract& RadExtract, double* arAuxInt, long long ie0, long long ie1, double InvStepRelArg, gpuUsageArg *pGpuUsage)
 {
 	srTSRWRadStructAccessData& RadAccessData = *((srTSRWRadStructAccessData*)(hRadAccessData.ptr()));
 
@@ -208,20 +221,20 @@ int srTRadGenManip::ExtractSingleElecIntensity2DvsXZ_GPU(srTRadExtract& RadExtra
 
     if (RadAccessData.pBaseRadX != NULL)
 	{
-		RadAccessData.pBaseRadX = (float*)UtiDev::ToDevice(pGpuUsage, RadAccessData.pBaseRadX, 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz*RadAccessData.nwfr*sizeof(float));
-		UtiDev::EnsureDeviceMemoryReady(pGpuUsage, RadAccessData.pBaseRadX);
+		RadAccessData.pBaseRadX = (float*)AuxGpu::ToDevice(pGpuUsage, RadAccessData.pBaseRadX, 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz*RadAccessData.nwfr*sizeof(float));
+		AuxGpu::EnsureDeviceMemoryReady(pGpuUsage, RadAccessData.pBaseRadX);
 	}
 	if (RadAccessData.pBaseRadZ != NULL)
 	{
-		RadAccessData.pBaseRadZ = (float*)UtiDev::ToDevice(pGpuUsage, RadAccessData.pBaseRadZ, 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz*RadAccessData.nwfr*sizeof(float));
-		UtiDev::EnsureDeviceMemoryReady(pGpuUsage, RadAccessData.pBaseRadZ);
+		RadAccessData.pBaseRadZ = (float*)AuxGpu::ToDevice(pGpuUsage, RadAccessData.pBaseRadZ, 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz*RadAccessData.nwfr*sizeof(float));
+		AuxGpu::EnsureDeviceMemoryReady(pGpuUsage, RadAccessData.pBaseRadZ);
 	}
 
-	srTRadGenManip *local_copy = (srTRadGenManip*)UtiDev::ToDevice(pGpuUsage, this, sizeof(srTRadGenManip));
-	UtiDev::EnsureDeviceMemoryReady(pGpuUsage, local_copy);
+	srTRadGenManip *local_copy = (srTRadGenManip*)AuxGpu::ToDevice(pGpuUsage, this, sizeof(srTRadGenManip));
+	AuxGpu::EnsureDeviceMemoryReady(pGpuUsage, local_copy);
 
-    arAuxInt = (double*)UtiDev::ToDevice(pGpuUsage, arAuxInt, RadAccessData.ne*sizeof(double));
-    UtiDev::EnsureDeviceMemoryReady(pGpuUsage, arAuxInt);
+    arAuxInt = (double*)AuxGpu::ToDevice(pGpuUsage, arAuxInt, RadAccessData.ne*sizeof(double));
+    AuxGpu::EnsureDeviceMemoryReady(pGpuUsage, arAuxInt);
 
 	bool allStokesReq = (RadExtract.PolarizCompon == -5);
 	bool intOverEnIsRequired = (RadExtract.Int_or_Phase == 7) && (RadAccessData.ne > 1);
@@ -240,23 +253,23 @@ int srTRadGenManip::ExtractSingleElecIntensity2DvsXZ_GPU(srTRadExtract& RadExtra
 		else
     		KernelLauncher<false, false> (blocks, threads, RadExtract, RadAccessData, local_copy, arAuxInt, ie0, ie1, InvStepRelArg, Int_or_ReE);
 	
-    UtiDev::ToHostAndFree(pGpuUsage, local_copy, sizeof(srTRadGenManip), true);
-    UtiDev::ToHostAndFree(pGpuUsage, arAuxInt, RadAccessData.ne*sizeof(double), true);
-	UtiDev::MarkUpdated(pGpuUsage, RadAccessData.pBaseRadX, true, false);
-	UtiDev::MarkUpdated(pGpuUsage, RadAccessData.pBaseRadZ, true, false);
+    AuxGpu::ToHostAndFree(pGpuUsage, local_copy, sizeof(srTRadGenManip), true);
+    AuxGpu::ToHostAndFree(pGpuUsage, arAuxInt, RadAccessData.ne*sizeof(double), true);
+	AuxGpu::MarkUpdated(pGpuUsage, RadAccessData.pBaseRadX, true, false);
+	AuxGpu::MarkUpdated(pGpuUsage, RadAccessData.pBaseRadZ, true, false);
 
 #ifndef _DEBUG
 	if (RadAccessData.pBaseRadX != NULL)
-		RadAccessData.pBaseRadX = (float*)UtiDev::GetHostPtr(pGpuUsage, RadAccessData.pBaseRadX);
+		RadAccessData.pBaseRadX = (float*)AuxGpu::GetHostPtr(pGpuUsage, RadAccessData.pBaseRadX);
 	if (RadAccessData.pBaseRadZ != NULL)
-		RadAccessData.pBaseRadZ = (float*)UtiDev::GetHostPtr(pGpuUsage, RadAccessData.pBaseRadZ);
+		RadAccessData.pBaseRadZ = (float*)AuxGpu::GetHostPtr(pGpuUsage, RadAccessData.pBaseRadZ);
 #endif
 
 #ifdef _DEBUG
 	if (RadAccessData.pBaseRadX != NULL)
-		RadAccessData.pBaseRadX = (float*)UtiDev::ToHostAndFree(pGpuUsage, RadAccessData.pBaseRadX, 2 * RadAccessData.ne * RadAccessData.nx * RadAccessData.nz * RadAccessData.nwfr * sizeof(float));
+		RadAccessData.pBaseRadX = (float*)AuxGpu::ToHostAndFree(pGpuUsage, RadAccessData.pBaseRadX, 2 * RadAccessData.ne * RadAccessData.nx * RadAccessData.nz * RadAccessData.nwfr * sizeof(float));
 	if (RadAccessData.pBaseRadZ != NULL)
-		RadAccessData.pBaseRadZ = (float*)UtiDev::ToHostAndFree(pGpuUsage, RadAccessData.pBaseRadZ, 2 * RadAccessData.ne * RadAccessData.nx * RadAccessData.nz * RadAccessData.nwfr * sizeof(float));
+		RadAccessData.pBaseRadZ = (float*)AuxGpu::ToHostAndFree(pGpuUsage, RadAccessData.pBaseRadZ, 2 * RadAccessData.ne * RadAccessData.nx * RadAccessData.nz * RadAccessData.nwfr * sizeof(float));
 	cudaStreamSynchronize(0);
 	auto err = cudaGetLastError();
 	printf("%s\r\n", cudaGetErrorString(err));

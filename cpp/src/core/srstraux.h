@@ -1748,14 +1748,14 @@ struct srTDataPtrsForWfrEdgeCorr {
 	}
 	GPU_PORTABLE void DisposeData()
 	{
-		if(ExpArrXSt != 0) FREE_ARRAY(ExpArrXSt);
-		if(ExpArrXFi != 0) FREE_ARRAY(ExpArrXFi);
-		if(ExpArrZSt != 0) FREE_ARRAY(ExpArrZSt);
-		if(ExpArrZFi != 0) FREE_ARRAY(ExpArrZFi);
-		if(FFTArrXStEx != 0) FREE_ARRAY(FFTArrXStEx);
-		if(FFTArrXFiEx != 0) FREE_ARRAY(FFTArrXFiEx);
-		if(FFTArrZStEx != 0) FREE_ARRAY(FFTArrZStEx);
-		if(FFTArrZFiEx != 0) FREE_ARRAY(FFTArrZFiEx);
+		if(ExpArrXSt != 0) delete[] ExpArrXSt;
+		if(ExpArrXFi != 0) delete[] ExpArrXFi;
+		if(ExpArrZSt != 0) delete[] ExpArrZSt;
+		if(ExpArrZFi != 0) delete[] ExpArrZFi;
+		if(FFTArrXStEx != 0) delete[] FFTArrXStEx;
+		if(FFTArrXFiEx != 0) delete[] FFTArrXFiEx;
+		if(FFTArrZStEx != 0) delete[] FFTArrZStEx;
+		if(FFTArrZFiEx != 0) delete[] FFTArrZFiEx;
 		InitializeAll();
 	}
 };

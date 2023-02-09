@@ -1,13 +1,13 @@
 /************************************************************************//**
- * File: gmfftgpu0.h
- * Description: Auxiliary utilities to perform CUDA accelerated FFTs (header)
- * Project: 
- * First release: 2022
+ * File: gmfft_gpu.h
+ * Description: Auxiliary utilities to work with FFTW library (CUDA header)
+ * Project: Synchrotron Radiation Workshop
+ * First release: 2023
  *
- * Copyright (C) European Synchrotron Radiation Facility, Grenoble, France
+ * Copyright (C) Brookhaven National Laboratory
  * All Rights Reserved
  *
- * @author O.Chubar, P.Elleaume, H.Goel
+ * @author H.Goel
  * @version 1.0
  ***************************************************************************/
 

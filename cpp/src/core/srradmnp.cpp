@@ -676,7 +676,7 @@ int srTRadGenManip::ExtractSingleElecIntensity1DvsZ(srTRadExtract& RadExtract)
 
 //*************************************************************************
 
-int srTRadGenManip::ExtractSingleElecIntensity2DvsXZ(srTRadExtract& RadExtract, gpuUsageArg_t *pGpuUsage)
+int srTRadGenManip::ExtractSingleElecIntensity2DvsXZ(srTRadExtract& RadExtract, gpuUsageArg *pGpuUsage)
 {
 	int PolCom = RadExtract.PolarizCompon;
 	int Int_or_ReE = RadExtract.Int_or_Phase;

@@ -1,3 +1,16 @@
+/************************************************************************//**
+ * File: srradstr_gpu.cu
+ * Description: Auxiliary structures for various SR calculation methods (CUDA implementation)
+ * Project: Synchrotron Radiation Workshop
+ * First release: 2023
+ *
+ * Copyright (C) Brookhaven National Laboratory
+ * All Rights Reserved
+ *
+ * @author H.Goel
+ * @version 1.0
+ ***************************************************************************/
+
 #ifdef _OFFLOAD_GPU
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
@@ -5,7 +18,7 @@
 #include <stdio.h>
 #include <iostream>
 #include <chrono>
-#include "srradstrgpu.h"
+#include "srradstr_gpu.h"
 
 
 __global__ void MultiplyElFieldByPhaseLin_Kernel(double xMult, double zMult, float* pBaseRadX, float* pBaseRadZ, int nWfr, int nz, int nx, int ne, float zStart, float zStep, float xStart, float xStep) {
@@ -48,17 +61,17 @@ __global__ void MultiplyElFieldByPhaseLin_Kernel(double xMult, double zMult, flo
     }
 }
 
-void MultiplyElFieldByPhaseLin_GPU(double xMult, double zMult, float* pBaseRadX, float* pBaseRadZ, int nWfr, int nz, int nx, int ne, float zStart, float zStep, float xStart, float xStep, gpuUsageArg_t* pGpuUsage)
+void MultiplyElFieldByPhaseLin_GPU(double xMult, double zMult, float* pBaseRadX, float* pBaseRadZ, int nWfr, int nz, int nx, int ne, float zStart, float zStep, float xStart, float xStep, gpuUsageArg* pGpuUsage)
 {
 	if (pBaseRadX != NULL)
 	{
-		pBaseRadX = (float*)UtiDev::ToDevice(pGpuUsage, pBaseRadX, nWfr * nz * nx * ne * 2 * sizeof(float));
-		UtiDev::EnsureDeviceMemoryReady(pGpuUsage, pBaseRadX);
+		pBaseRadX = (float*)AuxGpu::ToDevice(pGpuUsage, pBaseRadX, nWfr * nz * nx * ne * 2 * sizeof(float));
+		AuxGpu::EnsureDeviceMemoryReady(pGpuUsage, pBaseRadX);
 	}
 	if (pBaseRadZ != NULL)
 	{
-		pBaseRadZ = (float*)UtiDev::ToDevice(pGpuUsage, pBaseRadZ, nWfr * nz * nx * ne * 2 * sizeof(float));
-		UtiDev::EnsureDeviceMemoryReady(pGpuUsage, pBaseRadZ);
+		pBaseRadZ = (float*)AuxGpu::ToDevice(pGpuUsage, pBaseRadZ, nWfr * nz * nx * ne * 2 * sizeof(float));
+		AuxGpu::EnsureDeviceMemoryReady(pGpuUsage, pBaseRadZ);
 	}
 
     const int bs = 256;
@@ -67,17 +80,17 @@ void MultiplyElFieldByPhaseLin_GPU(double xMult, double zMult, float* pBaseRadX,
     MultiplyElFieldByPhaseLin_Kernel<< <blocks, threads >> > (xMult, zMult, pBaseRadX, pBaseRadZ, nWfr, nz, nx, ne, zStart, zStep, xStart, xStep);
 
 	if (pBaseRadX != NULL)
-		UtiDev::MarkUpdated(pGpuUsage, pBaseRadX, true, false);
+		AuxGpu::MarkUpdated(pGpuUsage, pBaseRadX, true, false);
 	if (pBaseRadZ != NULL)
-		UtiDev::MarkUpdated(pGpuUsage, pBaseRadZ, true, false);
+		AuxGpu::MarkUpdated(pGpuUsage, pBaseRadZ, true, false);
 
 	    
 
 #ifdef _DEBUG
 	if (pBaseRadX != NULL)
-		pBaseRadX = (float*)UtiDev::ToHostAndFree(pGpuUsage, pBaseRadX, nWfr * nz * nx * ne * 2 * sizeof(float));
+		pBaseRadX = (float*)AuxGpu::ToHostAndFree(pGpuUsage, pBaseRadX, nWfr * nz * nx * ne * 2 * sizeof(float));
 	if (pBaseRadZ != NULL)
-		pBaseRadZ = (float*)UtiDev::ToHostAndFree(pGpuUsage, pBaseRadZ, nWfr * nz * nx * ne * 2 * sizeof(float));
+		pBaseRadZ = (float*)AuxGpu::ToHostAndFree(pGpuUsage, pBaseRadZ, nWfr * nz * nx * ne * 2 * sizeof(float));
 	cudaStreamSynchronize(0);
     auto err = cudaGetLastError();
     printf("%s\r\n", cudaGetErrorString(err));
@@ -255,17 +268,17 @@ template<int mode> __global__ void MirrorFieldData_Kernel(long ne, long nx, long
 	}
 }
 
-void MirrorFieldData_GPU(long ne, long nx, long nz, long nwfr, float* pEX0, float* pEZ0, int mode, gpuUsageArg_t* pGpuUsage)
+void MirrorFieldData_GPU(long ne, long nx, long nz, long nwfr, float* pEX0, float* pEZ0, int mode, gpuUsageArg* pGpuUsage)
 {
 	if (pEX0 != NULL)
 	{
-		pEX0 = (float*)UtiDev::ToDevice(pGpuUsage, pEX0, nwfr * nz * nx * ne * 2 * sizeof(float));
-		UtiDev::EnsureDeviceMemoryReady(pGpuUsage, pEX0);
+		pEX0 = (float*)AuxGpu::ToDevice(pGpuUsage, pEX0, nwfr * nz * nx * ne * 2 * sizeof(float));
+		AuxGpu::EnsureDeviceMemoryReady(pGpuUsage, pEX0);
 	}
 	if (pEZ0 != NULL)
 	{
-		pEZ0 = (float*)UtiDev::ToDevice(pGpuUsage, pEZ0, nwfr * nz * nx * ne * 2 * sizeof(float));
-		UtiDev::EnsureDeviceMemoryReady(pGpuUsage, pEZ0);
+		pEZ0 = (float*)AuxGpu::ToDevice(pGpuUsage, pEZ0, nwfr * nz * nx * ne * 2 * sizeof(float));
+		AuxGpu::EnsureDeviceMemoryReady(pGpuUsage, pEZ0);
 	}
 
 	const int bs = 256;
@@ -286,15 +299,15 @@ void MirrorFieldData_GPU(long ne, long nx, long nz, long nwfr, float* pEX0, floa
 
 
 	if (pEX0 != NULL)
-		UtiDev::MarkUpdated(pGpuUsage, pEX0, true, false);
+		AuxGpu::MarkUpdated(pGpuUsage, pEX0, true, false);
 	if (pEZ0 != NULL)
-		UtiDev::MarkUpdated(pGpuUsage, pEZ0, true, false);
+		AuxGpu::MarkUpdated(pGpuUsage, pEZ0, true, false);
 
 #ifdef _DEBUG
 	if (pEX0 != NULL)
-		pEX0 = (float*)UtiDev::ToHostAndFree(pGpuUsage, pEX0, nwfr * nz * nx * ne * 2 * sizeof(float));
+		pEX0 = (float*)AuxGpu::ToHostAndFree(pGpuUsage, pEX0, nwfr * nz * nx * ne * 2 * sizeof(float));
 	if (pEZ0 != NULL)
-		pEZ0 = (float*)UtiDev::ToHostAndFree(pGpuUsage, pEZ0, nwfr * nz * nx * ne * 2 * sizeof(float));
+		pEZ0 = (float*)AuxGpu::ToHostAndFree(pGpuUsage, pEZ0, nwfr * nz * nx * ne * 2 * sizeof(float));
 	cudaStreamSynchronize(0);
 	auto err = cudaGetLastError();
 	printf("%s\r\n", cudaGetErrorString(err));
