@@ -106,7 +106,7 @@ PRG= libsrw.a
 	$(CC) $(CFLAGS) -c $<  
 
 ifeq ($(MODE), cuda)
-lib:	$(OBJ)
+lib: $(CUDA_OBJ) $(OBJ)
 	$(NVCC) $(NVCFLAGS) -Xcompiler="$(SRW_CFLAGS)" -dlink -o srwl_link.o *.o $(LDFLAGS)
 	ar -cvq $(PRG) *.o
 	#cp $(PRG) $(LIB_DIR)/
