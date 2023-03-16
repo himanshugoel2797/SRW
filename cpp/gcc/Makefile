@@ -40,10 +40,14 @@ SRW_CFLAGS+= -D_WITH_OMP -fopenmp -Wno-write-strings
 LDFLAGS+= -lfftw 
 else
 ifeq ($(MODE), cuda)
+CUDA_PATH ?= /usr/local/cuda
+CUDA_INCLUDES = -I$(CUDA_PATH)/include
+CUDA_LIBS = -L$(CUDA_PATH)/lib64
+
 SRW_SRC_DEF += -D_OFFLOAD_GPU -DUSE_CUDA -D_FFTW3
-SRW_INCLUDES += -I$(NVCOMPILERS)/$(NVARCH)/$(NVVERSION)/math_libs/include -I$(NVCOMPILERS)/$(NVARCH)/$(NVVERSION)/cuda/include 
+SRW_INCLUDES += $(CUDA_INCLUDES) 
 SRW_CFLAGS += -std=c++17
-LDFLAGS += -L$(NVCOMPILERS)/$(NVARCH)/$(NVVERSION)/cuda/lib64 -lcudart_static -lcudadevrt -lcufft -lrt
+LDFLAGS += $(CUDA_LIBS) -lcudart_static -lcudadevrt -lcufft -lrt
 NVCFLAGS = -O3 -arch=sm_80 -dlto -rdc=true
 CUDA_OBJ=gmfft_gpu.o srradstr_gpu.o sroptelm_gpu.o sroptdrf_gpu.o sroptgtr_gpu.o srradmnp_gpu.o
 else
