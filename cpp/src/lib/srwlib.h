@@ -735,6 +735,7 @@ EXP int CALL srwlCalcPowDenSR(SRWLStokes* pStokes, SRWLPartBeam* pElBeam, SRWLPr
  * @see ...
  */
 EXP int CALL srwlCalcIntFromElecField(char* pInt, SRWLWfr* pWfr, char pol, char intType, char depType, double e, double x, double y, double* arMeth=0, void* pFldTrj=0, gpuUsageArg* pGpuUsage=0);
+//EXP int CALL srwlCalcIntFromElecField(char* pInt, SRWLWfr* pWfr, char pol, char intType, char depType, double e, double x, double y, double* arMeth=0, void* pFldTrj=0);
 //EXP int CALL srwlCalcIntFromElecField(char* pInt, SRWLWfr* pWfr, char pol, char intType, char depType, double e, double x, double y, double* arMeth=0);
 //EXP int CALL srwlCalcIntFromElecField(char* pInt, SRWLWfr* pWfr, char pol, char intType, char depType, double e, double x, double y);
 
@@ -804,7 +805,8 @@ EXP int CALL srwlSetRepresElecField(SRWLWfr* pWfr, char repr);
  * @return	integer error (>0) or warnig (<0) code
  * @see ...
  */
-EXP int CALL srwlPropagElecField(SRWLWfr* pWfr, SRWLOptC* pOpt, int nInt=0, char** arID=0, SRWLRadMesh* arIM=0, char** arI=0, gpuUsageArg* pGpuUsage =0); //OC15082018
+EXP int CALL srwlPropagElecField(SRWLWfr* pWfr, SRWLOptC* pOpt, int nInt=0, char** arID=0, SRWLRadMesh* arIM=0, char** arI=0, gpuUsageArg* pGpuUsage =0); //HG18072022
+//EXP int CALL srwlPropagElecField(SRWLWfr* pWfr, SRWLOptC* pOpt, int nInt=0, char** arID=0, SRWLRadMesh* arIM=0, char** arI=0); //OC15082018
 //EXP int CALL srwlPropagElecField(SRWLWfr* pWfr, SRWLOptC* pOpt);
 
 /** TEST
@@ -851,7 +853,8 @@ EXP int CALL srwlCalcTransm(SRWLOptT* pOpTr, const double* pDelta, const double*
  * @return	integer error (>0) or warnig (<0) code
  * @see ...
  */
-EXP int CALL srwlUtiFFT(char* pcData, char typeData, double* arMesh, int nMesh, int dir, gpuUsageArg *pGpuUsage=0);
+EXP int CALL srwlUtiFFT(char* pcData, char typeData, double* arMesh, int nMesh, int dir, gpuUsageArg *pGpuUsage=0); //HG18072022
+//EXP int CALL srwlUtiFFT(char* pcData, char typeData, double* arMesh, int nMesh, int dir);
 
 /** 
  * Convolves real data with 1D or 2D Gaussian (depending on arguments)
@@ -971,7 +974,7 @@ EXP int CALL srwlUtiUndFindMagFldInterpInds(int* arResInds, int* pnResInds, doub
  * @see ...
  */
 
-EXP bool CALL srwlUtiGPUAvailable();
+EXP bool CALL srwlAuxGpuAvailable();
 
 /**
  * Checks if GPU offloading is enabled
@@ -979,14 +982,14 @@ EXP bool CALL srwlUtiGPUAvailable();
  * @see ...
  */
 
-EXP bool CALL srwlUtiGPUEnabled();
+EXP bool CALL srwlAuxGpuEnabled();
 
 /**
  * Enable/Disable GPU offloading
  * @see ...
  */
 
-EXP void CALL srwlUtiGPUSetStatus(bool enable);
+EXP void CALL srwlAuxGpuSetStatus(bool enable);
 
 /**
  * Initialize device offloading

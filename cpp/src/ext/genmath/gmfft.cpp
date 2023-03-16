@@ -229,8 +229,8 @@ void CGenMathFFT::NextCorrectNumberForFFT(long& n)
 }
 
 //*************************************************************************
-
-int CGenMathFFT1D::Make1DFFT_InPlace(CGenMathFFT1DInfo& FFT1DInfo, gpuUsageArg *pGpuUsage)
+//int CGenMathFFT1D::Make1DFFT_InPlace(CGenMathFFT1DInfo& FFT1DInfo)
+int CGenMathFFT1D::Make1DFFT_InPlace(CGenMathFFT1DInfo& FFT1DInfo, gpuUsageArg *pGpuUsage) //HG18072022
 {
 	GPU_COND(pGpuUsage,
 	{
@@ -287,7 +287,8 @@ int CGenMathFFT2D::AuxDebug_TestFFT_Plans()
 //Modification by S.Yakubov for parallelizing SRW via OpenMP:
 // SY: creation (and deletion) of FFTW plans is not thread-safe. Therefore added option to use precreated plans
 #ifdef _FFTW3 //OC29012019
-int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwf_plan* pPrecreatedPlan2DFFT, fftw_plan* pdPrecreatedPlan2DFFT, gpuUsageArg *pGpuUsage)
+//int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwf_plan* pPrecreatedPlan2DFFT, fftw_plan* pdPrecreatedPlan2DFFT)
+int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwf_plan* pPrecreatedPlan2DFFT, fftw_plan* pdPrecreatedPlan2DFFT, gpuUsageArg *pGpuUsage) //HG18072022
 //int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwf_plan* pPrecreatedPlan2DFFT)
 #else
 int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecreatedPlan2DFFT) //OC27102018
@@ -365,10 +366,12 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 	fftw_complex* dDataToFFT = 0;
 #endif
 
-#ifdef _DEBUG
-	if (pGpuUsage != NULL)
-		printf ("GPU: Make2DFFT\n");
-#endif
+
+//HG18072022
+//#ifdef _DEBUG
+//	if (pGpuUsage != NULL)
+//		printf ("GPU: Make2DFFT\n");
+//#endif
 	GPU_COND(pGpuUsage, //HG02112021
 	{
 		if (FFT2DInfo.pData != 0) 
@@ -477,8 +480,8 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 				if (Plan2DFFT_cu == 0) return ERROR_IN_FFT;
 
 				auto res = cufftExecC2C(Plan2DFFT_cu, (cufftComplex*)DataToFFT, (cufftComplex*)DataToFFT, CUFFT_FORWARD);
-				if (res != CUFFT_SUCCESS)
-					printf("CUFFT Error: %d\r\n", res);
+//				if (res != CUFFT_SUCCESS)
+//					printf("CUFFT Error: %d\r\n", res);
 			}
 			else if (dDataToFFT != 0)
 			{
@@ -542,7 +545,7 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 #endif
 		}
 
-		GPU_COND(pGpuUsage, 
+		GPU_COND(pGpuUsage, //HG18072022
 		{
 			if (DataToFFT != 0)
 			{
@@ -577,7 +580,7 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 	}
 	else
 	{
-		GPU_COND(pGpuUsage, 
+		GPU_COND(pGpuUsage, //HG18072022
 		{
 			if (DataToFFT != 0)
 			{
@@ -670,7 +673,7 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 	}
 	
 	if (!alreadyNormalized){
-		GPU_COND(pGpuUsage, 
+		GPU_COND(pGpuUsage, //HG18072022
 		{
 			if (DataToFFT != 0)
 				NormalizeDataAfter2DFFT_GPU((float*)DataToFFT, Nx, Ny, FFT2DInfo.howMany, Mult);
@@ -702,7 +705,7 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 	}
 	if (NeedsShiftAfterX || NeedsShiftAfterY)
 	{
-		GPU_COND(pGpuUsage, 
+		GPU_COND(pGpuUsage, //HG18072022
 		{
 			if (DataToFFT != 0) {
 				m_ArrayShiftX = (float*)AuxGpu::ToDevice(pGpuUsage, m_ArrayShiftX, (Nx << 1) * sizeof(float), false);
@@ -777,6 +780,7 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 //*************************************************************************
 //Forward FFT: Int f(x)*exp(-i*2*Pi*qx*x)dx
 //Backward FFT: Int f(qx)*exp(i*2*Pi*qx*x)dqx
+//int CGenMathFFT1D::Make1DFFT(CGenMathFFT1DInfo& FFT1DInfo)
 int CGenMathFFT1D::Make1DFFT(CGenMathFFT1DInfo& FFT1DInfo, gpuUsageArg *pGpuUsage) //HG20012022
 {// Assumes Nx, Ny even !
 	//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
@@ -810,13 +814,13 @@ int CGenMathFFT1D::Make1DFFT(CGenMathFFT1DInfo& FFT1DInfo, gpuUsageArg *pGpuUsag
 		{
 			m_ArrayShiftX = new float[Nx << 1];
 			if (m_ArrayShiftX == 0) return MEMORY_ALLOCATION_FAILURE;
-			m_ArrayShiftX = (float*)AuxGpu::ToDevice(pGpuUsage, m_ArrayShiftX, (Nx << 1) * sizeof(float), true);
+			m_ArrayShiftX = (float*)AuxGpu::ToDevice(pGpuUsage, m_ArrayShiftX, (Nx << 1) * sizeof(float), true); //HG20012022
 		}
 		else if (FFT1DInfo.pdInData != 0)
 		{
 			m_dArrayShiftX = new double[Nx << 1];
 			if (m_dArrayShiftX == 0) return MEMORY_ALLOCATION_FAILURE;
-			m_dArrayShiftX = (double*)AuxGpu::ToDevice(pGpuUsage, m_dArrayShiftX, (Nx << 1) * sizeof(double), true);
+			m_dArrayShiftX = (double*)AuxGpu::ToDevice(pGpuUsage, m_dArrayShiftX, (Nx << 1) * sizeof(double), true); //HG20012022
 		}
 	}
 
@@ -828,10 +832,11 @@ int CGenMathFFT1D::Make1DFFT(CGenMathFFT1DInfo& FFT1DInfo, gpuUsageArg *pGpuUsag
 	fftw_complex* dDataToFFT = 0, * dOutDataFFT = 0; //, *pdOutDataFFT=0;
 #endif
 
-#ifdef _DEBUG
-	if (pGpuUsage != NULL)
-		printf ("GPU: Make1DFFT\n");
-#endif
+//HG20012022
+//#ifdef _DEBUG
+//	if (pGpuUsage != NULL)
+//		printf ("GPU: Make1DFFT\n");
+//#endif
 	GPU_COND(pGpuUsage, //HG20012022
 	{
 		if ((FFT1DInfo.pInData != 0) && (FFT1DInfo.pOutData != 0))
@@ -1016,7 +1021,7 @@ int CGenMathFFT1D::Make1DFFT(CGenMathFFT1DInfo& FFT1DInfo, gpuUsageArg *pGpuUsag
 		//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
 		//srwlPrintTime("::Make1DFFT : fft  dir>0",&start);
 
-		GPU_COND(pGpuUsage, 
+		GPU_COND(pGpuUsage, //HG20012022
 		{
 			if (OutDataFFT != 0)
 			{
@@ -1053,7 +1058,7 @@ int CGenMathFFT1D::Make1DFFT(CGenMathFFT1DInfo& FFT1DInfo, gpuUsageArg *pGpuUsag
 	{
 		//int flags = FFTW_ESTIMATE; //OC30012019 (commented-out)
 
-		GPU_COND(pGpuUsage, 
+		GPU_COND(pGpuUsage,  //HG20012022
 		{
 			int arN[] = { (int)Nx }; //OC14052020
 			//int arN[] = {Nx};

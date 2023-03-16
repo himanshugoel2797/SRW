@@ -19,6 +19,8 @@
 #include <iostream>
 #include <chrono>
 
+#define GMFFT_BLOCK_SIZE 256
+
 template <typename T> __global__ void RepairSignAfter1DFFT_Kernel(T* pAfterFFT, long HowMany, long Nx2) 
 {
     int ix = (blockIdx.x * blockDim.x + threadIdx.x) * 4 + 2; //Nx range
@@ -148,177 +150,177 @@ template <typename T> __global__ void TreatShift_Kernel(T* pData, long HowMany, 
 
 void RepairSignAfter1DFFT_GPU(float* pAfterFFT, long HowMany, long Nx) 
 {
-    const int bs = 256;
-    dim3 blocks(Nx / bs + ((Nx & (bs - 1)) != 0));
-    dim3 threads(bs, 1);
+
+    dim3 blocks(Nx / GMFFT_BLOCK_SIZE + ((Nx & (GMFFT_BLOCK_SIZE - 1)) != 0));
+    dim3 threads(GMFFT_BLOCK_SIZE, 1);
     RepairSignAfter1DFFT_Kernel<float> << <blocks, threads >> > (pAfterFFT, HowMany, Nx * 2);
 
-#ifdef _DEBUG
-	cudaStreamSynchronize(0);
-	auto err = cudaGetLastError();
-	printf("%s\r\n", cudaGetErrorString(err));
-#endif
+//#ifdef _DEBUG
+//	cudaStreamSynchronize(0);
+//	auto err = cudaGetLastError();
+//	printf("%s\r\n", cudaGetErrorString(err));
+//#endif
 }
 
 void RotateDataAfter1DFFT_GPU(float* pAfterFFT, long HowMany, long Nx) 
 {
-    const int bs = 256;
-    dim3 blocks(Nx / (2 * bs) + ((Nx / 2 & (bs - 1)) != 0));
-    dim3 threads(bs, 1);
+
+    dim3 blocks(Nx / (2 * GMFFT_BLOCK_SIZE) + ((Nx / 2 & (GMFFT_BLOCK_SIZE - 1)) != 0));
+    dim3 threads(GMFFT_BLOCK_SIZE, 1);
     RotateDataAfter1DFFT_Kernel<float> << <blocks, threads >> > (pAfterFFT, HowMany, Nx * 2, Nx);
 
-#ifdef _DEBUG
-	cudaStreamSynchronize(0);
-	auto err = cudaGetLastError();
-	printf("%s\r\n", cudaGetErrorString(err));
-#endif
+//#ifdef _DEBUG
+//	cudaStreamSynchronize(0);
+//	auto err = cudaGetLastError();
+//	printf("%s\r\n", cudaGetErrorString(err));
+//#endif
 }
 
 void RepairAndRotateDataAfter1DFFT_GPU(float* pAfterFFT, long HowMany, long Nx, float Mult) 
 {
 
-#ifdef _DEBUG
-	cudaStreamSynchronize(0);
-	auto err = cudaGetLastError();
-	printf("%s\r\n", cudaGetErrorString(err));
-#endif
+//#ifdef _DEBUG
+//	cudaStreamSynchronize(0);
+//	auto err = cudaGetLastError();
+//	printf("%s\r\n", cudaGetErrorString(err));
+//#endif
 
-    const int bs = 256;
-    dim3 blocks(Nx / (2 * bs) + (((Nx / 2) & (bs - 1)) != 0), 1);
-    dim3 threads(bs, 1);
+
+    dim3 blocks(Nx / (2 * GMFFT_BLOCK_SIZE) + (((Nx / 2) & (GMFFT_BLOCK_SIZE - 1)) != 0), 1);
+    dim3 threads(GMFFT_BLOCK_SIZE, 1);
     RepairAndRotateAfter1DFFT_Kernel<float> << <blocks, threads >> > (pAfterFFT, HowMany, Nx, Mult);
 
-#ifdef _DEBUG
-	cudaStreamSynchronize(0);
-	err = cudaGetLastError();
-	printf("%s\r\n", cudaGetErrorString(err));
-#endif
+//#ifdef _DEBUG
+//	cudaStreamSynchronize(0);
+//	err = cudaGetLastError();
+//	printf("%s\r\n", cudaGetErrorString(err));
+//#endif
 }
 
 void NormalizeDataAfter1DFFT_GPU(float* pAfterFFT, long HowMany, long Nx, double Mult) 
 {
-    const int bs = 256;
-    dim3 blocks(Nx / bs + ((Nx & (bs - 1)) != 0), 1);
-    dim3 threads(bs, 1);
+
+    dim3 blocks(Nx / GMFFT_BLOCK_SIZE + ((Nx & (GMFFT_BLOCK_SIZE - 1)) != 0), 1);
+    dim3 threads(GMFFT_BLOCK_SIZE, 1);
     NormalizeDataAfter1DFFT_Kernel<float> << <blocks, threads >> > (pAfterFFT, HowMany, Nx * 2, Mult);
 
-#ifdef _DEBUG
-	cudaStreamSynchronize(0);
-	auto err = cudaGetLastError();
-	printf("%s\r\n", cudaGetErrorString(err));
-#endif
+//#ifdef _DEBUG
+//	cudaStreamSynchronize(0);
+//	auto err = cudaGetLastError();
+//	printf("%s\r\n", cudaGetErrorString(err));
+//#endif
 }
 
 void FillArrayShift_GPU(double t0, double tStep, long Nx, float* tShiftX) 
 {
-    const int bs = 256;
-    dim3 blocks(Nx / (2 * bs) + ((Nx / 2 & (bs - 1)) != 0), 1);
-    dim3 threads(bs, 1);
+
+    dim3 blocks(Nx / (2 * GMFFT_BLOCK_SIZE) + ((Nx / 2 & (GMFFT_BLOCK_SIZE - 1)) != 0), 1);
+    dim3 threads(GMFFT_BLOCK_SIZE, 1);
     FillArrayShift_Kernel<float> << <blocks, threads >> > (t0, tStep, Nx, tShiftX);
 
-#ifdef _DEBUG
-	cudaStreamSynchronize(0);
-	auto err = cudaGetLastError();
-	printf("%s\r\n", cudaGetErrorString(err));
-#endif
+//#ifdef _DEBUG
+//	cudaStreamSynchronize(0);
+//	auto err = cudaGetLastError();
+//	printf("%s\r\n", cudaGetErrorString(err));
+//#endif
 }
 
 void TreatShift_GPU(float* pData, long HowMany, long Nx, float* tShiftX) 
 {
-    const int bs = 256;
-    dim3 blocks(Nx / bs + ((Nx & (bs - 1)) != 0));
-    dim3 threads(bs, 1);
+
+    dim3 blocks(Nx / GMFFT_BLOCK_SIZE + ((Nx & (GMFFT_BLOCK_SIZE - 1)) != 0));
+    dim3 threads(GMFFT_BLOCK_SIZE, 1);
     TreatShift_Kernel<float> << <blocks, threads >> > (pData, HowMany, Nx * 2, tShiftX);
 
-#ifdef _DEBUG
-	cudaStreamSynchronize(0);
-	auto err = cudaGetLastError();
-	printf("%s\r\n", cudaGetErrorString(err));
-#endif
+//#ifdef _DEBUG
+//	cudaStreamSynchronize(0);
+//	auto err = cudaGetLastError();
+//	printf("%s\r\n", cudaGetErrorString(err));
+//#endif
 }
 
 void RepairSignAfter1DFFT_GPU(double* pAfterFFT, long HowMany, long Nx) 
 {
-    const int bs = 256;
-    dim3 blocks(Nx / bs + ((Nx & (bs - 1)) != 0));
-    dim3 threads(bs, 1);
+
+    dim3 blocks(Nx / GMFFT_BLOCK_SIZE + ((Nx & (GMFFT_BLOCK_SIZE - 1)) != 0));
+    dim3 threads(GMFFT_BLOCK_SIZE, 1);
     RepairSignAfter1DFFT_Kernel<double> << <blocks, threads >> > (pAfterFFT, HowMany, Nx * 2);
 
-#ifdef _DEBUG
-	cudaStreamSynchronize(0);
-	auto err = cudaGetLastError();
-	printf("%s\r\n", cudaGetErrorString(err));
-#endif
+//#ifdef _DEBUG
+//	cudaStreamSynchronize(0);
+//	auto err = cudaGetLastError();
+//	printf("%s\r\n", cudaGetErrorString(err));
+//#endif
 }
 
 void RotateDataAfter1DFFT_GPU(double* pAfterFFT, long HowMany, long Nx) 
 {
-    const int bs = 256;
-    dim3 blocks(Nx / (2 * bs) + ((Nx & (2 * bs - 1)) != 0));
-    dim3 threads(bs, 1);
+
+    dim3 blocks(Nx / (2 * GMFFT_BLOCK_SIZE) + ((Nx & (2 * GMFFT_BLOCK_SIZE - 1)) != 0));
+    dim3 threads(GMFFT_BLOCK_SIZE, 1);
     RotateDataAfter1DFFT_Kernel<double> << <blocks, threads >> > (pAfterFFT, HowMany, Nx * 2, Nx);
 
-#ifdef _DEBUG
-	cudaStreamSynchronize(0);
-	auto err = cudaGetLastError();
-	printf("%s\r\n", cudaGetErrorString(err));
-#endif
+//#ifdef _DEBUG
+//	cudaStreamSynchronize(0);
+//	auto err = cudaGetLastError();
+//	printf("%s\r\n", cudaGetErrorString(err));
+//#endif
 }
 
 void RepairAndRotateDataAfter1DFFT_GPU(double* pAfterFFT, long HowMany, long Nx, double Mult) 
 {
-    const int bs = 256;
-    dim3 blocks(Nx / (2 * bs) + (((Nx / 2) & (bs - 1)) != 0), 1);
-    dim3 threads(bs, 1);
+
+    dim3 blocks(Nx / (2 * GMFFT_BLOCK_SIZE) + (((Nx / 2) & (GMFFT_BLOCK_SIZE - 1)) != 0), 1);
+    dim3 threads(GMFFT_BLOCK_SIZE, 1);
     RepairAndRotateAfter1DFFT_Kernel<double> << <blocks, threads >> > (pAfterFFT, HowMany, Nx, Mult);
 
-#ifdef _DEBUG
-	cudaStreamSynchronize(0);
-	auto err = cudaGetLastError();
-	printf("%s\r\n", cudaGetErrorString(err));
-#endif
+//#ifdef _DEBUG
+//	cudaStreamSynchronize(0);
+//	auto err = cudaGetLastError();
+//	printf("%s\r\n", cudaGetErrorString(err));
+//#endif
 }
 
 void NormalizeDataAfter1DFFT_GPU(double* pAfterFFT, long HowMany, long Nx, double Mult) 
 {
-    const int bs = 256;
-    dim3 blocks(Nx / bs + ((Nx & (bs - 1)) != 0));
-    dim3 threads(bs, 1);
+
+    dim3 blocks(Nx / GMFFT_BLOCK_SIZE + ((Nx & (GMFFT_BLOCK_SIZE - 1)) != 0));
+    dim3 threads(GMFFT_BLOCK_SIZE, 1);
     NormalizeDataAfter1DFFT_Kernel<double> << <blocks, threads >> > (pAfterFFT, HowMany, Nx * 2, Mult);
 
-#ifdef _DEBUG
-	cudaStreamSynchronize(0);
-	auto err = cudaGetLastError();
-	printf("%s\r\n", cudaGetErrorString(err));
-#endif
+//#ifdef _DEBUG
+//	cudaStreamSynchronize(0);
+//	auto err = cudaGetLastError();
+//	printf("%s\r\n", cudaGetErrorString(err));
+//#endif
 }
 
 void FillArrayShift_GPU(double t0, double tStep, long Nx, double* tShiftX) 
 {
-    const int bs = 256;
-    dim3 blocks(Nx / (2 * bs) + ((Nx & (2 * bs - 1)) != 0), 1);
-    dim3 threads(bs, 1);
+
+    dim3 blocks(Nx / (2 * GMFFT_BLOCK_SIZE) + ((Nx & (2 * GMFFT_BLOCK_SIZE - 1)) != 0), 1);
+    dim3 threads(GMFFT_BLOCK_SIZE, 1);
     FillArrayShift_Kernel<double> << <blocks, threads >> > (t0, tStep, Nx, tShiftX);
 
-#ifdef _DEBUG
-	cudaStreamSynchronize(0);
-	auto err = cudaGetLastError();
-	printf("%s\r\n", cudaGetErrorString(err));
-#endif
+//#ifdef _DEBUG
+//	cudaStreamSynchronize(0);
+//	auto err = cudaGetLastError();
+//	printf("%s\r\n", cudaGetErrorString(err));
+//#endif
 }
 
 void TreatShift_GPU(double* pData, long HowMany, long Nx, double* tShiftX) 
 {
-    const int bs = 256;
-    dim3 blocks(Nx / bs + ((Nx & (bs - 1)) != 0));
-    dim3 threads(bs, 1);
+
+    dim3 blocks(Nx / GMFFT_BLOCK_SIZE + ((Nx & (GMFFT_BLOCK_SIZE - 1)) != 0));
+    dim3 threads(GMFFT_BLOCK_SIZE, 1);
     TreatShift_Kernel<double> << <blocks, threads >> > (pData, HowMany, Nx * 2, tShiftX);
 
-#ifdef _DEBUG
-	cudaStreamSynchronize(0);
-	auto err = cudaGetLastError();
-	printf("%s\r\n", cudaGetErrorString(err));
-#endif
+//#ifdef _DEBUG
+//	cudaStreamSynchronize(0);
+//	auto err = cudaGetLastError();
+//	printf("%s\r\n", cudaGetErrorString(err));
+//#endif
 }
 
 
@@ -495,41 +497,41 @@ template <typename T, bool NeedsShiftX, bool NeedsShiftY> __global__ void TreatS
 
 void RepairSignAfter2DFFT_GPU(float* pAfterFFT, long Nx, long Ny, long howMany)
 {
-    const int bs = 256;
-    dim3 blocks(Nx / bs + ((Nx & (bs - 1)) != 0), Ny);
-    dim3 threads(bs, 1);
+
+    dim3 blocks(Nx / GMFFT_BLOCK_SIZE + ((Nx & (GMFFT_BLOCK_SIZE - 1)) != 0), Ny);
+    dim3 threads(GMFFT_BLOCK_SIZE, 1);
     RepairSignAfter2DFFT_Kernel<float> << <blocks, threads >> > (pAfterFFT, Nx, Ny, Nx * Ny * 2, howMany);
 }
 
 void RotateDataAfter2DFFT_GPU(float* pAfterFFT, long Nx, long Ny, long howMany)
 {
-    const int bs = 256;
-    dim3 blocks(Nx / (2 * bs) + ((Nx / 2 & (bs - 1)) != 0), Ny);
-    dim3 threads(bs, 1);
+
+    dim3 blocks(Nx / (2 * GMFFT_BLOCK_SIZE) + ((Nx / 2 & (GMFFT_BLOCK_SIZE - 1)) != 0), Ny);
+    dim3 threads(GMFFT_BLOCK_SIZE, 1);
     RotateDataAfter2DFFT_Kernel<float> << <blocks, threads >> > (pAfterFFT, Nx / 2, Nx, Ny / 2, Ny, Nx * Ny * 2, howMany);
 }
 
 void RepairSignAndRotateDataAfter2DFFT_GPU(float* pAfterFFT, long Nx, long Ny, long howMany, float Mult)
 {
-    const int bs = 256;
-    dim3 blocks(Nx / (2 * bs) + ((Nx / 2 & (bs - 1)) != 0), Ny/2);
-    dim3 threads(bs, 1);
+
+    dim3 blocks(Nx / (2 * GMFFT_BLOCK_SIZE) + ((Nx / 2 & (GMFFT_BLOCK_SIZE - 1)) != 0), Ny/2);
+    dim3 threads(GMFFT_BLOCK_SIZE, 1);
     RepairSignAndRotateDataAfter2DFFT_Kernel<float2, float> << <blocks, threads >> > ((float2*)pAfterFFT, Nx / 2, Nx, Ny / 2, Ny, Nx * Ny, howMany, Mult);
 }
 
 void NormalizeDataAfter2DFFT_GPU(float* pAfterFFT, long Nx, long Ny, long howMany, double Mult)
 {
-    const int bs = 256;
-    dim3 blocks((Nx * Ny) / bs + (((Nx * Ny) & (bs - 1)) != 0), 1);
-    dim3 threads(bs, 1);
+
+    dim3 blocks((Nx * Ny) / GMFFT_BLOCK_SIZE + (((Nx * Ny) & (GMFFT_BLOCK_SIZE - 1)) != 0), 1);
+    dim3 threads(GMFFT_BLOCK_SIZE, 1);
     NormalizeDataAfter2DFFT_Kernel<float> << <blocks, threads >> > (pAfterFFT, Nx * Ny * 2, howMany,1, Mult);
 }
 
 void TreatShifts2D_GPU(float* pData, long Nx, long Ny, long howMany, bool NeedsShiftX, bool NeedsShiftY, float* m_ArrayShiftX, float* m_ArrayShiftY)
 {
-    const int bs = 256;
-    dim3 blocks((Nx) / bs + (((Nx) & (bs - 1)) != 0), Ny);
-    dim3 threads(bs, 1);
+
+    dim3 blocks((Nx) / GMFFT_BLOCK_SIZE + (((Nx) & (GMFFT_BLOCK_SIZE - 1)) != 0), Ny);
+    dim3 threads(GMFFT_BLOCK_SIZE, 1);
     
     if (NeedsShiftX && NeedsShiftY) TreatShift2D_Kernel<float, true, true> << <blocks, threads >> > (pData, howMany, Nx * 2, Ny, m_ArrayShiftX, m_ArrayShiftY);
     else if (NeedsShiftX) TreatShift2D_Kernel<float, true, false> << <blocks, threads >> > (pData, howMany, Nx * 2, Ny, m_ArrayShiftX, m_ArrayShiftY);
@@ -538,41 +540,41 @@ void TreatShifts2D_GPU(float* pData, long Nx, long Ny, long howMany, bool NeedsS
 
 void RepairSignAfter2DFFT_GPU(double* pAfterFFT, long Nx, long Ny, long howMany)
 {
-    const int bs = 256;
-    dim3 blocks(Nx / bs + ((Nx & (bs - 1)) != 0), Ny);
-    dim3 threads(bs, 1);
+
+    dim3 blocks(Nx / GMFFT_BLOCK_SIZE + ((Nx & (GMFFT_BLOCK_SIZE - 1)) != 0), Ny);
+    dim3 threads(GMFFT_BLOCK_SIZE, 1);
     RepairSignAfter2DFFT_Kernel<double> << <blocks, threads >> > (pAfterFFT, Nx, Ny, Nx * Ny * 2, howMany);
 }
 
 void RotateDataAfter2DFFT_GPU(double* pAfterFFT, long Nx, long Ny, long howMany)
 {
-    const int bs = 256;
-    dim3 blocks(Nx / (2 * bs) + ((Nx / 2 & (bs - 1)) != 0), Ny);
-    dim3 threads(bs, 1);
+
+    dim3 blocks(Nx / (2 * GMFFT_BLOCK_SIZE) + ((Nx / 2 & (GMFFT_BLOCK_SIZE - 1)) != 0), Ny);
+    dim3 threads(GMFFT_BLOCK_SIZE, 1);
     RotateDataAfter2DFFT_Kernel<double> << <blocks, threads >> > (pAfterFFT, Nx / 2, Nx, Ny / 2, Ny, Nx * Ny * 2, howMany);
 }
 
 void RepairSignAndRotateDataAfter2DFFT_GPU(double* pAfterFFT, long Nx, long Ny, long howMany, double Mult)
 {
-    const int bs = 256;
-    dim3 blocks(Nx / (2 * bs) + ((Nx / 2 & (bs - 1)) != 0), Ny/2);
-    dim3 threads(bs, 1);
+
+    dim3 blocks(Nx / (2 * GMFFT_BLOCK_SIZE) + ((Nx / 2 & (GMFFT_BLOCK_SIZE - 1)) != 0), Ny/2);
+    dim3 threads(GMFFT_BLOCK_SIZE, 1);
     RepairSignAndRotateDataAfter2DFFT_Kernel<double2, double> << <blocks, threads >> > ((double2*)pAfterFFT, Nx / 2, Nx, Ny / 2, Ny, Nx * Ny, howMany, Mult);
 }
 
 void NormalizeDataAfter2DFFT_GPU(double* pAfterFFT, long Nx, long Ny, long howMany, double Mult)
 {
-    const int bs = 256;
-    dim3 blocks((Nx * Ny) / bs + (((Nx * Ny) & (bs - 1)) != 0), 1);
-    dim3 threads(bs, 1);
+
+    dim3 blocks((Nx * Ny) / GMFFT_BLOCK_SIZE + (((Nx * Ny) & (GMFFT_BLOCK_SIZE - 1)) != 0), 1);
+    dim3 threads(GMFFT_BLOCK_SIZE, 1);
     NormalizeDataAfter2DFFT_Kernel<double> << <blocks, threads >> > (pAfterFFT, Nx * Ny * 2, howMany,1, Mult);
 }
 
 void TreatShifts2D_GPU(double* pData, long Nx, long Ny, long howMany, bool NeedsShiftX, bool NeedsShiftY, double* m_ArrayShiftX, double* m_ArrayShiftY)
 {
-    const int bs = 256;
-    dim3 blocks((Nx) / bs + (((Nx) & (bs - 1)) != 0), Ny);
-    dim3 threads(bs, 1);
+
+    dim3 blocks((Nx) / GMFFT_BLOCK_SIZE + (((Nx) & (GMFFT_BLOCK_SIZE - 1)) != 0), Ny);
+    dim3 threads(GMFFT_BLOCK_SIZE, 1);
 
     if (NeedsShiftX && NeedsShiftY) TreatShift2D_Kernel<double, true, true> << <blocks, threads >> > (pData, howMany, Nx * 2, Ny, m_ArrayShiftX, m_ArrayShiftY);
     else if (NeedsShiftX) TreatShift2D_Kernel<double, true, false> << <blocks, threads >> > (pData, howMany, Nx * 2, Ny, m_ArrayShiftX, m_ArrayShiftY);
@@ -688,9 +690,9 @@ template<typename T> __global__ void StokesAvgUpdateInterp_Kernel(float* pStokes
 
 void StokesAvgUpdateInterp(float* pStokesArS, float* pMoreStokesArS, int nIters, int nOrder, int nStokesComp, double mult, int iSt, long xNpMeshRes, long yNpMeshRes, long eNpMeshRes, double yStartMeshRes, double yStepMeshRes, double yStartWfr, double yStepWfr, double xStartMeshRes, double xStepMeshRes, double xStartWfr, double xStepWfr, int iOfstSt, long xNpWfr, long yNpWfr, long eNpWfr, bool sum)
 {
-    const int bs = 8;
-    dim3 threads(xNpMeshRes / bs + ((xNpMeshRes & (bs - 1)) != 0), yNpMeshRes / bs + ((yNpMeshRes & (bs - 1)) != 0), eNpMeshRes);
-    dim3 blocks(bs, bs, 1);
+    const int GMFFT_BLOCK_SIZE = 8;
+    dim3 threads(xNpMeshRes / GMFFT_BLOCK_SIZE + ((xNpMeshRes & (GMFFT_BLOCK_SIZE - 1)) != 0), yNpMeshRes / GMFFT_BLOCK_SIZE + ((yNpMeshRes & (GMFFT_BLOCK_SIZE - 1)) != 0), eNpMeshRes);
+    dim3 blocks(GMFFT_BLOCK_SIZE, GMFFT_BLOCK_SIZE, 1);
     StokesAvgUpdateInterp_Kernel <float><< <threads, blocks >> > (pStokesArS, pMoreStokesArS, nIters, nOrder, nStokesComp, mult, iSt, xNpMeshRes, yNpMeshRes, eNpMeshRes, yStartMeshRes, yStepMeshRes, yStartWfr, yStepWfr, xStartMeshRes, xStepMeshRes, xStartWfr, xStepWfr, iOfstSt, xNpWfr, yNpWfr, eNpWfr, sum);
 }
 #endif
