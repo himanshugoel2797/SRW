@@ -3,13 +3,13 @@
 Create `environment.yml`:
 
 ```yml
-name: expdev3_py39_gcc12
+name: py39_gcc11
 channels:
     - conda-forge
 dependencies:
     - python==3.9.0
-    - gcc
-    - gxx
+    - gcc_linux-64==11.3.0
+    - gxx_linux-64==11.3.0
     - numpy
     - scipy
     - matplotlib
@@ -24,7 +24,7 @@ Then:
 ```bash
 cp /nsls2/users/hgoel/srw_gpu/environment.yml .
 conda env create -f "environment.yml"
-conda activate expdev3_py39_gcc12
+conda activate py39_gcc11
 
 git clone https://github.com/himanshugoel2797/SRW.git
 cd SRW
@@ -56,7 +56,8 @@ to select the first GPU etc. Set to 0 to explicitly disable GPU.
 
 ```bash
 module load python
-conda env create -f environment.yml
+conda env create -f "environment.yml"
+conda activate py39_gcc11
 
 git clone https://github.com/himanshugoel2797/SRW.git
 cd SRW
