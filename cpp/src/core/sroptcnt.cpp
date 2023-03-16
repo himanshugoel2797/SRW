@@ -337,9 +337,9 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 		GPU_COND(pGpuUsage, {
 			if (dataOnDevice && (((srTGenOptElem*)it->rep)->SupportedFeatures() & 1) == 0)
 			{
-#if DEBUG
-				printf("Element does not support GPU, transferring to CPU.\r\n");
-#endif
+//#if DEBUG
+//				printf("Element does not support GPU, transferring to CPU.\r\n");
+//#endif
 				if (wfr.pBaseRadX != NULL)
 					wfr.pBaseRadX = (float*)AuxGpu::ToHostAndFree(pGpuUsage, wfr.pBaseRadX, 2 * wfr.ne * wfr.nx * wfr.nz * wfr.nwfr * sizeof(float));
 				if (wfr.pBaseRadZ != NULL)
@@ -349,9 +349,9 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 			else if (!dataOnDevice && (((srTGenOptElem*)it->rep)->SupportedFeatures() & 1) == 1)
 			{
 					dataOnDevice = true;
-#if DEBUG
-					printf("Element supports GPU, transferring...\r\n");
-#endif
+//#if DEBUG
+//					printf("Element supports GPU, transferring...\r\n");
+//#endif
 			}
 		});
 

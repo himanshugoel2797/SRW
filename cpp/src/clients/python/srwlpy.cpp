@@ -3351,7 +3351,7 @@ void ParseDeviceParam(PyObject* oDev, gpuUsageArg *pGpuUsage) //HG10202021 Conve
  ***************************************************************************/
 void CleanDeviceParam() //HG10202021
 {
-	srwlUtiGPUSetStatus(false);
+	srwlAuxGpuSetStatus(false);
 }
 
 /************************************************************************//**

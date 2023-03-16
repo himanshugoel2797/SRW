@@ -2139,7 +2139,7 @@ class SRWLWfr(object):
     #arMomY = array('d', [0]*11)
     #arWfrAuxData = array('d', [0]*30) #array of auxiliary wavefront data
 
-    def __init__(self, _arEx=None, _arEy=None, _typeE='f', _eStart=0, _eFin=0, _ne=0, _xStart=0, _xFin=0, _nx=0, _yStart=0, _yFin=0, _ny=0, _zStart=0, _partBeam=None):
+    def __init__(self, _arEx=None, _arEy=None, _typeE='f', _eStart=0, _eFin=0, _ne=0, _xStart=0, _xFin=0, _nx=0, _yStart=0, _yFin=0, _ny=0, _zStart=0, _partBeam=None, _nwfr=1):
         """
         :param _arEx: horizontal complex electric field component array; NOTE: only 'f' (float) is supported for the moment (Jan. 2011)
         :param _arEy: vertical complex electric field component array
@@ -2155,6 +2155,7 @@ class SRWLWfr(object):
         :param _ny: numbers of points vs vertical positions
         :param _zStart: longitudinal position
         :param _partBeam: particle beam source; strictly speaking, it should be just SRWLParticle; however, "multi-electron" information can appear useful for those cases when "multi-electron intensity" can be deduced from the "single-electron" one by convolution
+        :param _nwfr: number of wavefronts stored in the structure
 
         Some additional parameters, that are not included in constructor arguments:
         Rx, Ry: instant wavefront radii
@@ -2181,6 +2182,7 @@ class SRWLWfr(object):
         self.dRy = 0
         self.xc = 0 #instant transverse coordinates of wavefront instant "source center"
         self.yc = 0
+        self.nwfr = _nwfr
         self.avgPhotEn = 0 #average photon energy for time-domain simulations
         self.presCA = 0 #presentation/domain: 0- coordinates, 1- angles
         self.presFT = 0 #presentation/domain: 0- frequency (photon energy), 1- time
@@ -2191,7 +2193,7 @@ class SRWLWfr(object):
         self.arMomY = array('d', [0] * 11 * _ne)
         self.arWfrAuxData = array('d', [0] * 30) #array of auxiliary wavefront data
 
-        nProd = _ne * _nx * _ny #array length to store one component of complex electric field
+        nProd = _ne * _nx * _ny * _nwfr #array length to store one component of complex electric field
         EXNeeded = 0
         EYNeeded = 0
         if(_arEx == 1) and (nProd > 0):
@@ -2217,7 +2219,7 @@ class SRWLWfr(object):
         #print('                           new point numbers: ne=',_ne,' nx=',_nx,' ny=',_ny) #,' type:',typeE)
         #print('                           backupNeeded',_backupNeeded)
         
-        nTot = 2*_ne*_nx*_ny #array length to store one component of complex electric field
+        nTot = 2*_ne*_nx*_ny*self.nwfr #array length to store one component of complex electric field
         nMom = 11*_ne
         if _EXNeeded:
             #print('          trying to (re-)allocate Ex ... ', end='')
@@ -7330,6 +7332,15 @@ def srwl_uti_array_alloc(_type, _n, _list_base=[0]): #OC14042019
     #print('srwl_uti_array_alloc: array requested:', _n)
     lenBase = len(_list_base) #OC14042019
     nTrue = _n*lenBase #OC14042019
+    
+    try: #HG01112022 If numpy is available, use it to allocate the array, as it is much faster
+        import numpy as np
+        if _type == 'f': 
+            return np.zeros(_n, dtype=np.float32)
+        elif _type == 'd':
+            return np.zeros(_n, dtype=np.float64)
+    except:
+        pass
     
     if(nTrue <= nPartMax): return array(_type, _list_base*_n)
     #if(_n <= nPartMax): return array(_type, [0]*_n)

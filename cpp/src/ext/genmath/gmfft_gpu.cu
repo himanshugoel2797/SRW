@@ -690,9 +690,9 @@ template<typename T> __global__ void StokesAvgUpdateInterp_Kernel(float* pStokes
 
 void StokesAvgUpdateInterp(float* pStokesArS, float* pMoreStokesArS, int nIters, int nOrder, int nStokesComp, double mult, int iSt, long xNpMeshRes, long yNpMeshRes, long eNpMeshRes, double yStartMeshRes, double yStepMeshRes, double yStartWfr, double yStepWfr, double xStartMeshRes, double xStepMeshRes, double xStartWfr, double xStepWfr, int iOfstSt, long xNpWfr, long yNpWfr, long eNpWfr, bool sum)
 {
-    const int GMFFT_BLOCK_SIZE = 8;
-    dim3 threads(xNpMeshRes / GMFFT_BLOCK_SIZE + ((xNpMeshRes & (GMFFT_BLOCK_SIZE - 1)) != 0), yNpMeshRes / GMFFT_BLOCK_SIZE + ((yNpMeshRes & (GMFFT_BLOCK_SIZE - 1)) != 0), eNpMeshRes);
-    dim3 blocks(GMFFT_BLOCK_SIZE, GMFFT_BLOCK_SIZE, 1);
+    const int bs = 8;
+    dim3 threads(xNpMeshRes / bs + ((xNpMeshRes & (bs - 1)) != 0), yNpMeshRes / bs + ((yNpMeshRes & (bs - 1)) != 0), eNpMeshRes);
+    dim3 blocks(bs, bs, 1);
     StokesAvgUpdateInterp_Kernel <float><< <threads, blocks >> > (pStokesArS, pMoreStokesArS, nIters, nOrder, nStokesComp, mult, iSt, xNpMeshRes, yNpMeshRes, eNpMeshRes, yStartMeshRes, yStepMeshRes, yStartWfr, yStepWfr, xStartMeshRes, xStepMeshRes, xStartWfr, xStepWfr, iOfstSt, xNpWfr, yNpWfr, eNpWfr, sum);
 }
 #endif

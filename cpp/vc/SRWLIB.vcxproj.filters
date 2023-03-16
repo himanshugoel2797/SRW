@@ -393,6 +393,9 @@
     <ClCompile Include="..\src\ext\genesis\genesis_july08\math.c">
       <Filter>genesis</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\lib\auxgpu.cpp">
+      <Filter>lib</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\src\ext\auxparse\auxparse.h">
@@ -611,5 +614,37 @@
     <ClInclude Include="..\src\lib\srwlib.h">
       <Filter>lib</Filter>
     </ClInclude>
+    <ClInclude Include="..\src\lib\auxgpu.h">
+      <Filter>lib</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\core\sroptelm_gpu.h">
+      <Filter>core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\core\srradstr_gpu.h">
+      <Filter>core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\ext\genmath\gmfft_gpu.h">
+      <Filter>core</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <CudaCompile Include="..\src\core\srradstr_gpu.cu">
+      <Filter>core</Filter>
+    </CudaCompile>
+    <CudaCompile Include="..\src\core\srradmnp_gpu.cu">
+      <Filter>core</Filter>
+    </CudaCompile>
+    <CudaCompile Include="..\src\core\sroptgtr_gpu.cu">
+      <Filter>core</Filter>
+    </CudaCompile>
+    <CudaCompile Include="..\src\core\sroptelm_gpu.cu">
+      <Filter>core</Filter>
+    </CudaCompile>
+    <CudaCompile Include="..\src\core\sroptdrf_gpu.cu">
+      <Filter>core</Filter>
+    </CudaCompile>
+    <CudaCompile Include="..\src\ext\genmath\gmfft_gpu.cu">
+      <Filter>core</Filter>
+    </CudaCompile>
   </ItemGroup>
 </Project>
