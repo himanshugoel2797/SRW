@@ -23,6 +23,7 @@ if 'MODE' in os.environ:
     if sMode == 'cuda':
         ext_kwargs.update({'libraries': ['srw', 'm', 'cudart_static', 'cudadevrt', 'cufft', 'fftw3f', 'fftw3', 'rt'],  'extra_compile_args': ['-O3', '-mavx2', '-fno-math-errno']})
         ext_kwargs['library_dirs'].append('{0}/lib64'.format(os.environ['CUDA_PATH']))
+        ext_kwargs['library_dirs'].append('{0}/lib64'.format(os.environ['CUDA_MATHLIBS_PATH']))
     elif sMode == 'omp': 
         #ext_kwargs.update({'extra_link_args': ['-fopenmp'], 
         ext_kwargs.update({'libraries': ['srw', 'm', 'fftw'], #OC07022019

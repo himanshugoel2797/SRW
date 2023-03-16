@@ -1,21 +1,6 @@
-## Expdev Build Instructions
+## General Conda-specific Build Instructions
 
-```bash
-cp /nsls2/users/hgoel/srw_gpu/environment.yml .
-conda env create -f "environment.yml"
-conda activate expdev3_py39_gcc12
-
-git clone https://github.com/himanshugoel2797/SRW.git
-cd SRW
-git checkout reorg_gpu #Switch to GPU supporting branch
-
-CUDA_PATH=/usr/local/cuda MODE=cuda make fftw
-CUDA_PATH=/usr/local/cuda MODE=cuda make
-```
-
-The GPU enabled SRW will then work as normal (from `clients/python/srwpy`).
-
-`environment.yml`:
+Create `environment.yml`:
 
 ```yml
 name: expdev3_py39_gcc12
@@ -33,6 +18,23 @@ dependencies:
     - mpi4py
     - scikit-learn
 ```
+
+Then:
+
+```bash
+cp /nsls2/users/hgoel/srw_gpu/environment.yml .
+conda env create -f "environment.yml"
+conda activate expdev3_py39_gcc12
+
+git clone https://github.com/himanshugoel2797/SRW.git
+cd SRW
+git checkout reorg_gpu #Switch to GPU supporting branch
+
+MODE=cuda make fftw
+MODE=cuda make
+```
+
+The GPU enabled SRW will then work as normal (from `clients/python/srwpy`).
 
 ### Making a script use GPU
 
@@ -54,23 +56,21 @@ to select the first GPU etc. Set to 0 to explicitly disable GPU.
 
 ```bash
 module load python
-conda create --name srw_gpu python=3.8 #Have not tested with newer versions of Python, although should work
-conda activate srw_gpu
-conda install numpy scikit-learn matplotlib
+conda env create -f environment.yml
 
 git clone https://github.com/himanshugoel2797/SRW.git
 cd SRW
-git checkout manualmemory_test #Switch to GPU supporting branch
+git checkout reorg_gpu #Switch to GPU supporting branch
 
 #Environment variables I added for configuring hpc sdk location
-export NVCOMPILERS=/opt/nvidia/hpc_sdk
-export NVVERSION=22.5
-export NVARCH=Linux_x86_64
-
+export CUDA_PATH=/opt/nvidia/hpc_sdk/Linux_x86_64/22.5/cuda 
+export CUDA_MATHLIBS_PATH=/opt/nvidia/hpc_sdk/Linux_x86_64/22.5/math_libs 
+MODE=cuda make fftw
 MODE=cuda make
+
 ```
 
-### Perlmutter GPU Slurm file:
+### Perlmutter GPU Slurm file
 
 ```bash
 #!/bin/bash

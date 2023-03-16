@@ -28,6 +28,7 @@ else
 endif
 
 CUDA_PATH ?= /usr/local/cuda
+CUDA_MATHLIBS_PATH ?= /usr/local/cuda
 NVCC = $(CUDA_PATH)/bin/nvcc
 NVCXX = $(CUDA_PATH)/bin/nvc++
 
@@ -41,8 +42,8 @@ SRW_CFLAGS+= -D_WITH_OMP -fopenmp -Wno-write-strings
 LDFLAGS+= -lfftw 
 else
 ifeq ($(MODE), cuda)
-CUDA_INCLUDES = -I$(CUDA_PATH)/include
-CUDA_LIBS = -L$(CUDA_PATH)/lib64
+CUDA_INCLUDES = -I$(CUDA_PATH)/include -I$(CUDA_MATHLIBS_PATH)/include
+CUDA_LIBS = -L$(CUDA_PATH)/lib64 -L$(CUDA_MATHLIBS_PATH)/lib64
 
 SRW_SRC_DEF += -D_OFFLOAD_GPU -DUSE_CUDA -D_FFTW3
 SRW_INCLUDES += $(CUDA_INCLUDES) 
