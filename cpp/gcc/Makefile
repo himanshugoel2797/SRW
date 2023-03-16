@@ -27,8 +27,9 @@ else
 	endif
 endif
 
-NVCC = nvcc
-NVCXX = nvc++
+CUDA_PATH ?= /usr/local/cuda
+NVCC = $(CUDA_PATH)/bin/nvcc
+NVCXX = $(CUDA_PATH)/bin/nvc++
 
 SRW_SRC_DEF=	-D_GNU_SOURCE -D__USE_XOPEN2K8 -DFFTW_ENABLE_FLOAT -D_GM_WITHOUT_BASE -DSRWLIB_STATIC -DNO_TIMER -DANSI_DECLARATORS -DTRILIBRARY $(OSFLAG)
 SRW_INCLUDES=   -I$(SRW_SRC_GEN_DIR) -I$(SRW_SRC_LIB_DIR) -I$(SH_SRC_PARSE_DIR) -I$(SH_SRC_GEN_MATH_DIR) $(SRW_SRC_DEF) 
@@ -40,7 +41,6 @@ SRW_CFLAGS+= -D_WITH_OMP -fopenmp -Wno-write-strings
 LDFLAGS+= -lfftw 
 else
 ifeq ($(MODE), cuda)
-CUDA_PATH ?= /usr/local/cuda
 CUDA_INCLUDES = -I$(CUDA_PATH)/include
 CUDA_LIBS = -L$(CUDA_PATH)/lib64
 
