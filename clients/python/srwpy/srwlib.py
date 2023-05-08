@@ -7922,7 +7922,8 @@ def srwl_wfr_emit_prop_multi_e(_e_beam, _mag, _mesh, _sr_meth, _sr_rel_prec, _n_
                                #_rand_meth=1, _tryToUseMPI=True, _wr=0., _wre=0., _det=None, _me_approx=0, _file_bkp=False, _rand_opt=False, _file_form='ascii', _com_mpi=None, _n_mpi=1): #OC01032021
                                #_rand_meth=1, _tryToUseMPI=True, _wr=0., _wre=0., _det=None, _me_approx=0, _file_bkp=False, _rand_opt=False, _file_form='ascii', _n_mpi=1): #OC02032021
                                #_rand_meth=1, _tryToUseMPI=True, _wr=0., _wre=0., _det=None, _me_approx=0, _file_bkp=False, _rand_opt=False, _file_form='ascii', _n_mpi=1, _del_aux_files=False): #OC02032021
-                               _rand_meth=1, _tryToUseMPI=True, _wr=0., _wre=0., _det=None, _me_approx=0, _file_bkp=False, _rand_opt=False, _file_form='ascii', _n_mpi=1, _n_cm=1000, _del_aux_files=False): #OC27062021
+                               #_rand_meth=1, _tryToUseMPI=True, _wr=0., _wre=0., _det=None, _me_approx=0, _file_bkp=False, _rand_opt=False, _file_form='ascii', _n_mpi=1, _n_cm=1000, _del_aux_files=False): #OC27062021
+                               _rand_meth=1, _tryToUseMPI=True, _wr=0., _wre=0., _det=None, _me_approx=0, _file_bkp=False, _rand_opt=False, _file_form='ascii', _n_mpi=1, _n_cm=1000, _del_aux_files=False, _propgpus=None, _csdgpus=None): #HG01052023
     """
     Calculate Stokes Parameters of Emitted (and Propagated, if beamline is defined) Partially-Coherent SR.
     :param _e_beam: Finite-Emittance e-beam (SRWLPartBeam type)
@@ -7974,6 +7975,8 @@ def srwl_wfr_emit_prop_multi_e(_e_beam, _mag, _mesh, _sr_meth, _sr_rel_prec, _n_
     :param _n_mpi: number of independent "groups" of MPI processes (for 4D CSD calculation)
     :param _n_cm: number of coherent modes to calculate (is taken into account if _char==61 or _char==7)
     :param _del_aux_files: delete (or not) auxiliary files (applies to different types of calculations)
+    :param _propgpus: GPU to use for propagation calculations
+    :param _csdgpus: GPU to use for cross spectral density accumulation
    """
 
     doMutual = 0 #OC30052017
@@ -10206,7 +10209,7 @@ def srwl_wfr_emit_prop_multi_e(_e_beam, _mag, _mesh, _sr_meth, _sr_rel_prec, _n_
                     arMethPar[18] = itStartEnd[0]
                     arMethPar[19] = itStartEnd[1]
 
-                srwl.CalcIntFromElecField(resStokes.arS, wfr, -1, 8, depTypeInt, phEnInt, 0., 0., arMethPar) #OC03032021
+                srwl.CalcIntFromElecField(resStokes.arS, wfr, -1, 8, depTypeInt, phEnInt, 0., 0., arMethPar, None, _csdgpus) #OC03032021
                 #srwl.CalcIntFromElecField(resStokes.arS, wfr, 6, 8, depTypeInt, phEnInt, 0., 0., [intSumType, i]) #One main Stokes component
 
                 #DEBUG

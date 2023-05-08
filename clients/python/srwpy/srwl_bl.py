@@ -1392,7 +1392,8 @@ class SRWLBeamline(object):
     #------------------------------------------------------------------------
     #def calc_arb_spec_me(self, _mesh, _meth=2, _rel_prec=0.01, _n_part_tot=100000, _n_part_avg_proc=10, _n_save_per=10, _type=2, _mag=2, _pol=0, _rand_meth=1, _fname=None):
     #def calc_arb_spec_me(self, _mesh, _meth=2, _rel_prec=0.01, _n_part_tot=100000, _n_part_avg_proc=10, _n_save_per=10, _type=2, _mag=2, _pol=0, _rand_meth=1, _fname=None, _sr_samp_fact=-1, _det=None, _me_approx=0): #OC13042018
-    def calc_arb_spec_me(self, _mesh, _meth=2, _rel_prec=0.01, _n_part_tot=100000, _n_part_avg_proc=10, _n_save_per=10, _type=2, _mag=2, _pol=0, _rand_meth=1, _fname=None, _sr_samp_fact=-1, _det=None, _me_approx=0, _fbk=False): #OC14082018
+    #def calc_arb_spec_me(self, _mesh, _meth=2, _rel_prec=0.01, _n_part_tot=100000, _n_part_avg_proc=10, _n_save_per=10, _type=2, _mag=2, _pol=0, _rand_meth=1, _fname=None, _sr_samp_fact=-1, _det=None, _me_approx=0, _fbk=False): #OC14082018
+    def calc_arb_spec_me(self, _mesh, _meth=2, _rel_prec=0.01, _n_part_tot=100000, _n_part_avg_proc=10, _n_save_per=10, _type=2, _mag=2, _pol=0, _rand_meth=1, _fname=None, _sr_samp_fact=-1, _det=None, _me_approx=0, _fbk=False, _propgpus=None, _csdgpus=None): #HG02052023
         """Calculates multi-electron flux of undulator radiation (within fixed aperture of per unit surface), using approximate periodic magnetic field
         :param _mesh: mesh on which the intensity has to be calculated (SRWLRadMesh instance)
         :param _meth: SR Electric Field calculation method to be used (0- "manual", 1- "auto-undulator", 2- "auto-wiggler")
@@ -1447,7 +1448,9 @@ class SRWLBeamline(object):
             _n_part_tot = _n_part_tot, _n_part_avg_proc = _n_part_avg_proc, _n_save_per = _n_save_per, _rand_meth = _rand_meth,
             #_file_path = _fname, _char = charMultiE)
             _file_path = _fname, _sr_samp_fact = _sr_samp_fact, _char = charMultiE, _det = _det, _me_approx = _me_approx, #) #OC14042018
-            _file_bkp = True if(_fbk == True) else False) #OC14082018
+            _file_bkp = True if(_fbk == True) else False,
+            _propgpus=_propgpus,
+            _csdgpus=_csdgpus) #OC14082018
             
         #Consider treating detector here?
 
@@ -1895,7 +1898,8 @@ class SRWLBeamline(object):
     #def calc_wfr_emit_prop_me(self, _mesh, _sr_samp_fact=1, _sr_meth=2, _sr_rel_prec=0.01, _in_wr=0., _in_wre=0., _mag_type=1, _n_part_tot=100000, _n_part_avg_proc=10, _n_save_per=50, _pres_ang=0, _char=0, _x0=0, _y0=0, _e_ph_integ=0, _rand_meth=1, _fname=None, _det=None, _me_approx=0): #OC05042017
     #def calc_wfr_emit_prop_me(self, _mesh, _sr_samp_fact=1, _sr_meth=2, _sr_rel_prec=0.01, _in_wr=0., _in_wre=0., _mag_type=1, _n_part_tot=100000, _n_part_avg_proc=10, _n_save_per=50, _pres_ang=0, _char=0, _x0=0, _y0=0, _e_ph_integ=0, _rand_meth=1, _fname=None, _det=None, _me_approx=0, _fbk=False): #OC14082018
     def calc_wfr_emit_prop_me(self, _mesh, _sr_samp_fact=1, _sr_meth=2, _sr_rel_prec=0.01, _in_wr=0., _in_wre=0., _mag_type=1, _n_part_tot=100000, _n_part_avg_proc=10, _n_save_per=50,
-                              _pres_ang=0, _char=0, _x0=0, _y0=0, _e_ph_integ=0, _rand_meth=1, _fname=None, _det=None, _me_approx=0, _fbk=False, _op_rnd=False, _fform='ascii', _no_opt=False, _nmm=1, _ncm=100, _cm_wfr=None): #OC02072021
+                              _pres_ang=0, _char=0, _x0=0, _y0=0, _e_ph_integ=0, _rand_meth=1, _fname=None, _det=None, _me_approx=0, _fbk=False, _op_rnd=False, _fform='ascii', _no_opt=False, _nmm=1, _ncm=100, _cm_wfr=None, _propgpus=None, _csdgpus=None): #HG02052023
+                              #_pres_ang=0, _char=0, _x0=0, _y0=0, _e_ph_integ=0, _rand_meth=1, _fname=None, _det=None, _me_approx=0, _fbk=False, _op_rnd=False, _fform='ascii', _no_opt=False, _nmm=1, _ncm=100, _cm_wfr=None): #OC02072021
                               #_pres_ang=0, _char=0, _x0=0, _y0=0, _e_ph_integ=0, _rand_meth=1, _fname=None, _det=None, _me_approx=0, _fbk=False, _op_rnd=False, _fform='ascii', _nmm=1, _ncm=1000): #OC27062021
                               #_pres_ang=0, _char=0, _x0=0, _y0=0, _e_ph_integ=0, _rand_meth=1, _fname=None, _det=None, _me_approx=0, _fbk=False, _op_rnd=False, _fform='ascii', _nmm=1): #OC16042021
                               #_pres_ang=0, _char=0, _x0=0, _y0=0, _e_ph_integ=0, _rand_meth=1, _fname=None, _det=None, _me_approx=0, _fbk=False, _op_rnd=False, _fform='ascii'): #OC25022021
@@ -2003,7 +2007,9 @@ class SRWLBeamline(object):
             #_file_bkp = _fbk, _rand_opt = _op_rnd) #OC24042020
             #_file_bkp = _fbk, _rand_opt = _op_rnd, _file_form = _fform) #OC25022021
             #_file_bkp = _fbk, _rand_opt = _op_rnd, _file_form = _fform, _n_mpi=_nmm) #OC16042021
-            _file_bkp = _fbk, _rand_opt = _op_rnd, _file_form = _fform, _n_mpi=_nmm, _n_cm=_ncm) #OC27062021
+            _file_bkp = _fbk, _rand_opt = _op_rnd, _file_form = _fform, _n_mpi=_nmm, _n_cm=_ncm,
+            _propgpus=_propgpus,
+            _csdgpus=_csdgpus) #OC27062021
 
     #------------------------------------------------------------------------
     def cost_func_aux_int_distr(self, _x, *_aux):
@@ -2953,7 +2959,9 @@ class SRWLBeamline(object):
                     _sr_samp_fact = _v.sm_smpf,
                     _det = detector,
                     _me_approx = _v.sm_am, #) #OC13042018
-                    _fbk = True if(_v.sm_fbk) else False) #OC14082018
+                    _fbk = True if(_v.sm_fbk) else False,
+                    _propgpus = _v.prop_gpus,
+                    _csdgpus = _v.csd_gpus) #OC14082018
 
         #---calculate undulator "operation table", i.e. dependence of gap (and phase) on photon energy (for a given polarization)
         if(_v.ut):
@@ -3225,7 +3233,9 @@ class SRWLBeamline(object):
                         _no_opt = _v.wm_nop, #OC03072021
                         _nmm = _v.wm_nmm, #) #OC16042021
                         _ncm = _v.wm_ncm, #) #OC27062021
-                        _cm_wfr = lstWfrCM) #OC02072021
+                        _cm_wfr = lstWfrCM, #OC02072021
+                        _propgpus = _v.prop_gpus,
+                        _csdgpus = _v.csd_gpus)
 
         #---plot results of all calculatiopns here (because the plotting "from the middle of the script" may hang up script execution)
         #uti_plot_init('TkAgg') #make the backend name an input option or move this to uti_plot ?

@@ -118,7 +118,7 @@ public:
 		}
 		else if(RadExtract.Int_or_Phase == 8) //OC06092018
 		{
-			if(res = ExtractSingleElecMutualIntensity(RadExtract)) throw res;
+			if(res = ExtractSingleElecMutualIntensity(RadExtract, pGpuUsage)) throw res;
 		}
 		//else if(RadExtract.Int_or_Phase == 9) //OC23022020 (under development - OC23032020)
 		//{
@@ -189,7 +189,8 @@ public:
 		else return ExtractSingleElecIntensity3D(RadExtract);
 	}
 
-	int ExtractSingleElecMutualIntensity(srTRadExtract& RadExtract) 
+	//int ExtractSingleElecMutualIntensity(srTRadExtract& RadExtract)
+	int ExtractSingleElecMutualIntensity(srTRadExtract& RadExtract, gpuUsageArg *pGpuUsage=0) //HG24042023 Added GPU usage parameter
 	{//OC06092018
 		//int PolCom = RadExtract.PolarizCompon; //OC03032021 (commented-out)
 		int Int_or_ReE = RadExtract.Int_or_Phase;
@@ -200,7 +201,8 @@ public:
 		//else if(RadExtract.PlotType == 1) return ExtractSingleElecMutualIntensityVsX(RadExtract);
 		if(RadExtract.PlotType == 1) return ExtractSingleElecMutualIntensityVsX(RadExtract);
 		else if(RadExtract.PlotType == 2) return ExtractSingleElecMutualIntensityVsZ(RadExtract);
-		else if(RadExtract.PlotType == 3) return ExtractSingleElecMutualIntensityVsXZ(RadExtract);
+		//else if(RadExtract.PlotType == 3) return ExtractSingleElecMutualIntensityVsXZ(RadExtract);
+		else if (RadExtract.PlotType == 3) return ExtractSingleElecMutualIntensityVsXZ(RadExtract, pGpuUsage); //HG24042023
 		//else if(RadExtract.PlotType == 4) return ExtractSingleElecMutualIntensityVsEX(RadExtract);
 		//else if(RadExtract.PlotType == 5) return ExtractSingleElecMutualIntensityVsEZ(RadExtract);
 		//else return ExtractSingleElecMutualIntensityEXZ(RadExtract);
@@ -239,9 +241,10 @@ public:
 
 	int ExtractSingleElecMutualIntensityVsX(srTRadExtract&); //OC06092018
 	int ExtractSingleElecMutualIntensityVsZ(srTRadExtract&);
-	int ExtractSingleElecMutualIntensityVsXZ(srTRadExtract&);
+	int ExtractSingleElecMutualIntensityVsXZ(srTRadExtract&, gpuUsageArg* pGpuUsage=0);
 
 #ifdef _OFFLOAD_GPU
+	int ExtractSingleElecMutualIntensityVsXZ_GPU(float* pEx, float* pEz, float* pMI, long nxnz, long itStart, long itEnd, long PerX, long iter, int PolCom, bool EhOK, bool EvOK, gpuUsageArg *pGpuUsage);
 	int ExtractSingleElecIntensity2DvsXZ_GPU(srTRadExtract& RadExtract, double* arAuxInt, long long ie0, long long ie1, double InvStepRelArg, gpuUsageArg *pGpuUsage);
 #endif
 
