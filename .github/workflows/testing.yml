@@ -67,7 +67,7 @@ jobs:
       - name: Build sdist and wheel and install *.whl
         run: |
           set -vxeuo pipefail
-          cd clients/python
+          cd env/python
           python -VV
           python setup.py sdist bdist_wheel
           ls -la dist/*
@@ -76,20 +76,20 @@ jobs:
       - name: Install test requirements with pip
         run: |
           set -vxeuo pipefail
-          cd clients/python
+          cd env/python
           python -m pip install -r requirements-dev.txt
           python -m pip list
 
       - name: Fast tests with pytest
         run: |
           set -vxeuo pipefail
-          cd clients/python
+          cd env/python
           # Note: check `pytest.ini` for args and test paths.
           pytest -k fast
 
       - name: Slow tests with pytest
         run: |
           set -vxeuo pipefail
-          cd clients/python
+          cd env/python
           # Note: check `pytest.ini` for args and test paths.
           pytest -k slow

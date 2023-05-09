@@ -34,7 +34,7 @@ MODE=cuda make fftw
 MODE=cuda make
 ```
 
-The GPU enabled SRW will then work as normal (from `clients/python/srwpy`).
+The GPU enabled SRW will then work as normal (from `env/python/srwpy`).
 
 ### Making a script use GPU
 
