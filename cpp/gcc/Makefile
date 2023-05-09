@@ -62,7 +62,7 @@ endif
 endif
 
 PYFLAGS=-I$(shell python -c "from __future__ import print_function; from sysconfig import get_paths as gp; print(gp()['include'])")
-PYFLAGS+=-L$(shell python -c "from __future__ import print_function; from sysconfig import get_paths as gp; print(gp()['stdlib'])")
+PYFLAGS+=-L$(shell python -c "from __future__ import print_function; from sysconfig import get_paths as gp; import os; print(os.path.join(gp()['stdlib'], '../libs'))")
 CFLAGS=$(SRW_CFLAGS) $(SRW_INCLUDES) $(SRW_SRC_DEF)
 
 # src/ext/auxparse
