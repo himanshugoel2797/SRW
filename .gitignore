@@ -13,7 +13,7 @@ docs/build/
 # Python and C compiled files
 *.pyc
 *.o
-data_example*
+#data_example*
 .idea
 
 # Compiled libraries
