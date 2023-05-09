@@ -99,7 +99,7 @@ print('   Reading magnetic field data from files ... ', end='')
 #for i in range(3):
 for i in range(1): 
     filePath = os.path.join(os.getcwd(), strExDataFolderName, arFldInFileNames[i])
-    print(filePath)
+    print(filePath, flush=True)
     magFldCnt.arMagFld[i] = AuxReadInMagFld3D(filePath, '#')
     magFldCnt.arMagFld[i].interp = fieldInterpMeth
     magFldCnt.arXc[i] = xcID
