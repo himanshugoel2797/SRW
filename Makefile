@@ -19,7 +19,7 @@ fftw3_version = fftw-3.3.8
 fftw3_dir = $(fftw3_version)
 fftw3_file = fftw3/$(fftw3_version).tar.gz
 log_fftw = /dev/null
-examples_dir = clients/python/srwpy/examples
+examples_dir = env/python/srwpy/examples
 #example10_data_dir = $(examples_dir)/data_example_10
 export MODE ?= 0
 
