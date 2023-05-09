@@ -1097,7 +1097,7 @@
       <ProfileGuidedDatabase>srwlpy.pgd</ProfileGuidedDatabase>
     </Link>
     <PostBuildEvent>
-      <Command>copy $(SolutionDir)srwlpy.pyd "$(SolutionDir)..\..\clients\python\srwpy\"</Command>
+      <Command>copy $(SolutionDir)srwlpy.pyd "$(SolutionDir)..\..\env\python\srwpy\"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug_Py2x|Win32'">
