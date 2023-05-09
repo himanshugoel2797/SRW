@@ -92,7 +92,7 @@ set(genmath_source_files
 
 add_library(genmath OBJECT ${genmath_source_files})
 target_link_libraries(genmath PUBLIC auxparse)
-target_include_directories(genmath PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../src/ext/genmath/)
+target_include_directories(genmath PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../src/ext/genmath/ ${CMAKE_CURRENT_SOURCE_DIR}/../src/lib)
 
 if(USE_OPENMP)
     target_include_directories(genmath PUBLIC ${OpenMP_CXX_INCLUDE_DIRS})
@@ -165,6 +165,8 @@ target_include_directories(core PUBLIC
 set(srw_lib_source_files
     ../src/lib/srwlib.cpp
     ../src/lib/srwlib.h
+    ../src/lib/auxgpu.h
+    ../src/lib/auxgpu.cpp
     ../src/lib/srerror.cpp
     ../src/lib/srerror.h
 )

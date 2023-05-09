@@ -572,7 +572,9 @@ public:
 		else if(LocalPropMode == 3) { RadPointModifier_AnalytTreatQuadPhaseTerm(EXZ, EPtrs, pBufVars); return;} //OC06092019
 		//else if(LocalPropMode == 3) { RadPointModifier_AnalytTreatQuadPhaseTerm(EXZ, EPtrs); return;}
 	}
+#ifdef _OFFLOAD_GPU
 	int RadPointModifierParallel(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars=0, long pBufVarsSz=0, gpuUsageArg* pGpuUsage=0) override;
+#endif
 
 	GPU_PORTABLE void RadPointModifier_AngRepres(srTEXZ& EXZ, srTEFieldPtrs& EPtrs)
 	{// e in eV; Length in m !!!
