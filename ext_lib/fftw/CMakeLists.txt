@@ -70,43 +70,78 @@ else()
         set_property(TARGET fftw PROPERTY IMPORTED_LOCATION ${STAGED_INSTALL_PREFIX}/lib/libfftw.a)
     endif()
     if(WIN32)
-        ExternalProject_Add(fftw_external
-            URL
-              https://github.com/ochubar/SRW/raw/master/ext_lib/fftw64_f.lib
-            URL_HASH
-              MD5=3e34fe1af702ba2af176e83a39021250
-            DOWNLOAD_NAME fftwf.lib
-            DOWNLOAD_DIR ${STAGED_INSTALL_PREFIX}/lib
-            DOWNLOAD_NO_EXTRACT true
-            CONFIGURE_COMMAND ""
-            BUILD_COMMAND ""
-            INSTALL_COMMAND ""
-        )
-
-        include(GNUInstallDirs)
+        #ExternalProject_Add(fftw_external
+        #    URL
+        #      https://github.com/ochubar/SRW/raw/master/ext_lib/fftw64_f.lib
+        #    URL_HASH
+        #      MD5=3e34fe1af702ba2af176e83a39021250
+        #    DOWNLOAD_NAME fftwf.lib
+        #    DOWNLOAD_DIR ${STAGED_INSTALL_PREFIX}/lib
+        #    DOWNLOAD_NO_EXTRACT true
+        #    CONFIGURE_COMMAND ""
+        #    BUILD_COMMAND ""
+        #    INSTALL_COMMAND ""
+        #)
+        #
+        #include(GNUInstallDirs)
+        #
+        #set(
+        #    FFTW_ROOT ${STAGED_INSTALL_PREFIX}
+        #    CACHE PATH "Path to internally built FFTWConfig.cmake"
+        #    FORCE
+        #)
+        #
+        #set(
+        #    FFTW_DOUBLE_LIB ${STAGED_INSTALL_PREFIX}/lib/fftwf.lib
+        #    CACHE PATH "Path to FFTW"
+        #    FORCE
+        #)
+        #
+        #set(
+        #    FFTW_FLOAT_LIB
+        #    CACHE PATH "Path to FFTWF"
+        #    FORCE
+        #)
+        #
+        # Libraries
+        #add_library(fftw STATIC IMPORTED)
+        #set_property(TARGET fftw PROPERTY IMPORTED_LOCATION ${STAGED_INSTALL_PREFIX}/lib/fftwf.lib)
 
         set(
-            FFTW_ROOT ${STAGED_INSTALL_PREFIX}
-            CACHE PATH "Path to internally built FFTWConfig.cmake"
+            FFTW_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/ext_lib
             FORCE
         )
 
-        set(
-            FFTW_DOUBLE_LIB ${STAGED_INSTALL_PREFIX}/lib/fftwf.lib
-            CACHE PATH "Path to FFTW"
-            FORCE
-        )
+        if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+            set(
+                FFTW_DOUBLE_LIB
+                CACHE PATH "Path to FFTW"
+                FORCE
+            )
 
-        set(
-            FFTW_FLOAT_LIB
-            CACHE PATH "Path to FFTWF"
-            FORCE
-        )
+            set(
+                FFTW_FLOAT_LIB ${CMAKE_CURRENT_SOURCE_DIR}/../fftw64_f.lib
+                CACHE PATH "Path to FFTWF"
+                FORCE
+            )
+        elseif(CMAKE_SIZEOF_VOID_P EQUAL 4)
+            set(
+                FFTW_DOUBLE_LIB
+                CACHE PATH "Path to FFTW"
+                FORCE
+            )
+
+            set(
+                FFTW_FLOAT_LIB ${CMAKE_CURRENT_SOURCE_DIR}/../fftw_f.lib
+                CACHE PATH "Path to FFTWF"
+                FORCE
+            )
+        endif()
 
 
         # Libraries
         add_library(fftw STATIC IMPORTED)
-        set_property(TARGET fftw PROPERTY IMPORTED_LOCATION ${STAGED_INSTALL_PREFIX}/lib/fftwf.lib)
+        set_property(TARGET fftw PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/../fftw_f.lib)
     endif()
     add_dependencies(fftw fftw_external)
 
