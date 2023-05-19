@@ -23,7 +23,7 @@ Testing of the pre-compiled SRW libraries and clients / bindings can be done usi
 
 ### II.1. Compiling SRW library and Python binding using MS Visual C++  
 
-#### II.1.1
+### II.1.1
 
 Microsoft Visual C++ 2015 (or later version) solution file (`SRW.sln`), which includes 4 projects:  
 
@@ -41,13 +41,13 @@ To compile SRW library supporting OpenMP based parallel calculations (e.g. for X
 
 ### II.2. Checking the examples
 
-#### II.2.1
+### II.2.1
 
 The SRW for Python examples can be tested using e.g. "IDLE" (Python native GUI). To do so, start this application (e.g. from Windows Start menu), open an example file in it, e.g. `SRW_Dev\env\work\srw_python\SRWLIB_Example01.py`, and run it from the IDLE.
 
 Alternatively, the example scripts can be executed from the Windows Command Prompt, e.g. from within the `SRW_Dev\env\work\srw_python` directory. For convenience, correct path to python.exe file may need to be specified in the Windows system PATH variable prior to these tests.
 
-#### II.2.2
+### II.2.2
 
 The SRW for IGOR Pro examples can be tested from "SRWE" and "SRWP" menus, "Help" sub-menus, of the IGOR Pro.
 
@@ -57,7 +57,7 @@ The SRW for IGOR Pro examples can be tested from "SRWE" and "SRWP" menus, "Help"
 
 This can be done either using Python "setuptools" module (see section III.1.1 below) or without it (see section III.1.2).
 
-#### III.1.1. Compiling using Python "setuptools" module  
+### III.1.1. Compiling using Python "setuptools" module  
 
 Make sure the "setuptools" module of the Python version you would like to use is properly installed and configured. If this is done, the compilation and installation is simple:
 
@@ -74,9 +74,9 @@ make all MODE=omp
 
 This should compile `libsrw.a` and `srwlpy.so`, and copy `srwlpy.so` to `SRW_Dev/env/work/srw_python/`
 
-#### III.1.2. Compiling without "setuptools"  
+### III.1.2. Compiling without "setuptools"  
 
-##### III.1.2.1. Download and compile fftw-2.1.5 or/and fftw-3.3.8 library as required for SRW  
+### III.1.2.1. Download and compile fftw-2.1.5 or/and fftw-3.3.8 library as required for SRW  
 
 Make sure files `fftw-3.3.8.tar.gz` and `fftw-2.1.5.tar.gz` are located in `SRW_Dev/ext_lib` directory (if necessary, download these files from FFTW site, probably http://www.fftw.org/download.html).  
 Do the following to compile fftw-3.3.8 for using single-precision numbers as required for most FFT-based operations in SRW:
@@ -124,7 +124,7 @@ Manually (using editor) add -fPIC option to CFLAGS in Makefile
 make -j8 && cp fftw/.libs/libfftw.a ../
 ```
 
-##### III.1.2.2. Compiling the SRW library and Python binding  
+### III.1.2.2. Compiling the SRW library and Python binding  
 
 ```bash
 cd SRW_Dev/cpp/gcc
@@ -234,6 +234,35 @@ sudo port install gcc47
 ```
 
 Modify the `SRW_Dev/cpp/gcc/Makefile` so that `CC=<path to macports>/gcc` and `CXX=<path to macports>/g++`, and proceed to the compilation as described in III.1.2.2.  
+
+## V. Compiling and testing SRW Library and its Python binding on Windows and Linux (via CMake/Pip)
+
+Run the following in a Visual Studio Developer Command Line/Linux Terminal:
+
+```bash
+cmake -B build
+cmake --build build -j
+```
+
+The pip installable version of the package can be obtained by running the following in a Visual Studio Developer Command Line/Linux Terminal:
+
+```bash
+cd env/python
+pip install -e .
+```
+
+## VI. GPU Acceleration of SRW
+
+SRW has basic support for GPU acceleration of some routines through CUDA. Compilation of SRW with GPU acceleration requires the CUDA HPC SDK to be installed and, on Linux can be performed with:
+
+```bash
+MODE=cuda make
+```
+
+To compile on Windows, open the SRW solution in Visual Studio, set the target to the `_cuda` variants and update the library and include paths for the SRWLIB project. You may also have to copy the following DLLs from the HPC SDK install into the env/python/srwpy directory:
+
+- cudart64_110.dll
+- cufft64_10.dll
 
 ## Authors and Contributors to SRW project
 
