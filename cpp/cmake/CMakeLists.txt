@@ -267,5 +267,8 @@ if(WIN32)
   set_target_properties(srwlpy PROPERTIES SUFFIX ".pyd")
 endif()
 
+add_custom_command(TARGET srwlpy POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:srwlpy> ${CMAKE_SOURCE_DIR}/env/python/srwpy/
+)
 
-install(TARGETS srwlpy LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
+#install(TARGETS srwlpy LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})

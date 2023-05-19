@@ -26,13 +26,13 @@ set(CMAKE_BUILD_TYPE Release)
 # Option for OpenMP build, OFF by default.
 option(USE_OPENMP "Activate OpenMP build" OFF)
 
-# Option for C client library to be built or not - See cpp/src/clients/CMakeLists.txt
+# Option for C client library to be built or not - See cpp/env/cmake/CMakeLists.txt
 option(BUILD_CLIENT_C "Activate C Client library build" OFF)
 
-# Option for Python client library to be built or not - See cpp/src/clients/CMakeLists.txt
+# Option for Python client library to be built or not - See cpp/env/cmake/CMakeLists.txt
 option(BUILD_CLIENT_PYTHON "Activate Python Client library build" OFF)
 
-# Option for Igor Pro client library to be built or not - See cpp/src/clients/CMakeLists.txt
+# Option for Igor Pro client library to be built or not - See cpp/env/cmake/CMakeLists.txt
 option(BUILD_CLIENT_IGOR "Activate Igor Pro Client library build" OFF)
 
 
@@ -41,20 +41,21 @@ set(STAGED_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/stage)
 message(STATUS "${PROJECT_NAME} staged install: ${STAGED_INSTALL_PREFIX}")
 
 
-if(UNIX)
-  # Use ./lib ./bin ./include ./share folder structure
-  include(GNUInstallDirs)
-else()
-  if (WIN32)
-    set(${CMAKE_INSTALL_LIBDIR} "lib")
-    set(${CMAKE_INSTALL_DATADIR} "share")
-    set(${CMAKE_INSTALL_INCLUDEDIR} "include")
-    set(${CMAKE_INSTALL_BINDIR} "bin")
-    message(STATUS "Setting installation destination on Windows to: ${CMAKE_INSTALL_PREFIX}")
-  else()
-    message(FATAL_ERROR "System not UNIX nor WIN32 - not implemented yet")
-  endif()
-endif()
+#if(UNIX)
+#  # Use ./lib ./bin ./include ./share folder structure
+#  include(GNUInstallDirs)
+#else()
+#  if (WIN32)
+#    set(${CMAKE_INSTALL_LIBDIR} "lib")
+#    set(${CMAKE_INSTALL_DATADIR} "share")
+#    set(${CMAKE_INSTALL_INCLUDEDIR} "include")
+#    set(${CMAKE_INSTALL_BINDIR} "bin")
+#    message(STATUS "Setting installation destination on Windows to: ${CMAKE_INSTALL_PREFIX}")
+#  else()
+#    message(FATAL_ERROR "System not UNIX nor WIN32 - not implemented yet")
+#  endif()
+#endif()
+
 
 # Force FFTW to look for STATIC libraries that we need
 set(FFTW_USE_STATIC_LIBS ON)
