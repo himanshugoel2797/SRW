@@ -72,6 +72,12 @@ jobs:
         run: |
           set -vxeuo pipefail
           conda install -y -c conda-forge mpi4py openmpi
+      
+      - name: Copy over README.md
+        run: |
+          set -vxeuo pipefail
+          cp README.md env/python
+
 
       - name: Install cibuildwheel on Linux
         if: runner.os == 'Linux'
