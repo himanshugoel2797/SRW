@@ -367,7 +367,7 @@ void AuxGpu::Fini() {
 		}
 	}
 	gpuMap.clear();
-	printf("Max Device Memory: %d\n", maxDeviceMemory);
+	printf("Max Device Memory: %lld\n", maxDeviceMemory);
 #if _DEBUG
 	printf("Fini: %d\n", gpuMap.size());
 #endif
