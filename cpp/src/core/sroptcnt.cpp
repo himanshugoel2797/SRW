@@ -262,7 +262,17 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 	//get_walltime(&start);
 	//get_walltime(&start1);
 #if _BENCHMARK_ == 2
-		auto ts0 = std::chrono::high_resolution_clock::now();
+	cudaEvent_t start, stop;
+	
+	GPU_COND(pGpuUsage,
+	{
+		//Place CUDA event
+		cudaEventCreate(&start);
+		cudaEventCreate(&stop);
+		cudaEventRecord(start);
+	})
+	
+	auto ts0 = std::chrono::high_resolution_clock::now();
 #endif
 
 	int numElem = (int)GenOptElemList.size();
@@ -317,17 +327,34 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 				(::fabs(curPropResizeInst.pzd - 1.) > tolRes) || (::fabs(curPropResizeInst.pzm - 1.) > tolRes) || (curPropResizeInst.ShiftTypeBeforeRes > 0)) //OC11072019
 			{
 #if _BENCHMARK_ == 1
+				cudaEvent_t start, stop;
+				
+				GPU_COND(pGpuUsage,
+				{
+					//Place CUDA event
+					cudaEventCreate(&start);
+					cudaEventCreate(&stop);
+					cudaEventRecord(start);
+				})
+				
 				auto ts0 = std::chrono::high_resolution_clock::now();
 #endif
 				if(res = RadResizeGen(wfr, curPropResizeInst, pGpuUsage)) return res;
 
 #if _BENCHMARK_ == 1
 				GPU_COND(pGpuUsage, {
-					cudaDeviceSynchronize();
-				});
-				auto ts1 = std::chrono::high_resolution_clock::now();
-				std::chrono::duration<double> dt = ts1 - ts0;
-				std::cout << "RadResizeGen: " << dt.count() << " s" << std::endl;
+					cudaEventRecord(stop);
+					cudaEventSynchronize(stop);
+					float milliseconds = 0;
+					cudaEventElapsedTime(&milliseconds, start, stop);
+					std::cout << "RadResizeGen: " << milliseconds << " ms" << std::endl;
+				})
+				else
+				{
+					auto ts1 = std::chrono::high_resolution_clock::now();
+					std::chrono::duration<double> dt = ts1 - ts0;
+					std::cout << "RadResizeGen: " << dt.count() * 1000 << " ms" << std::endl;
+				}
 #endif
 				
 				//Mark data as already being on GPU if the resize was done on GPU
@@ -352,6 +379,16 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 		//srwlPrintTime("Iteration: precParWfrPropag",&start);
 
 #if _BENCHMARK_ == 1
+		cudaEvent_t start, stop;
+		
+		GPU_COND(pGpuUsage,
+		{
+			//Place CUDA event
+			cudaEventCreate(&start);
+			cudaEventCreate(&stop);
+			cudaEventRecord(start);
+		})
+
 		auto ts0 = std::chrono::high_resolution_clock::now();
 #endif
 
@@ -383,11 +420,18 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 
 #if _BENCHMARK_ == 1
 		GPU_COND(pGpuUsage, {
-			cudaDeviceSynchronize();
-		});
-		auto ts1 = std::chrono::high_resolution_clock::now();
-		std::chrono::duration<double> dt = ts1 - ts0;
-		std::cout << "Prop" << elemCount << ": " << dt.count() << " s" << std::endl;
+			cudaEventRecord(stop);
+			cudaEventSynchronize(stop);
+			float milliseconds = 0;
+			cudaEventElapsedTime(&milliseconds, start, stop);
+			std::cout << "Prop" << elemCount << ": " << milliseconds << " ms" << std::endl;
+		})
+		else
+		{
+			auto ts1 = std::chrono::high_resolution_clock::now();
+			std::chrono::duration<double> dt = ts1 - ts0;
+			std::cout << "Prop" << elemCount << ": " << dt.count() * 1000 << " ms" << std::endl;
+		}
 #endif
 
 		//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
@@ -433,11 +477,18 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 
 #if _BENCHMARK_ == 2
 	GPU_COND(pGpuUsage, {
-		cudaDeviceSynchronize();
-	});
-	auto ts1 = std::chrono::high_resolution_clock::now();
-	std::chrono::duration<double> dt = ts1 - ts0;
-	std::cout << "Overall: " << dt.count() << " s" << std::endl;
+		cudaEventRecord(stop);
+		cudaEventSynchronize(stop);
+		float milliseconds = 0;
+		cudaEventElapsedTime(&milliseconds, start, stop);
+		std::cout << "Overall: " << milliseconds << " ms" << std::endl;
+	})
+	else
+	{
+		auto ts1 = std::chrono::high_resolution_clock::now();
+		std::chrono::duration<double> dt = ts1 - ts0;
+		std::cout << "Overall: " << dt.count() * 1000 << " ms" << std::endl;
+	}
 #endif
 	return 0;
 }

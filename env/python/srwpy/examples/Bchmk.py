@@ -7,6 +7,8 @@
 
 from __future__ import print_function
 from tabnanny import check #Python 2.7 compatibility
+import sys
+sys.path.append('../')
 from srwlib import *
 from srwl_uti_smp import *
 import srwl_uti_smp_rnd_obj3d
@@ -66,7 +68,7 @@ def sum_wavefronts(wfr):
 
 
 
-def uti_read_wfr_cm_hdf5(_file_path, _gen0s=True, _wfrs_per_grp = 1, mode_cnt = 50): #OC11042020
+def uti_read_wfr_cm_hdf5(_file_path, _gen0s=True, _wfrs_per_grp = 1, mode_cnt = 1): #OC11042020
     """
     Reads-in Wavefront data file (with a number of wavefronts, calculated in the same mesh vs x nad y)
     :param _file_path: string specifying path do data file to be loaded
@@ -184,7 +186,7 @@ def uti_read_wfr_cm_hdf5(_file_path, _gen0s=True, _wfrs_per_grp = 1, mode_cnt = 
 
     return wfrs
 
-wfr_list = uti_read_wfr_cm_hdf5(os.path.join(os.getcwd(), strCmDataFileName), _wfrs_per_grp=1)
+wfr_list = uti_read_wfr_cm_hdf5(os.path.join(os.getcwd(), strDataFolderName, strCmDataFileName), _wfrs_per_grp=1)
 #print('{} groups of coherent modes with {} per group loaded'.format(len(wfr_list), wfr_list[0].nWfr))
 
 #************Defining Samples (lists of 3D objects (spheres))
