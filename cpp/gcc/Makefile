@@ -37,6 +37,10 @@ SRW_INCLUDES=   -I$(SRW_SRC_GEN_DIR) -I$(SRW_SRC_LIB_DIR) -I$(SH_SRC_PARSE_DIR) 
 SRW_CFLAGS=		-O3 -fPIC
 LDFLAGS=-L$(LIB_DIR) -lm 
 
+ifeq ($(BCHMK), 1)
+SRW_SRC_DEF+= -D_BENCHMARK_
+endif
+
 ifeq ($(MODE), omp)
 SRW_CFLAGS+= -D_WITH_OMP -fopenmp -Wno-write-strings 
 LDFLAGS+= -lfftw 
