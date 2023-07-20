@@ -257,7 +257,7 @@ void* AuxGpu::ToHostAndFree(gpuUsageArg* arg, void* devicePtr, size_t size, bool
 	cudaStreamWaitEvent(0, info.h2d_event);
 	cudaStreamWaitEvent(0, info.d2h_event);
 	cudaFreeAsync(devicePtr, 0);
-	deviceMemory -= size;
+	deviceMemory -= info.size;
 	if (deviceMemory > maxDeviceMemory)
 		maxDeviceMemory = deviceMemory;
     cudaEventDestroy(info.h2d_event);
@@ -286,7 +286,7 @@ void AuxGpu::FreeHost(void* ptr)
     //cudaStreamWaitEvent(0, info.h2d_event);
 	//cudaStreamWaitEvent(0, info.d2h_event);
 	cudaFreeAsync(devicePtr, 0);
-	deviceMemory -= size;
+	deviceMemory -= info.size;
 	if (deviceMemory > maxDeviceMemory)
 		maxDeviceMemory = deviceMemory;
 	//cudaEventDestroy(info.h2d_event);
@@ -359,7 +359,7 @@ void AuxGpu::Fini() {
 			cudaStreamWaitEvent(0, it->second.h2d_event);
 			cudaStreamWaitEvent(0, it->second.d2h_event);
 			cudaFreeAsync(it->second.devicePtr, 0);
-			deviceMemory -= size;
+			deviceMemory -= it->second.size;
 			if (deviceMemory > maxDeviceMemory)
 				maxDeviceMemory = deviceMemory;
 			cudaEventDestroy(it->second.h2d_event);
