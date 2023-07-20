@@ -31,13 +31,13 @@ res_mult = int(sys.argv[1])
 gpu_id = int(sys.argv[2])
     
 #***********Folder and Data File Names
-strDataFolderName = 'data_example_19' #Data sub-folder name
+strDataFolderName = 'xpcs' #Data sub-folder name
 strSampleSubFolderName = 'samples' #Sub-folder name for storing Sample data
 strListSampObjFileName = 'ex19_smp_obj_list_%d.dat' #List of 3D Nano-Objects / Sample file name
 strSampOptPathDifOutFileName = 'ex19_smp_opt_path_dif_%d.dat' #optical path difference corresponding to selected sample
 strIntInitOutFileName = 'ex19_res_int_in.dat' #initial wavefront intensity distribution output file name
 strIntPropOutFileName = 'ex19_res_int_prop_%d.dat' #propagated wavefront intensity distribution output file name
-strIntPropOutFileNameDet = 'realchx_pc_100frames_sio2_0.02_v5_3_hires_sio2_densityfix.h5' #intensity distribution regisgtered by detector output file name
+strIntPropOutFileNameDet = 'calc_res.h5' #intensity distribution regisgtered by detector output file name
 strCmDataFileName = 'chx_res_9650eV_pr_dir_100k_cm.h5' #file name for loading coherent modes from file
 
 #***********Initial Wavefront
@@ -204,7 +204,7 @@ listObjBrownian = []
 step = 100
 step_cnt = 1
 base_i = 399
-base_path = '/home/hgoel/Documents/LAMMPS/silica_np3/converted_0.02/smp_%d.dat'
+base_path = 'sim_data/smp_%d.dat'
 #for i in range(1000):
 #    file = base_path % ((i + base_i) * step)
 #    objs = uti_io.read_ascii_data_rows(file, '\t')
