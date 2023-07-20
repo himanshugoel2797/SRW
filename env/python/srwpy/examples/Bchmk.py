@@ -301,4 +301,6 @@ for it in range(step_cnt):
 
         idx+=1
 
+
+    print('Points: %d, %d' % (wfrP.mesh.nx, wfrP.mesh.ny))
     #cmArI1 = np.sum(cmFrames, axis=0)
