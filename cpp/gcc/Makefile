@@ -38,7 +38,11 @@ SRW_CFLAGS=		-O3 -fPIC
 LDFLAGS=-L$(LIB_DIR) -lm 
 
 ifeq ($(BCHMK), 1)
-SRW_SRC_DEF+= -D_BENCHMARK_
+SRW_SRC_DEF+= -D_BENCHMARK_=1
+else
+ifeq ($(BCHMK), 2)
+SRW_SRC_DEF+= -D_BENCHMARK_=2
+endif
 endif
 
 ifeq ($(MODE), omp)

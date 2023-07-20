@@ -261,6 +261,9 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 	//double start,start1;
 	//get_walltime(&start);
 	//get_walltime(&start1);
+#if _BENCHMARK_ == 2
+		auto ts0 = std::chrono::high_resolution_clock::now();
+#endif
 
 	int numElem = (int)GenOptElemList.size();
 	int numResizeInst = (int)GenOptElemPropResizeVect.size();
@@ -313,12 +316,12 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 				//(::fabs(curPropResizeInst.pzd - 1.) > tolRes) || (::fabs(curPropResizeInst.pzm - 1.) > tolRes))
 				(::fabs(curPropResizeInst.pzd - 1.) > tolRes) || (::fabs(curPropResizeInst.pzm - 1.) > tolRes) || (curPropResizeInst.ShiftTypeBeforeRes > 0)) //OC11072019
 			{
-#ifdef _BENCHMARK_
+#if _BENCHMARK_ == 1
 				auto ts0 = std::chrono::high_resolution_clock::now();
 #endif
 				if(res = RadResizeGen(wfr, curPropResizeInst, pGpuUsage)) return res;
 
-#ifdef _BENCHMARK_
+#if _BENCHMARK_ == 1
 				GPU_COND(pGpuUsage, {
 					cudaDeviceSynchronize();
 				});
@@ -348,7 +351,7 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 		//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
 		//srwlPrintTime("Iteration: precParWfrPropag",&start);
 
-#ifdef _BENCHMARK_
+#if _BENCHMARK_ == 1
 		auto ts0 = std::chrono::high_resolution_clock::now();
 #endif
 
@@ -378,7 +381,7 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 		if(res = ((srTGenOptElem*)(it->rep))->PropagateRadiation(&wfr, precParWfrPropag, auxResizeVect, pGpuUsage)) return res;
 		//maybe to use "PropagateRadiationGuided" for srTCompositeOptElem?
 
-#ifdef _BENCHMARK_
+#if _BENCHMARK_ == 1
 		GPU_COND(pGpuUsage, {
 			cudaDeviceSynchronize();
 		});
@@ -427,6 +430,15 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 		if(propIntIsNeeded) ExtractPropagatedIntensity(wfr, nInt, arID, arIM, arI, elemCount); //OC29082018
 		//if(propIntIsNeeded) ExtractPropagatedIntensity(wfr, nInt, arID, arIM, arI, elemCount, nInt - 1);
 	}
+
+#if _BENCHMARK_ == 2
+	GPU_COND(pGpuUsage, {
+		cudaDeviceSynchronize();
+	});
+	auto ts1 = std::chrono::high_resolution_clock::now();
+	std::chrono::duration<double> dt = ts1 - ts0;
+	std::cout << "Overall: " << dt.count() << " s" << std::endl;
+#endif
 	return 0;
 }
 
