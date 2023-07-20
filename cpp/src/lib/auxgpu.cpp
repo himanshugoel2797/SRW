@@ -26,6 +26,8 @@ static bool isGPUEnabled = false;
 static bool GPUAvailabilityTested = false;
 static bool deviceOffloadInitialized = false;
 static int deviceCount = 0;
+static long long deviceMemory = 0;
+static long long maxDeviceMemory = 0;
 
 #ifdef _OFFLOAD_GPU
 typedef struct
@@ -148,6 +150,9 @@ void* AuxGpu::ToDevice(gpuUsageArg* arg, void* hostPtr, size_t size, bool dontCo
 
 	void *devicePtr = NULL;
 	cudaError_t err = cudaMalloc(&devicePtr, size);
+	deviceMemory += size;
+	if (deviceMemory > maxDeviceMemory)
+		maxDeviceMemory = deviceMemory;
 	if (err != cudaSuccess)
 		return NULL;
 #if _DEBUG
@@ -252,6 +257,9 @@ void* AuxGpu::ToHostAndFree(gpuUsageArg* arg, void* devicePtr, size_t size, bool
 	cudaStreamWaitEvent(0, info.h2d_event);
 	cudaStreamWaitEvent(0, info.d2h_event);
 	cudaFreeAsync(devicePtr, 0);
+	deviceMemory -= size;
+	if (deviceMemory > maxDeviceMemory)
+		maxDeviceMemory = deviceMemory;
     cudaEventDestroy(info.h2d_event);
 	cudaEventDestroy(info.d2h_event);
 	gpuMap.erase(devicePtr);
@@ -278,6 +286,9 @@ void AuxGpu::FreeHost(void* ptr)
     //cudaStreamWaitEvent(0, info.h2d_event);
 	//cudaStreamWaitEvent(0, info.d2h_event);
 	cudaFreeAsync(devicePtr, 0);
+	deviceMemory -= size;
+	if (deviceMemory > maxDeviceMemory)
+		maxDeviceMemory = deviceMemory;
 	//cudaEventDestroy(info.h2d_event);
 	//cudaEventDestroy(info.d2h_event);
 	AuxGpu::free(hostPtr);
@@ -348,11 +359,15 @@ void AuxGpu::Fini() {
 			cudaStreamWaitEvent(0, it->second.h2d_event);
 			cudaStreamWaitEvent(0, it->second.d2h_event);
 			cudaFreeAsync(it->second.devicePtr, 0);
+			deviceMemory -= size;
+			if (deviceMemory > maxDeviceMemory)
+				maxDeviceMemory = deviceMemory;
 			cudaEventDestroy(it->second.h2d_event);
 			cudaEventDestroy(it->second.d2h_event);
 		}
 	}
 	gpuMap.clear();
+	printf("Max Device Memory: %d\n", maxDeviceMemory);
 #if _DEBUG
 	printf("Fini: %d\n", gpuMap.size());
 #endif
