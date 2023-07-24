@@ -148,6 +148,11 @@ void* AuxGpu::ToDevice(gpuUsageArg* arg, void* hostPtr, size_t size, bool dontCo
 
 	void *devicePtr = NULL;
 	cudaError_t err = cudaMalloc(&devicePtr, size);
+	if (err != cudaSuccess) // Try again after freeing up some memory HG24072023
+	{
+		cudaStreamSynchronize(0);
+		err = cudaMalloc(&devicePtr, size);
+	}
 	if (err != cudaSuccess)
 		return NULL;
 #if _DEBUG
@@ -326,6 +331,7 @@ void AuxGpu::Fini() {
 #ifdef _OFFLOAD_GPU
 	// Copy back all updated data
 	bool updated = false;
+	bool freed = false;
 	for (std::map<void*, memAllocInfo_t>::const_iterator it = gpuMap.cbegin(); it != gpuMap.cend(); it++)
 	{
 		if (it->second.DevToHostUpdated){
@@ -339,8 +345,6 @@ void AuxGpu::Fini() {
 			gpuMap[it->second.devicePtr].DevToHostUpdated = false;
 		}
 	}
-	if (updated)
-		cudaDeviceSynchronize();
 	for (std::map<void*, memAllocInfo_t>::const_iterator it = gpuMap.cbegin(); it != gpuMap.cend(); it++)
 	{
 		if (it->first == it->second.devicePtr)
@@ -348,10 +352,13 @@ void AuxGpu::Fini() {
 			cudaStreamWaitEvent(0, it->second.h2d_event);
 			cudaStreamWaitEvent(0, it->second.d2h_event);
 			cudaFreeAsync(it->second.devicePtr, 0);
+			freed = true;
 			cudaEventDestroy(it->second.h2d_event);
 			cudaEventDestroy(it->second.d2h_event);
 		}
 	}
+	if (updated | freed)
+		cudaStreamSynchronize(0);
 	gpuMap.clear();
 #if _DEBUG
 	printf("Fini: %d\n", gpuMap.size());
