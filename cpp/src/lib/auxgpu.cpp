@@ -357,8 +357,6 @@ void AuxGpu::Fini() {
 			gpuMap[it->second.devicePtr].DevToHostUpdated = false;
 		}
 	}
-	if (updated)
-		cudaDeviceSynchronize();
 	for (std::map<void*, memAllocInfo_t>::const_iterator it = gpuMap.cbegin(); it != gpuMap.cend(); it++)
 	{
 		if (it->first == it->second.devicePtr)
@@ -374,7 +372,7 @@ void AuxGpu::Fini() {
 			cudaEventDestroy(it->second.d2h_event);
 		}
 	}
-	if (freed)
+	if (updated | freed)
 		cudaStreamSynchronize(0);
 	gpuMap.clear();
 	printf("Max Device Memory: %lld\n", maxDeviceMemory);
