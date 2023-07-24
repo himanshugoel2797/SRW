@@ -150,6 +150,12 @@ void* AuxGpu::ToDevice(gpuUsageArg* arg, void* hostPtr, size_t size, bool dontCo
 
 	void *devicePtr = NULL;
 	cudaError_t err = cudaMalloc(&devicePtr, size);
+	if (err != cudaSuccess) // Try again after freeing up some memory HG24072023
+	{
+		cudaStreamSynchronize(0);
+		err = cudaMalloc(&devicePtr, size);
+	}
+
 	deviceMemory += size;
 	if (deviceMemory > maxDeviceMemory)
 		maxDeviceMemory = deviceMemory;
@@ -337,6 +343,7 @@ void AuxGpu::Fini() {
 #ifdef _OFFLOAD_GPU
 	// Copy back all updated data
 	bool updated = false;
+	bool freed = false;
 	for (std::map<void*, memAllocInfo_t>::const_iterator it = gpuMap.cbegin(); it != gpuMap.cend(); it++)
 	{
 		if (it->second.DevToHostUpdated){
@@ -359,6 +366,7 @@ void AuxGpu::Fini() {
 			cudaStreamWaitEvent(0, it->second.h2d_event);
 			cudaStreamWaitEvent(0, it->second.d2h_event);
 			cudaFreeAsync(it->second.devicePtr, 0);
+			freed = true;
 			deviceMemory -= it->second.size;
 			if (deviceMemory > maxDeviceMemory)
 				maxDeviceMemory = deviceMemory;
@@ -366,6 +374,8 @@ void AuxGpu::Fini() {
 			cudaEventDestroy(it->second.d2h_event);
 		}
 	}
+	if (freed)
+		cudaStreamSynchronize(0);
 	gpuMap.clear();
 	printf("Max Device Memory: %lld\n", maxDeviceMemory);
 #if _DEBUG
