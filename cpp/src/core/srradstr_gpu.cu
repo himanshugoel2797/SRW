@@ -18,15 +18,14 @@
 #include <stdio.h>
 #include <iostream>
 #include <chrono>
-#include "srradstr_gpu.h"
+#include "srradstr.h"
 
 
-__global__ void MultiplyElFieldByPhaseLin_Kernel(double xMult, double zMult, float* pBaseRadX, float* pBaseRadZ, int nWfr, int nz, int nx, int ne, float zStart, float zStep, float xStart, float xStep) {
+__global__ void MultiplyElFieldByPhaseLin_Kernel(double xMult, double zMult, float* pBaseRadX, float* pBaseRadZ, int nz, int nx, int ne, float zStart, float zStep, float xStart, float xStep) {
     int ix = (blockIdx.x * blockDim.x + threadIdx.x); //nx range
     int iz = (blockIdx.y * blockDim.y + threadIdx.y); //nz range
-    int iwfr = (blockIdx.z * blockDim.z + threadIdx.z); //nWfr range
-
-    if (ix < nx && iz < nz && iwfr < nWfr) 
+    
+    if (ix < nx && iz < nz) 
     {
 		bool RadXisDefined = (pBaseRadX != 0);
 		bool RadZisDefined = (pBaseRadZ != 0);
@@ -38,7 +37,7 @@ __global__ void MultiplyElFieldByPhaseLin_Kernel(double xMult, double zMult, flo
 		double cosPh, sinPh;
 		sincos(dPh, &sinPh, &cosPh);
 
-		long long offset = iwfr * nz * nx * ne * 2 + iz * nx * ne * 2 + ix * ne * 2;
+		long long offset = iz * nx * ne * 2 + ix * ne * 2;
 		float* tEx = pBaseRadX + offset;
 		float* tEz = pBaseRadZ + offset;
 		for (int ie = 0; ie < ne; ie++)
@@ -61,55 +60,49 @@ __global__ void MultiplyElFieldByPhaseLin_Kernel(double xMult, double zMult, flo
     }
 }
 
-void MultiplyElFieldByPhaseLin_GPU(double xMult, double zMult, float* pBaseRadX, float* pBaseRadZ, int nWfr, int nz, int nx, int ne, float zStart, float zStep, float xStart, float xStep, gpuUsageArg* pGpuUsage)
+void srTSRWRadStructAccessData::MultiplyElFieldByPhaseLin_GPU(double xMult, double zMult, void* pGpuUsage)
 {
 	if (pBaseRadX != NULL)
 	{
-		pBaseRadX = (float*)AuxGpu::ToDevice(pGpuUsage, pBaseRadX, nWfr * nz * nx * ne * 2 * sizeof(float));
-		AuxGpu::EnsureDeviceMemoryReady(pGpuUsage, pBaseRadX);
+		pBaseRadX = (float*)CAuxGPU::ToDevice(pGpuUsage, pBaseRadX, nz * nx * ne * 2 * sizeof(float));
+		CAuxGPU::EnsureDeviceMemoryReady(pGpuUsage, pBaseRadX);
 	}
 	if (pBaseRadZ != NULL)
 	{
-		pBaseRadZ = (float*)AuxGpu::ToDevice(pGpuUsage, pBaseRadZ, nWfr * nz * nx * ne * 2 * sizeof(float));
-		AuxGpu::EnsureDeviceMemoryReady(pGpuUsage, pBaseRadZ);
+		pBaseRadZ = (float*)CAuxGPU::ToDevice(pGpuUsage, pBaseRadZ, nz * nx * ne * 2 * sizeof(float));
+		CAuxGPU::EnsureDeviceMemoryReady(pGpuUsage, pBaseRadZ);
 	}
 
     const int bs = 256;
-    dim3 blocks(nx / bs + ((nx & (bs - 1)) != 0), nz, nWfr);
+    dim3 blocks(nx / bs + ((nx & (bs - 1)) != 0), nz);
     dim3 threads(bs, 1);
-    MultiplyElFieldByPhaseLin_Kernel<< <blocks, threads >> > (xMult, zMult, pBaseRadX, pBaseRadZ, nWfr, nz, nx, ne, zStart, zStep, xStart, xStep);
+    MultiplyElFieldByPhaseLin_Kernel<<<blocks, threads>>> (xMult, zMult, pBaseRadX, pBaseRadZ, nz, nx, ne, zStart, zStep, xStart, xStep);
 
 	if (pBaseRadX != NULL)
-		AuxGpu::MarkUpdated(pGpuUsage, pBaseRadX, true, false);
+		CAuxGPU::MarkUpdated(pGpuUsage, pBaseRadX, true, false);
 	if (pBaseRadZ != NULL)
-		AuxGpu::MarkUpdated(pGpuUsage, pBaseRadZ, true, false);
-
-	    
+		CAuxGPU::MarkUpdated(pGpuUsage, pBaseRadZ, true, false);
 
 #ifdef _DEBUG
 	if (pBaseRadX != NULL)
-		pBaseRadX = (float*)AuxGpu::ToHostAndFree(pGpuUsage, pBaseRadX, nWfr * nz * nx * ne * 2 * sizeof(float));
+		pBaseRadX = (float*)CAuxGPU::ToHostAndFree(pGpuUsage, pBaseRadX, nz * nx * ne * 2 * sizeof(float));
 	if (pBaseRadZ != NULL)
-		pBaseRadZ = (float*)AuxGpu::ToHostAndFree(pGpuUsage, pBaseRadZ, nWfr * nz * nx * ne * 2 * sizeof(float));
+		pBaseRadZ = (float*)CAuxGPU::ToHostAndFree(pGpuUsage, pBaseRadZ, nz * nx * ne * 2 * sizeof(float));
 	cudaStreamSynchronize(0);
-    auto err = cudaGetLastError();
-    printf("%s\r\n", cudaGetErrorString(err));
+    //auto err = cudaGetLastError();
+    //printf("%s\r\n", cudaGetErrorString(err));
 #endif
 }
 
-template<int mode> __global__ void MirrorFieldData_Kernel(long ne, long nx, long nz, long nwfr, float* pEX0, float* pEZ0) {
+template<int mode> __global__ void MirrorFieldData_Kernel(long ne, long nx, long nz, float* pEX0, float* pEZ0) {
 	int ix = (blockIdx.x * blockDim.x + threadIdx.x); //nx range
 	int iz = (blockIdx.y * blockDim.y + threadIdx.y); //nz range
-	int iwfr = (blockIdx.z * blockDim.z + threadIdx.z); //nWfr range
 
-	if (ix < nx && iz < nz && iwfr < nwfr)
+	if (ix < nx && iz < nz)
 	{
 		long long PerX = ne << 1;
 		long long PerZ = PerX * nx;
 		float buf;
-
-		if (pEX0 != 0) pEX0 += ne * nx * nz * 2 * iwfr;
-		if (pEZ0 != 0) pEZ0 += ne * nx * nz * 2 * iwfr;
 
 		if (mode == 0)
 		{
@@ -268,49 +261,48 @@ template<int mode> __global__ void MirrorFieldData_Kernel(long ne, long nx, long
 	}
 }
 
-void MirrorFieldData_GPU(long ne, long nx, long nz, long nwfr, float* pEX0, float* pEZ0, int mode, gpuUsageArg* pGpuUsage)
+void srTSRWRadStructAccessData::MirrorFieldData_GPU(int sx, int sz, void* pGpuUsage)
 {
+	float *pEX0 = pBaseRadX;
+	float *pEZ0 = pBaseRadZ;
+
 	if (pEX0 != NULL)
 	{
-		pEX0 = (float*)AuxGpu::ToDevice(pGpuUsage, pEX0, nwfr * nz * nx * ne * 2 * sizeof(float));
-		AuxGpu::EnsureDeviceMemoryReady(pGpuUsage, pEX0);
+		pEX0 = (float*)CAuxGPU::ToDevice(pGpuUsage, pEX0, nz * nx * ne * 2 * sizeof(float));
+		CAuxGPU::EnsureDeviceMemoryReady(pGpuUsage, pEX0);
 	}
 	if (pEZ0 != NULL)
 	{
-		pEZ0 = (float*)AuxGpu::ToDevice(pGpuUsage, pEZ0, nwfr * nz * nx * ne * 2 * sizeof(float));
-		AuxGpu::EnsureDeviceMemoryReady(pGpuUsage, pEZ0);
+		pEZ0 = (float*)CAuxGPU::ToDevice(pGpuUsage, pEZ0, nz * nx * ne * 2 * sizeof(float));
+		CAuxGPU::EnsureDeviceMemoryReady(pGpuUsage, pEZ0);
 	}
 
 	const int bs = 256;
-	dim3 blocks(nx / bs + ((nx & (bs - 1)) != 0), nz, nwfr);
+	dim3 blocks(nx / bs + ((nx & (bs - 1)) != 0), nz);
 	dim3 threads(bs, 1);
-	switch (mode)
-	{
-	case 0:
-		MirrorFieldData_Kernel<0> <<<blocks, threads>>>(ne, nx, nz, nwfr, pEX0, pEZ0);
-		break;
-	case 1:
-		MirrorFieldData_Kernel<1> <<<blocks, threads >>> (ne, nx, nz, nwfr, pEX0, pEZ0);
-		break;
-	case 2:
-		MirrorFieldData_Kernel<2> <<<blocks, threads >>> (ne, nx, nz, nwfr, pEX0, pEZ0);
-		break;
-	}
 
+	if ((sx > 0) && (sz > 0))
+		return;
+	else if ((sx < 0) && (sz > 0))
+		MirrorFieldData_Kernel<0> <<<blocks, threads>>>(ne, nx, nz, pEX0, pEZ0);
+	else if ((sx > 0) && (sz < 0))
+		MirrorFieldData_Kernel<1> <<<blocks, threads >>> (ne, nx, nz, pEX0, pEZ0);
+	else
+		MirrorFieldData_Kernel<2> <<<blocks, threads >>> (ne, nx, nz, pEX0, pEZ0);
 
 	if (pEX0 != NULL)
-		AuxGpu::MarkUpdated(pGpuUsage, pEX0, true, false);
+		CAuxGPU::MarkUpdated(pGpuUsage, pEX0, true, false);
 	if (pEZ0 != NULL)
-		AuxGpu::MarkUpdated(pGpuUsage, pEZ0, true, false);
+		CAuxGPU::MarkUpdated(pGpuUsage, pEZ0, true, false);
 
 #ifdef _DEBUG
 	if (pEX0 != NULL)
-		pEX0 = (float*)AuxGpu::ToHostAndFree(pGpuUsage, pEX0, nwfr * nz * nx * ne * 2 * sizeof(float));
+		pEX0 = (float*)CAuxGPU::ToHostAndFree(pGpuUsage, pEX0, nz * nx * ne * 2 * sizeof(float));
 	if (pEZ0 != NULL)
-		pEZ0 = (float*)AuxGpu::ToHostAndFree(pGpuUsage, pEZ0, nwfr * nz * nx * ne * 2 * sizeof(float));
+		pEZ0 = (float*)CAuxGPU::ToHostAndFree(pGpuUsage, pEZ0, nz * nx * ne * 2 * sizeof(float));
 	cudaStreamSynchronize(0);
-	auto err = cudaGetLastError();
-	printf("%s\r\n", cudaGetErrorString(err));
+	//auto err = cudaGetLastError();
+	//printf("%s\r\n", cudaGetErrorString(err));
 #endif
 }
 

@@ -67,15 +67,17 @@ static void CheckGPUAvailability()
 #endif
 }
 
-bool AuxGpu::GPUAvailable()
+bool CAuxGPU::GPUAvailable()
 {
 	CheckGPUAvailability();
 	return isGPUAvailable;
 }
 
-bool AuxGpu::GPUEnabled(gpuUsageArg *arg) 
+//bool CAuxGPU::GPUEnabled(TGPUUsageArg *arg) 
+bool CAuxGPU::GPUEnabled(void* arg0) //HG28072023
 {
 #ifdef _OFFLOAD_GPU
+	TGPUUsageArg* arg = (TGPUUsageArg*)arg0;
 	if (arg == NULL)
 		return false;
 	if (arg->deviceIndex > 0) {
@@ -99,14 +101,16 @@ bool AuxGpu::GPUEnabled(gpuUsageArg *arg)
 	return false;
 }
 
-void AuxGpu::SetGPUStatus(bool enabled)
+void CAuxGPU::SetGPUStatus(bool enabled)
 {
 	isGPUEnabled = enabled && GPUAvailable();
 }
 
-int AuxGpu::GetDevice(gpuUsageArg* arg)
+//int CAuxGPU::GetDevice(TGPUUsageArg* arg)
+int CAuxGPU::GetDevice(void* arg0) //HG28072023
 {
 #ifdef _OFFLOAD_GPU
+	TGPUUsageArg* arg = (TGPUUsageArg*)arg0;
 	if (arg == NULL)
 		return cudaCpuDeviceId;
 
@@ -118,9 +122,11 @@ int AuxGpu::GetDevice(gpuUsageArg* arg)
 #endif
 }
 
-void* AuxGpu::ToDevice(gpuUsageArg* arg, void* hostPtr, size_t size, bool dontCopy)
+//void* CAuxGPU::ToDevice(TGPUUsageArg* arg, void* hostPtr, size_t size, bool dontCopy)
+void* CAuxGPU::ToDevice(void* arg0, void* hostPtr, size_t size, bool dontCopy) //HG28072023
 {
 #ifdef _OFFLOAD_GPU
+	TGPUUsageArg* arg = (TGPUUsageArg*)arg0;
 	if (arg == NULL)
 		return hostPtr;
 	if (arg->deviceIndex == 0)
@@ -140,7 +146,7 @@ void* AuxGpu::ToDevice(gpuUsageArg* arg, void* hostPtr, size_t size, bool dontCo
 			cudaEventRecord(gpuMap[devPtr].h2d_event, memcpy_stream);
 		}
 #if _DEBUG
-		printf("ToDevice: %p -> %p, %d, D2H: %d, H2D: %d\n", hostPtr, devPtr, size, gpuMap[devPtr].DevToHostUpdated, gpuMap[devPtr].HostToDevUpdated);
+	//	printf("ToDevice: %p -> %p, %d, D2H: %d, H2D: %d\n", hostPtr, devPtr, size, gpuMap[devPtr].DevToHostUpdated, gpuMap[devPtr].HostToDevUpdated); //HG28072023
 #endif
 		gpuMap[devPtr].HostToDevUpdated = false;
 		return devPtr;
@@ -156,7 +162,7 @@ void* AuxGpu::ToDevice(gpuUsageArg* arg, void* hostPtr, size_t size, bool dontCo
 	if (err != cudaSuccess)
 		return NULL;
 #if _DEBUG
-	printf("ToDevice: %p -> %p, %d\n", hostPtr, devicePtr, size);
+	//printf("ToDevice: %p -> %p, %d\n", hostPtr, devicePtr, size); //HG28072023
 #endif
 	memAllocInfo_t info;
 	info.devicePtr = devicePtr;
@@ -178,9 +184,11 @@ void* AuxGpu::ToDevice(gpuUsageArg* arg, void* hostPtr, size_t size, bool dontCo
 #endif
 }
 
-void AuxGpu::EnsureDeviceMemoryReady(gpuUsageArg* arg, void* hostPtr)
+//void CAuxGPU::EnsureDeviceMemoryReady(TGPUUsageArg* arg, void* hostPtr)
+void CAuxGPU::EnsureDeviceMemoryReady(void* arg0, void* hostPtr) //HG28072023
 {
 #ifdef _OFFLOAD_GPU
+	TGPUUsageArg* arg = (TGPUUsageArg*)arg0;
 	if (arg == NULL)
 		return;
 	if (arg->deviceIndex == 0)
@@ -195,15 +203,17 @@ void AuxGpu::EnsureDeviceMemoryReady(gpuUsageArg* arg, void* hostPtr)
 			cudaStreamWaitEvent(0, gpuMap[devPtr].h2d_event);
 		}
 #if _DEBUG
-		printf("EnsureDeviceMemoryReady: %p -> %p, %d, D2H: %d, H2D: %d\n", hostPtr, devPtr, gpuMap[devPtr].size, gpuMap[devPtr].DevToHostUpdated, gpuMap[devPtr].HostToDevUpdated);
+		//printf("EnsureDeviceMemoryReady: %p -> %p, %d, D2H: %d, H2D: %d\n", hostPtr, devPtr, gpuMap[devPtr].size, gpuMap[devPtr].DevToHostUpdated, gpuMap[devPtr].HostToDevUpdated); //HG28072023
 #endif
 	}
 #endif
 }
 
-void* AuxGpu::GetHostPtr(gpuUsageArg* arg, void* devicePtr)
+//void* CAuxGPU::GetHostPtr(TGPUUsageArg* arg, void* devicePtr)
+void* CAuxGPU::GetHostPtr(void* arg0, void* devicePtr) //HG28072023
 {
 #ifdef _OFFLOAD_GPU
+	TGPUUsageArg* arg = (TGPUUsageArg*)arg0;
 	if (arg == NULL)
 		return devicePtr;
 	if (arg->deviceIndex == 0)
@@ -217,7 +227,7 @@ void* AuxGpu::GetHostPtr(gpuUsageArg* arg, void* devicePtr)
 		return devicePtr;
 	info = gpuMap[devicePtr];
 #if _DEBUG
-	printf("GetHostPtr: %p -> %p\n", devicePtr, info.hostPtr);
+	//printf("GetHostPtr: %p -> %p\n", devicePtr, info.hostPtr); //HG28072023
 #endif
 	return info.hostPtr;
 #else
@@ -225,9 +235,11 @@ void* AuxGpu::GetHostPtr(gpuUsageArg* arg, void* devicePtr)
 #endif
 }
 
-void* AuxGpu::ToHostAndFree(gpuUsageArg* arg, void* devicePtr, size_t size, bool dontCopy)
+//void* CAuxGPU::ToHostAndFree(TGPUUsageArg* arg, void* devicePtr, size_t size, bool dontCopy)
+void* CAuxGPU::ToHostAndFree(void* arg0, void* devicePtr, size_t size, bool dontCopy) //HG28072023
 {
 #ifdef _OFFLOAD_GPU
+	TGPUUsageArg* arg = (TGPUUsageArg*)arg0;
 	if (arg == NULL)
 		return devicePtr;
 	if (arg->deviceIndex == 0)
@@ -252,7 +264,7 @@ void* AuxGpu::ToHostAndFree(gpuUsageArg* arg, void* devicePtr, size_t size, bool
 		cudaEventSynchronize(info.d2h_event); // we can't treat host memory as valid until the copy is complete
 	}
 #if _DEBUG
-	printf("ToHostAndFree: %p -> %p, %d\n", devicePtr, hostPtr, size);
+	//printf("ToHostAndFree: %p -> %p, %d\n", devicePtr, hostPtr, size); //HG28072023
 #endif
 	cudaStreamWaitEvent(0, info.h2d_event);
 	cudaStreamWaitEvent(0, info.d2h_event);
@@ -267,7 +279,7 @@ void* AuxGpu::ToHostAndFree(gpuUsageArg* arg, void* devicePtr, size_t size, bool
 #endif
 }
 
-void AuxGpu::FreeHost(void* ptr)
+void CAuxGPU::FreeHost(void* ptr)
 {
 #ifdef _OFFLOAD_GPU
 	if (ptr == NULL)
@@ -285,16 +297,18 @@ void AuxGpu::FreeHost(void* ptr)
 	cudaFreeAsync(devicePtr, 0);
 	//cudaEventDestroy(info.h2d_event);
 	//cudaEventDestroy(info.d2h_event);
-	AuxGpu::free(hostPtr);
+	CAuxGPU::free(hostPtr);
 	gpuMap.erase(devicePtr);
 	gpuMap.erase(hostPtr);
 #endif
 	return;
 }
 
-void AuxGpu::MarkUpdated(gpuUsageArg* arg, void* ptr, bool devToHost, bool hostToDev)
+//void CAuxGPU::MarkUpdated(TGPUUsageArg* arg, void* ptr, bool devToHost, bool hostToDev)
+void CAuxGPU::MarkUpdated(void* arg0, void* ptr, bool devToHost, bool hostToDev) //HG28072023
 {
 #ifdef _OFFLOAD_GPU
+	TGPUUsageArg* arg = (TGPUUsageArg*)arg0;
 	if (arg == NULL)
 		return;
 	if (arg->deviceIndex == 0)
@@ -319,7 +333,7 @@ void AuxGpu::MarkUpdated(gpuUsageArg* arg, void* ptr, bool devToHost, bool hostT
 #endif
 }
 
-void AuxGpu::Init() {
+void CAuxGPU::Init() {
 	deviceOffloadInitialized = true;
 #ifdef _OFFLOAD_GPU
 	cudaGetDeviceCount(&deviceCount);
@@ -327,7 +341,7 @@ void AuxGpu::Init() {
 #endif
 }
 
-void AuxGpu::Fini() {
+void CAuxGPU::Fini() {
 #ifdef _OFFLOAD_GPU
 	// Copy back all updated data
 	bool updated = false;

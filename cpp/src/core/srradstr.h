@@ -26,8 +26,10 @@
 //#endif
 //#endif
 
-#include "auxgpu.h"
-#include "srradstr_gpu.h"
+#include "auxgpu.h" //HG28072023 Needed so GPU_COND is defined regardless of GPU or CPU mode compilation (but is empty with CPU mode compilation, causing the GPU code to not be compiled)
+//#ifdef _OFFLOAD_GPU //HG28072023 Maybe remove since this header isn't needed anymore?
+//#include "srradstr_gpu.h"
+//#endif
 
 #ifdef __IGOR_PRO__
 #include "XOPStandardHeaders.h"			// Include ANSI headers, Mac headers, IgorXOP.h, XOP.h and XOPSupport.h
@@ -75,8 +77,8 @@ public:
 	waveHndl wRad, wRadX, wRadZ;
 	int hStateRadX, hStateRadZ;
 	double eStep, eStart, xStep, xStart, zStep, zStart;
-	long ne, nx, nz, nwfr;
-	//long long ne, nx, nz; //OC26042019
+	//long ne, nx, nz, nwfr; //HG28072023
+	long long ne, nx, nz; //OC26042019
 
 	double xStartTr, zStartTr;
 	bool UseStartTrToShiftAtChangingRepresToCoord;
@@ -245,6 +247,9 @@ public:
 	void CheckAndSubtractPhaseTermsLin(double newXc, double newZc);
 	void CheckAndResetPhaseTermsLin();
 	void EstimateOversamplingFactors(double& estimOverSampX, double& estimOverSampZ);
+#ifdef _OFFLOAD_GPU
+	void MirrorFieldData_GPU(int sx, int sz, void* pGpuUsage); //HG28072023
+#endif
 	void MirrorFieldData(int sx, int sz, gpuUsageArg *pGpuUsage=0);
 
 	int SetupWfrEdgeCorrData(float* pDataEx, float* pDataEz, srTDataPtrsForWfrEdgeCorr& DataPtrsForWfrEdgeCorr);
@@ -494,7 +499,10 @@ public:
 		}
 	}
 
-	void MultiplyElFieldByPhaseLin(double xMult, double zMult, gpuUsageArg* pGpuUsage =0)
+#ifdef _OFFLOAD_GPU
+	void MultiplyElFieldByPhaseLin_GPU(double xMult, double zMult, void* pGpuUsage); //HG28072023
+#endif
+	void MultiplyElFieldByPhaseLin(double xMult, double zMult, void* pGpuUsage=0)
 	{
 		bool RadXisDefined = (pBaseRadX != 0);
 		bool RadZisDefined = (pBaseRadZ != 0);
@@ -502,47 +510,43 @@ public:
 
 		GPU_COND(pGpuUsage,
 		{
-			MultiplyElFieldByPhaseLin_GPU(xMult, zMult, pBaseRadX, pBaseRadZ, nwfr, nz, nx, ne, zStart, zStep, xStart, xStep, pGpuUsage);
+			MultiplyElFieldByPhaseLin_GPU(xMult, zMult, pGpuUsage);
+			return;
 		})
-		else
+		
+		float *tEx = pBaseRadX;
+		float *tEz = pBaseRadZ;
+		
+		double z = zStart;	
+		for(int iz=0; iz<nz; iz++)
 		{
-			float *tEx = pBaseRadX;
-			float *tEz = pBaseRadZ;
-			
-			for(int iwfr=0; iwfr<nwfr; iwfr++)
+			double dPhZ = zMult*z;
+			double x = xStart;
+			for(int ix=0; ix<nx; ix++)
 			{
-				double z = zStart;	
-				for(int iz=0; iz<nz; iz++)
+				double dPh = dPhZ + xMult*x;
+				double cosPh = cos(dPh), sinPh = sin(dPh);
+				
+				for(int ie=0; ie<ne; ie++)
 				{
-					double dPhZ = zMult*z;
-					double x = xStart;
-					for(int ix=0; ix<nx; ix++)
+					if(RadXisDefined) 
 					{
-						double dPh = dPhZ + xMult*x;
-						double cosPh = cos(dPh), sinPh = sin(dPh);
-						
-						for(int ie=0; ie<ne; ie++)
-						{
-							if(RadXisDefined) 
-							{
-								//*(tEx++) *= a; *(tEx++) *= a;
-								double newReEx = (*tEx)*cosPh - (*(tEx + 1))*sinPh;
-								double newImEx = (*tEx)*sinPh + (*(tEx + 1))*cosPh;
-								*(tEx++) = (float)newReEx; *(tEx++) = (float)newImEx;
-							}
-							if(RadZisDefined) 
-							{
-								//*(tEz++) *= a; *(tEz++) *= a;
-								double newReEz = (*tEz)*cosPh - (*(tEz + 1))*sinPh;
-								double newImEz = (*tEz)*sinPh + (*(tEz + 1))*cosPh;
-								*(tEz++) = (float)newReEz; *(tEz++) = (float)newImEz;
-							}
-						}
-						x += xStep;
+						//*(tEx++) *= a; *(tEx++) *= a;
+						double newReEx = (*tEx)*cosPh - (*(tEx + 1))*sinPh;
+						double newImEx = (*tEx)*sinPh + (*(tEx + 1))*cosPh;
+						*(tEx++) = (float)newReEx; *(tEx++) = (float)newImEx;
 					}
-					z += zStep;
+					if(RadZisDefined) 
+					{
+						//*(tEz++) *= a; *(tEz++) *= a;
+						double newReEz = (*tEz)*cosPh - (*(tEz + 1))*sinPh;
+						double newImEz = (*tEz)*sinPh + (*(tEz + 1))*cosPh;
+						*(tEz++) = (float)newReEz; *(tEz++) = (float)newImEz;
+					}
 				}
+				x += xStep;
 			}
+			z += zStep;
 		}
 	}
 	

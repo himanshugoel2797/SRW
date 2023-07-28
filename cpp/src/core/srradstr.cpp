@@ -449,7 +449,8 @@ void srTSRWRadStructAccessData::InSRWRadPtrs(srTSRWRadInData* p, bool DataShould
 	eStep = p->eStep; eStart = p->eStart; 
 	xStep = p->xStep; xStart = p->xStart; 
 	zStep = p->zStep; zStart = p->zStart;
-	ne = p->ne; nx = p->nx; nz = p->nz; nwfr = p->nwfr;
+	ne = p->ne; nx = p->nx; nz = p->nz;
+	//ne = p->ne; nx = p->nx; nz = p->nz; nwfr = p->nwfr; //HG28072023
 
 	RobsX = p->RobsX; RobsZ = p->RobsZ;
 	RobsXAbsErr = p->RobsXAbsErr; RobsZAbsErr = p->RobsZAbsErr;
@@ -2703,7 +2704,7 @@ void srTSRWRadStructAccessData::CheckAndResetPhaseTermsLin()
 
 //*************************************************************************
 
-void srTSRWRadStructAccessData::MirrorFieldData(int sx, int sz, gpuUsageArg *pGpuUsage)
+void srTSRWRadStructAccessData::MirrorFieldData(int sx, int sz, void* pGpuUsage)
 {// sx < 0 means mirroring should be done vs x 
  // sz < 0 means mirroring should be done vs z 
 	//long PerX = ne << 1;
@@ -2716,183 +2717,179 @@ void srTSRWRadStructAccessData::MirrorFieldData(int sx, int sz, gpuUsageArg *pGp
 
 	GPU_COND(pGpuUsage,
 	{
-		if ((sx > 0) && (sz > 0))return;
-		else if ((sx < 0) && (sz > 0)) MirrorFieldData_GPU(ne, nx, nz, nwfr, pEX0, pEZ0, 0, pGpuUsage);
-		else if ((sx > 0) && (sz < 0)) MirrorFieldData_GPU(ne, nx, nz, nwfr, pEX0, pEZ0, 1, pGpuUsage);
-		else MirrorFieldData_GPU(ne, nx, nz, nwfr, pEX0, pEZ0, 2, pGpuUsage);
+		MirrorFieldData_GPU(sx, sz, pGpuUsage);
+		return;
 	})
+	
+	if((sx > 0) && (sz > 0)) return; //no mirroring is necessary 
+	else if((sx < 0) && (sz > 0)) //mirroring with respect to x
+	{
+		//long nx_mi_1 = nx - 1;
+		long long nx_mi_1 = nx - 1; //OC26042019
+		for(long long ie=0; ie<ne; ie++)
+		//for(long ie=0; ie<ne; ie++)
+		{
+			//long Two_ie = ie << 1;
+			long long Two_ie = ie << 1; //OC26042019
+			for(long long iz=0; iz<nz; iz++)
+			//for(long iz=0; iz<nz; iz++)
+			{
+				//long izPerZ = iz*PerZ;
+				long long izPerZ = iz*PerZ;
+				float *pEX_StartForX = pEX0 + izPerZ;
+				float *pEZ_StartForX = pEZ0 + izPerZ;
+
+				for(long long ix=0; ix<(nx >> 1); ix++) //OC26042019
+				//for(long ix=0; ix<(nx >> 1); ix++)
+				{
+					//long ixPerX_p_Two_ie = ix*PerX + Two_ie;
+					long long ixPerX_p_Two_ie = ix*PerX + Two_ie;
+					float *pEX = pEX_StartForX + ixPerX_p_Two_ie;
+					float *pEZ = pEZ_StartForX + ixPerX_p_Two_ie;
+
+					//long rev_ixPerX_p_Two_ie = (nx_mi_1 - ix)*PerX + Two_ie;
+					long long rev_ixPerX_p_Two_ie = (nx_mi_1 - ix)*PerX + Two_ie;
+					float *rev_pEX = pEX_StartForX + rev_ixPerX_p_Two_ie;
+					float *rev_pEZ = pEZ_StartForX + rev_ixPerX_p_Two_ie;
+
+					if(pEX0 != 0)
+					{
+						buf = *rev_pEX; *(rev_pEX++) = *pEX; *(pEX++) = buf;
+						buf = *rev_pEX; *rev_pEX = *pEX; *pEX = buf;
+					}
+					if(pEZ0 != 0)
+					{
+						buf = *rev_pEZ; *(rev_pEZ++) = *pEZ; *(pEZ++) = buf;
+						buf = *rev_pEZ; *rev_pEZ = *pEZ; *pEZ = buf;
+					}
+				}
+			}
+		}
+	}
+	else if((sx > 0) && (sz < 0))
+	{
+		//long nz_mi_1 = nz - 1;
+		//for(long ie=0; ie<ne; ie++)
+		long long nz_mi_1 = nz - 1; //OC26042019
+		for(long long ie=0; ie<ne; ie++)
+		{
+			//long Two_ie = ie << 1;
+			long long Two_ie = ie << 1;
+			for(long long iz=0; iz<(nz >> 1); iz++)
+			//for(long iz=0; iz<(nz >> 1); iz++)
+			{
+				//long izPerZ = iz*PerZ;
+				long long izPerZ = iz*PerZ;
+				float *pEX_StartForX = pEX0 + izPerZ;
+				float *pEZ_StartForX = pEZ0 + izPerZ;
+
+				//long rev_izPerZ = (nz_mi_1 - iz)*PerZ;
+				long long rev_izPerZ = (nz_mi_1 - iz)*PerZ;
+				float *rev_pEX_StartForX = pEX0 + rev_izPerZ;
+				float *rev_pEZ_StartForX = pEZ0 + rev_izPerZ;
+
+				for(long long ix=0; ix<nx; ix++)
+				//for(long ix=0; ix<nx; ix++)
+				{
+					//long ixPerX_p_Two_ie = ix*PerX + Two_ie;
+					long long ixPerX_p_Two_ie = ix*PerX + Two_ie;
+					float *pEX = pEX_StartForX + ixPerX_p_Two_ie;
+					float *pEZ = pEZ_StartForX + ixPerX_p_Two_ie;
+
+					float *rev_pEX = rev_pEX_StartForX + ixPerX_p_Two_ie;
+					float *rev_pEZ = rev_pEZ_StartForX + ixPerX_p_Two_ie;
+
+					if(pEX0 != 0)
+					{
+						buf = *rev_pEX; *(rev_pEX++) = *pEX; *(pEX++) = buf;
+						buf = *rev_pEX; *rev_pEX = *pEX; *pEX = buf;
+					}
+					if(pEZ0 != 0)
+					{
+						buf = *rev_pEZ; *(rev_pEZ++) = *pEZ; *(pEZ++) = buf;
+						buf = *rev_pEZ; *rev_pEZ = *pEZ; *pEZ = buf;
+					}
+				}
+			}
+		}
+	}
 	else
 	{
-		if ((sx > 0) && (sz > 0)) return; //no mirroring is necessary 
-		else if ((sx < 0) && (sz > 0)) //mirroring with respect to x
+		//long nx_mi_1 = nx - 1;
+		//long nz_mi_1 = nz - 1;
+		long long nx_mi_1 = nx - 1; //OC26042019
+		long long nz_mi_1 = nz - 1;
+		for(long long ie=0; ie<ne; ie++) //OC26042019
+		//for(long ie=0; ie<ne; ie++)
 		{
-			//long nx_mi_1 = nx - 1;
-			long long nx_mi_1 = nx - 1; //OC26042019
-			for (long long ie = 0; ie < ne; ie++)
-				//for(long ie=0; ie<ne; ie++)
+			//long Two_ie = ie << 1;
+			//for(long iz=0; iz<(nz >> 1); iz++)
+			long long Two_ie = ie << 1; //OC26042019
+			for(long long iz=0; iz<(nz >> 1); iz++)
 			{
-				//long Two_ie = ie << 1;
-				long long Two_ie = ie << 1; //OC26042019
-				for (long long iz = 0; iz < nz; iz++)
-					//for(long iz=0; iz<nz; iz++)
+				//long izPerZ = iz*PerZ;
+				long long izPerZ = iz*PerZ;
+				float *pEX_StartForX = pEX0 + izPerZ;
+				float *pEZ_StartForX = pEZ0 + izPerZ;
+
+				//long rev_izPerZ = (nz_mi_1 - iz)*PerZ;
+				long long rev_izPerZ = (nz_mi_1 - iz)*PerZ;
+				float *rev_pEX_StartForX = pEX0 + rev_izPerZ;
+				float *rev_pEZ_StartForX = pEZ0 + rev_izPerZ;
+
+				for(long long ix=0; ix<nx; ix++) //OC26042019
+				//for(long ix=0; ix<nx; ix++)
 				{
-					//long izPerZ = iz*PerZ;
-					long long izPerZ = iz * PerZ;
-					float* pEX_StartForX = pEX0 + izPerZ;
-					float* pEZ_StartForX = pEZ0 + izPerZ;
+					//long ixPerX_p_Two_ie = ix*PerX + Two_ie;
+					long long ixPerX_p_Two_ie = ix*PerX + Two_ie;
+					float *pEX = pEX_StartForX + ixPerX_p_Two_ie;
+					float *pEZ = pEZ_StartForX + ixPerX_p_Two_ie;
 
-					for (long long ix = 0; ix < (nx >> 1); ix++) //OC26042019
-						//for(long ix=0; ix<(nx >> 1); ix++)
+					//long rev_ixPerX_p_Two_ie = (nx_mi_1 - ix)*PerX + Two_ie;
+					long long rev_ixPerX_p_Two_ie = (nx_mi_1 - ix)*PerX + Two_ie;
+					float *rev_pEX = rev_pEX_StartForX + rev_ixPerX_p_Two_ie;
+					float *rev_pEZ = rev_pEZ_StartForX + rev_ixPerX_p_Two_ie;
+
+					if(pEX0 != 0)
 					{
-						//long ixPerX_p_Two_ie = ix*PerX + Two_ie;
-						long long ixPerX_p_Two_ie = ix * PerX + Two_ie;
-						float* pEX = pEX_StartForX + ixPerX_p_Two_ie;
-						float* pEZ = pEZ_StartForX + ixPerX_p_Two_ie;
-
-						//long rev_ixPerX_p_Two_ie = (nx_mi_1 - ix)*PerX + Two_ie;
-						long long rev_ixPerX_p_Two_ie = (nx_mi_1 - ix) * PerX + Two_ie;
-						float* rev_pEX = pEX_StartForX + rev_ixPerX_p_Two_ie;
-						float* rev_pEZ = pEZ_StartForX + rev_ixPerX_p_Two_ie;
-
-						if (pEX0 != 0)
-						{
-							buf = *rev_pEX; *(rev_pEX++) = *pEX; *(pEX++) = buf;
-							buf = *rev_pEX; *rev_pEX = *pEX; *pEX = buf;
-						}
-						if (pEZ0 != 0)
-						{
-							buf = *rev_pEZ; *(rev_pEZ++) = *pEZ; *(pEZ++) = buf;
-							buf = *rev_pEZ; *rev_pEZ = *pEZ; *pEZ = buf;
-						}
+						buf = *rev_pEX; *(rev_pEX++) = *pEX; *(pEX++) = buf;
+						buf = *rev_pEX; *rev_pEX = *pEX; *pEX = buf;
+					}
+					if(pEZ0 != 0)
+					{
+						buf = *rev_pEZ; *(rev_pEZ++) = *pEZ; *(pEZ++) = buf;
+						buf = *rev_pEZ; *rev_pEZ = *pEZ; *pEZ = buf;
 					}
 				}
 			}
-		}
-		else if ((sx > 0) && (sz < 0))
-		{
-			//long nz_mi_1 = nz - 1;
-			//for(long ie=0; ie<ne; ie++)
-			long long nz_mi_1 = nz - 1; //OC26042019
-			for (long long ie = 0; ie < ne; ie++)
+			if(((nz >> 1) << 1) != nz)
 			{
-				//long Two_ie = ie << 1;
-				long long Two_ie = ie << 1;
-				for (long long iz = 0; iz < (nz >> 1); iz++)
-					//for(long iz=0; iz<(nz >> 1); iz++)
+				//long izPerZ = ((nz >> 1) + 1)*PerZ;
+				long long izPerZ = ((nz >> 1) + 1)*PerZ;
+				float *pEX_StartForX = pEX0 + izPerZ;
+				float *pEZ_StartForX = pEZ0 + izPerZ;
+
+				for(long ix=0; ix<(nx >> 1); ix++)
 				{
-					//long izPerZ = iz*PerZ;
-					long long izPerZ = iz * PerZ;
-					float* pEX_StartForX = pEX0 + izPerZ;
-					float* pEZ_StartForX = pEZ0 + izPerZ;
+					//long ixPerX_p_Two_ie = ix*PerX + Two_ie;
+					long long ixPerX_p_Two_ie = ix*PerX + Two_ie;
+					float *pEX = pEX_StartForX + ixPerX_p_Two_ie;
+					float *pEZ = pEZ_StartForX + ixPerX_p_Two_ie;
 
-					//long rev_izPerZ = (nz_mi_1 - iz)*PerZ;
-					long long rev_izPerZ = (nz_mi_1 - iz) * PerZ;
-					float* rev_pEX_StartForX = pEX0 + rev_izPerZ;
-					float* rev_pEZ_StartForX = pEZ0 + rev_izPerZ;
+					//long rev_ixPerX_p_Two_ie = (nx_mi_1 - ix)*PerX + Two_ie;
+					long long rev_ixPerX_p_Two_ie = (nx_mi_1 - ix)*PerX + Two_ie;
+					float *rev_pEX = pEX_StartForX + rev_ixPerX_p_Two_ie;
+					float *rev_pEZ = pEZ_StartForX + rev_ixPerX_p_Two_ie;
 
-					for (long long ix = 0; ix < nx; ix++)
-						//for(long ix=0; ix<nx; ix++)
+					if(pEX0 != 0)
 					{
-						//long ixPerX_p_Two_ie = ix*PerX + Two_ie;
-						long long ixPerX_p_Two_ie = ix * PerX + Two_ie;
-						float* pEX = pEX_StartForX + ixPerX_p_Two_ie;
-						float* pEZ = pEZ_StartForX + ixPerX_p_Two_ie;
-
-						float* rev_pEX = rev_pEX_StartForX + ixPerX_p_Two_ie;
-						float* rev_pEZ = rev_pEZ_StartForX + ixPerX_p_Two_ie;
-
-						if (pEX0 != 0)
-						{
-							buf = *rev_pEX; *(rev_pEX++) = *pEX; *(pEX++) = buf;
-							buf = *rev_pEX; *rev_pEX = *pEX; *pEX = buf;
-						}
-						if (pEZ0 != 0)
-						{
-							buf = *rev_pEZ; *(rev_pEZ++) = *pEZ; *(pEZ++) = buf;
-							buf = *rev_pEZ; *rev_pEZ = *pEZ; *pEZ = buf;
-						}
+						buf = *rev_pEX; *(rev_pEX++) = *pEX; *(pEX++) = buf;
+						buf = *rev_pEX; *rev_pEX = *pEX; *pEX = buf;
 					}
-				}
-			}
-		}
-		else
-		{
-			//long nx_mi_1 = nx - 1;
-			//long nz_mi_1 = nz - 1;
-			long long nx_mi_1 = nx - 1; //OC26042019
-			long long nz_mi_1 = nz - 1;
-			for (long long ie = 0; ie < ne; ie++) //OC26042019
-				//for(long ie=0; ie<ne; ie++)
-			{
-				//long Two_ie = ie << 1;
-				//for(long iz=0; iz<(nz >> 1); iz++)
-				long long Two_ie = ie << 1; //OC26042019
-				for (long long iz = 0; iz < (nz >> 1); iz++)
-				{
-					//long izPerZ = iz*PerZ;
-					long long izPerZ = iz * PerZ;
-					float* pEX_StartForX = pEX0 + izPerZ;
-					float* pEZ_StartForX = pEZ0 + izPerZ;
-
-					//long rev_izPerZ = (nz_mi_1 - iz)*PerZ;
-					long long rev_izPerZ = (nz_mi_1 - iz) * PerZ;
-					float* rev_pEX_StartForX = pEX0 + rev_izPerZ;
-					float* rev_pEZ_StartForX = pEZ0 + rev_izPerZ;
-
-					for (long long ix = 0; ix < nx; ix++) //OC26042019
-						//for(long ix=0; ix<nx; ix++)
+					if(pEZ0 != 0)
 					{
-						//long ixPerX_p_Two_ie = ix*PerX + Two_ie;
-						long long ixPerX_p_Two_ie = ix * PerX + Two_ie;
-						float* pEX = pEX_StartForX + ixPerX_p_Two_ie;
-						float* pEZ = pEZ_StartForX + ixPerX_p_Two_ie;
-
-						//long rev_ixPerX_p_Two_ie = (nx_mi_1 - ix)*PerX + Two_ie;
-						long long rev_ixPerX_p_Two_ie = (nx_mi_1 - ix) * PerX + Two_ie;
-						float* rev_pEX = rev_pEX_StartForX + rev_ixPerX_p_Two_ie;
-						float* rev_pEZ = rev_pEZ_StartForX + rev_ixPerX_p_Two_ie;
-
-						if (pEX0 != 0)
-						{
-							buf = *rev_pEX; *(rev_pEX++) = *pEX; *(pEX++) = buf;
-							buf = *rev_pEX; *rev_pEX = *pEX; *pEX = buf;
-						}
-						if (pEZ0 != 0)
-						{
-							buf = *rev_pEZ; *(rev_pEZ++) = *pEZ; *(pEZ++) = buf;
-							buf = *rev_pEZ; *rev_pEZ = *pEZ; *pEZ = buf;
-						}
-					}
-				}
-				if (((nz >> 1) << 1) != nz)
-				{
-					//long izPerZ = ((nz >> 1) + 1)*PerZ;
-					long long izPerZ = ((nz >> 1) + 1) * PerZ;
-					float* pEX_StartForX = pEX0 + izPerZ;
-					float* pEZ_StartForX = pEZ0 + izPerZ;
-
-					for (long ix = 0; ix < (nx >> 1); ix++)
-					{
-						//long ixPerX_p_Two_ie = ix*PerX + Two_ie;
-						long long ixPerX_p_Two_ie = ix * PerX + Two_ie;
-						float* pEX = pEX_StartForX + ixPerX_p_Two_ie;
-						float* pEZ = pEZ_StartForX + ixPerX_p_Two_ie;
-
-						//long rev_ixPerX_p_Two_ie = (nx_mi_1 - ix)*PerX + Two_ie;
-						long long rev_ixPerX_p_Two_ie = (nx_mi_1 - ix) * PerX + Two_ie;
-						float* rev_pEX = pEX_StartForX + rev_ixPerX_p_Two_ie;
-						float* rev_pEZ = pEZ_StartForX + rev_ixPerX_p_Two_ie;
-
-						if (pEX0 != 0)
-						{
-							buf = *rev_pEX; *(rev_pEX++) = *pEX; *(pEX++) = buf;
-							buf = *rev_pEX; *rev_pEX = *pEX; *pEX = buf;
-						}
-						if (pEZ0 != 0)
-						{
-							buf = *rev_pEZ; *(rev_pEZ++) = *pEZ; *(pEZ++) = buf;
-							buf = *rev_pEZ; *rev_pEZ = *pEZ; *pEZ = buf;
-						}
+						buf = *rev_pEZ; *(rev_pEZ++) = *pEZ; *(pEZ++) = buf;
+						buf = *rev_pEZ; *rev_pEZ = *pEZ; *pEZ = buf;
 					}
 				}
 			}

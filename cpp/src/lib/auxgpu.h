@@ -30,57 +30,40 @@
 typedef struct
 {
 	int deviceIndex; // -1 means no device, TODO
-} gpuUsageArg; 
-
-//#define ALLOC_ARRAY(type, size) (type *)AuxGpu::malloc(sizeof(type)*(size))
-//#define FREE_ARRAY(x) AuxGpu::free(x); x=NULL
+} TGPUUsageArg; 
 
 #ifdef _OFFLOAD_GPU
-#define GPU_ENABLED(arg) AuxGpu::GPUEnabled(arg)
-#define GPU_COND(arg, code) if (GPU_ENABLED(arg)) { code }
+#define GPU_COND(arg, code) if (arg && CAuxGPU::GPUEnabled((TGPUUsageArg*)arg)) { code }
 #define GPU_PORTABLE __device__ __host__
 #else
 #define GPU_COND(arg, code) if(0) { }
-#define GPU_ENABLED(arg) 0
 #define GPU_PORTABLE 
 #endif
 
  //*************************************************************************
-class AuxGpu
+class CAuxGPU
 {
 private:
 public:
 	static void Init();
 	static void Fini();
 	static bool GPUAvailable(); //CheckGPUAvailable etc
-	static bool GPUEnabled(gpuUsageArg *arg);
+	//static bool GPUEnabled(TGPUUsageArg *arg);
+	static bool GPUEnabled(void* arg); //HG28072023
 	static void SetGPUStatus(bool enabled);
-	static int GetDevice(gpuUsageArg* arg);
-	static void* ToDevice(gpuUsageArg* arg, void* hostPtr, size_t size, bool dontCopy = false);
-	static void* GetHostPtr(gpuUsageArg* arg, void* devicePtr);
-	static void* ToHostAndFree(gpuUsageArg* arg, void* devicePtr, size_t size, bool dontCopy = false);
-	static void EnsureDeviceMemoryReady(gpuUsageArg* arg, void* devicePtr);
+	//static int GetDevice(TGPUUsageArg* arg);
+	static int GetDevice(void* arg); //HG28072023
+	//static void* ToDevice(TGPUUsageArg* arg, void* hostPtr, size_t size, bool dontCopy = false);
+	static void* ToDevice(void* arg, void* hostPtr, size_t size, bool dontCopy = false); //HG28072023
+	//static void* GetHostPtr(TGPUUsageArg* arg, void* devicePtr);
+	static void* GetHostPtr(void* arg, void* devicePtr); //HG28072023
+	//static void* ToHostAndFree(TGPUUsageArg* arg, void* devicePtr, size_t size, bool dontCopy = false);
+	static void* ToHostAndFree(void* arg, void* devicePtr, size_t size, bool dontCopy = false); //HG28072023
+	//static void EnsureDeviceMemoryReady(TGPUUsageArg* arg, void* devicePtr);
+	static void EnsureDeviceMemoryReady(void* arg, void* devicePtr); //HG28072023
 	static void FreeHost(void* ptr);
-	static void MarkUpdated(gpuUsageArg* arg, void* ptr, bool devToHost, bool hostToDev);
-	static inline void* malloc(size_t sz) {
-/*#ifdef _OFFLOAD_GPU
-			void *ptr;
-			auto err = cudaMallocManaged(&ptr, sz);
-			if (err != cudaSuccess)
-				printf("Allocation Failure\r\n");
-			return ptr;
-#else*/
-			return std::malloc(sz);
-//#endif
-	}
-
-	static inline void free(void* ptr) {
-//#ifdef _OFFLOAD_GPU
-//		FreeHost(ptr);
-//#else
-		std::free(ptr);
-//#endif
-	}
+	//static void MarkUpdated(TGPUUsageArg* arg, void* ptr, bool devToHost, bool hostToDev);
+	static void MarkUpdated(void* arg, void* ptr, bool devToHost, bool hostToDev); //HG28072023
 };
 
 //*************************************************************************
