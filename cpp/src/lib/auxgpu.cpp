@@ -139,9 +139,9 @@ void* CAuxGPU::ToDevice(TGPUUsageArg* arg, void* hostPtr, size_t size, bool dont
 			cudaMemcpyAsync(devPtr, hostPtr, size, cudaMemcpyHostToDevice, memcpy_stream);
 			cudaEventRecord(gpuMap[devPtr].h2d_event, memcpy_stream);
 		}
-#if _DEBUG
-	//	printf("ToDevice: %p -> %p, %d, D2H: %d, H2D: %d\n", hostPtr, devPtr, size, gpuMap[devPtr].DevToHostUpdated, gpuMap[devPtr].HostToDevUpdated); //HG28072023
-#endif
+//#if _DEBUG
+//		printf("ToDevice: %p -> %p, %d, D2H: %d, H2D: %d\n", hostPtr, devPtr, size, gpuMap[devPtr].DevToHostUpdated, gpuMap[devPtr].HostToDevUpdated); //HG28072023
+//#endif
 		gpuMap[devPtr].HostToDevUpdated = false;
 		return devPtr;
 	}
@@ -155,9 +155,9 @@ void* CAuxGPU::ToDevice(TGPUUsageArg* arg, void* hostPtr, size_t size, bool dont
 	}
 	if (err != cudaSuccess)
 		return NULL;
-#if _DEBUG
-	//printf("ToDevice: %p -> %p, %d\n", hostPtr, devicePtr, size); //HG28072023
-#endif
+//#if _DEBUG
+//	printf("ToDevice: %p -> %p, %d\n", hostPtr, devicePtr, size); //HG28072023
+//#endif
 	memAllocInfo_t info;
 	info.devicePtr = devicePtr;
 	info.hostPtr = hostPtr;
@@ -194,9 +194,9 @@ void CAuxGPU::EnsureDeviceMemoryReady(TGPUUsageArg* arg, void* hostPtr)
 		if (gpuMap[devPtr].HostToDevUpdated){
 			cudaStreamWaitEvent(0, gpuMap[devPtr].h2d_event);
 		}
-#if _DEBUG
-		//printf("EnsureDeviceMemoryReady: %p -> %p, %d, D2H: %d, H2D: %d\n", hostPtr, devPtr, gpuMap[devPtr].size, gpuMap[devPtr].DevToHostUpdated, gpuMap[devPtr].HostToDevUpdated); //HG28072023
-#endif
+//#if _DEBUG
+//		printf("EnsureDeviceMemoryReady: %p -> %p, %d, D2H: %d, H2D: %d\n", hostPtr, devPtr, gpuMap[devPtr].size, gpuMap[devPtr].DevToHostUpdated, gpuMap[devPtr].HostToDevUpdated); //HG28072023
+//#endif
 	}
 #endif
 }
@@ -216,9 +216,9 @@ void* CAuxGPU::GetHostPtr(TGPUUsageArg* arg, void* devicePtr)
 	if (gpuMap.find(devicePtr) == gpuMap.end())
 		return devicePtr;
 	info = gpuMap[devicePtr];
-#if _DEBUG
-	//printf("GetHostPtr: %p -> %p\n", devicePtr, info.hostPtr); //HG28072023
-#endif
+//#if _DEBUG
+//	printf("GetHostPtr: %p -> %p\n", devicePtr, info.hostPtr); //HG28072023
+//#endif
 	return info.hostPtr;
 #else
 	return devicePtr;
@@ -251,9 +251,9 @@ void* CAuxGPU::ToHostAndFree(TGPUUsageArg* arg, void* devicePtr, size_t size, bo
 		cudaEventRecord(info.d2h_event);
 		cudaEventSynchronize(info.d2h_event); // we can't treat host memory as valid until the copy is complete
 	}
-#if _DEBUG
-	//printf("ToHostAndFree: %p -> %p, %d\n", devicePtr, hostPtr, size); //HG28072023
-#endif
+//#if _DEBUG
+//	printf("ToHostAndFree: %p -> %p, %d\n", devicePtr, hostPtr, size); //HG28072023
+//#endif
 	cudaStreamWaitEvent(0, info.h2d_event);
 	cudaStreamWaitEvent(0, info.d2h_event);
 	cudaFreeAsync(devicePtr, 0);
@@ -277,9 +277,9 @@ void CAuxGPU::FreeHost(void* ptr)
 	memAllocInfo_t info = gpuMap[ptr];
 	void *hostPtr = info.hostPtr;
 	void *devicePtr = info.devicePtr;
-#if _DEBUG
-	printf("FreeHost: %p, %p\n", devicePtr, hostPtr);
-#endif
+//#if _DEBUG
+//	printf("FreeHost: %p, %p\n", devicePtr, hostPtr);
+//#endif
     //cudaStreamWaitEvent(0, info.h2d_event);
 	//cudaStreamWaitEvent(0, info.d2h_event);
 	cudaFreeAsync(devicePtr, 0);
@@ -313,9 +313,9 @@ void CAuxGPU::MarkUpdated(TGPUUsageArg* arg, void* ptr, bool devToHost, bool hos
 	gpuMap[hostPtr].HostToDevUpdated = hostToDev;
 	if (devToHost)
 		cudaEventRecord(gpuMap[devPtr].d2h_event, 0);
-#if _DEBUG
-	printf("MarkUpdated: %p -> %p, D2H: %d, H2D: %d\n", ptr, devPtr, devToHost, hostToDev);
-#endif
+//#if _DEBUG
+//	printf("MarkUpdated: %p -> %p, D2H: %d, H2D: %d\n", ptr, devPtr, devToHost, hostToDev);
+//#endif
 #endif
 }
 
@@ -337,9 +337,9 @@ void CAuxGPU::Fini() {
 		if (it->second.DevToHostUpdated){
 			cudaStreamWaitEvent(memcpy_stream, it->second.d2h_event, 0);
 			cudaMemcpyAsync(it->second.hostPtr, it->second.devicePtr, it->second.size, cudaMemcpyDeviceToHost, memcpy_stream);
-#if _DEBUG
-			printf("Fini: %p -> %p, %d\n", it->second.devicePtr, it->second.hostPtr, it->second.size);
-#endif
+//#if _DEBUG
+//			printf("Fini: %p -> %p, %d\n", it->second.devicePtr, it->second.hostPtr, it->second.size);
+//#endif
 			updated = true;
 			gpuMap[it->second.hostPtr].DevToHostUpdated = false;
 			gpuMap[it->second.devicePtr].DevToHostUpdated = false;
@@ -360,8 +360,8 @@ void CAuxGPU::Fini() {
 	if (updated | freed)
 		cudaStreamSynchronize(0);
 	gpuMap.clear();
-#if _DEBUG
-	printf("Fini: %d\n", gpuMap.size());
-#endif
+//#if _DEBUG
+//	printf("Fini: %d\n", gpuMap.size());
+//#endif
 #endif
 }
