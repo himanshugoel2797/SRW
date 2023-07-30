@@ -33,7 +33,7 @@ typedef struct
 } TGPUUsageArg; 
 
 #ifdef _OFFLOAD_GPU
-#define GPU_COND(arg, code) if (arg && CAuxGPU::GPUEnabled((TGPUUsageArg*)arg)) { code }
+#define GPU_COND(arg, code) if (arg && CAuxGPU::GPUEnabled(arg)) { code }
 #define GPU_PORTABLE __device__ __host__
 #else
 #define GPU_COND(arg, code) if(0) { }
@@ -48,22 +48,15 @@ public:
 	static void Init();
 	static void Fini();
 	static bool GPUAvailable(); //CheckGPUAvailable etc
-	//static bool GPUEnabled(TGPUUsageArg *arg);
-	static bool GPUEnabled(void* arg); //HG28072023
+	static bool GPUEnabled(TGPUUsageArg *arg);
 	static void SetGPUStatus(bool enabled);
-	//static int GetDevice(TGPUUsageArg* arg);
-	static int GetDevice(void* arg); //HG28072023
-	//static void* ToDevice(TGPUUsageArg* arg, void* hostPtr, size_t size, bool dontCopy = false);
-	static void* ToDevice(void* arg, void* hostPtr, size_t size, bool dontCopy = false); //HG28072023
-	//static void* GetHostPtr(TGPUUsageArg* arg, void* devicePtr);
-	static void* GetHostPtr(void* arg, void* devicePtr); //HG28072023
-	//static void* ToHostAndFree(TGPUUsageArg* arg, void* devicePtr, size_t size, bool dontCopy = false);
-	static void* ToHostAndFree(void* arg, void* devicePtr, size_t size, bool dontCopy = false); //HG28072023
-	//static void EnsureDeviceMemoryReady(TGPUUsageArg* arg, void* devicePtr);
-	static void EnsureDeviceMemoryReady(void* arg, void* devicePtr); //HG28072023
+	static int GetDevice(TGPUUsageArg* arg);
+	static void* ToDevice(TGPUUsageArg* arg, void* hostPtr, size_t size, bool dontCopy = false);
+	static void* GetHostPtr(TGPUUsageArg* arg, void* devicePtr);
+	static void* ToHostAndFree(TGPUUsageArg* arg, void* devicePtr, size_t size, bool dontCopy = false);
+	static void EnsureDeviceMemoryReady(TGPUUsageArg* arg, void* devicePtr);
 	static void FreeHost(void* ptr);
-	//static void MarkUpdated(TGPUUsageArg* arg, void* ptr, bool devToHost, bool hostToDev);
-	static void MarkUpdated(void* arg, void* ptr, bool devToHost, bool hostToDev); //HG28072023
+	static void MarkUpdated(TGPUUsageArg* arg, void* ptr, bool devToHost, bool hostToDev);
 };
 
 //*************************************************************************

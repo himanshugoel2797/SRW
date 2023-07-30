@@ -73,11 +73,9 @@ bool CAuxGPU::GPUAvailable()
 	return isGPUAvailable;
 }
 
-//bool CAuxGPU::GPUEnabled(TGPUUsageArg *arg) 
-bool CAuxGPU::GPUEnabled(void* arg0) //HG28072023
+bool CAuxGPU::GPUEnabled(TGPUUsageArg *arg) 
 {
 #ifdef _OFFLOAD_GPU
-	TGPUUsageArg* arg = (TGPUUsageArg*)arg0;
 	if (arg == NULL)
 		return false;
 	if (arg->deviceIndex > 0) {
@@ -106,11 +104,9 @@ void CAuxGPU::SetGPUStatus(bool enabled)
 	isGPUEnabled = enabled && GPUAvailable();
 }
 
-//int CAuxGPU::GetDevice(TGPUUsageArg* arg)
-int CAuxGPU::GetDevice(void* arg0) //HG28072023
+int CAuxGPU::GetDevice(TGPUUsageArg* arg)
 {
 #ifdef _OFFLOAD_GPU
-	TGPUUsageArg* arg = (TGPUUsageArg*)arg0;
 	if (arg == NULL)
 		return cudaCpuDeviceId;
 
@@ -122,11 +118,9 @@ int CAuxGPU::GetDevice(void* arg0) //HG28072023
 #endif
 }
 
-//void* CAuxGPU::ToDevice(TGPUUsageArg* arg, void* hostPtr, size_t size, bool dontCopy)
-void* CAuxGPU::ToDevice(void* arg0, void* hostPtr, size_t size, bool dontCopy) //HG28072023
+void* CAuxGPU::ToDevice(TGPUUsageArg* arg, void* hostPtr, size_t size, bool dontCopy)
 {
 #ifdef _OFFLOAD_GPU
-	TGPUUsageArg* arg = (TGPUUsageArg*)arg0;
 	if (arg == NULL)
 		return hostPtr;
 	if (arg->deviceIndex == 0)
@@ -184,11 +178,9 @@ void* CAuxGPU::ToDevice(void* arg0, void* hostPtr, size_t size, bool dontCopy) /
 #endif
 }
 
-//void CAuxGPU::EnsureDeviceMemoryReady(TGPUUsageArg* arg, void* hostPtr)
-void CAuxGPU::EnsureDeviceMemoryReady(void* arg0, void* hostPtr) //HG28072023
+void CAuxGPU::EnsureDeviceMemoryReady(TGPUUsageArg* arg, void* hostPtr)
 {
 #ifdef _OFFLOAD_GPU
-	TGPUUsageArg* arg = (TGPUUsageArg*)arg0;
 	if (arg == NULL)
 		return;
 	if (arg->deviceIndex == 0)
@@ -209,11 +201,9 @@ void CAuxGPU::EnsureDeviceMemoryReady(void* arg0, void* hostPtr) //HG28072023
 #endif
 }
 
-//void* CAuxGPU::GetHostPtr(TGPUUsageArg* arg, void* devicePtr)
-void* CAuxGPU::GetHostPtr(void* arg0, void* devicePtr) //HG28072023
+void* CAuxGPU::GetHostPtr(TGPUUsageArg* arg, void* devicePtr)
 {
 #ifdef _OFFLOAD_GPU
-	TGPUUsageArg* arg = (TGPUUsageArg*)arg0;
 	if (arg == NULL)
 		return devicePtr;
 	if (arg->deviceIndex == 0)
@@ -235,11 +225,9 @@ void* CAuxGPU::GetHostPtr(void* arg0, void* devicePtr) //HG28072023
 #endif
 }
 
-//void* CAuxGPU::ToHostAndFree(TGPUUsageArg* arg, void* devicePtr, size_t size, bool dontCopy)
-void* CAuxGPU::ToHostAndFree(void* arg0, void* devicePtr, size_t size, bool dontCopy) //HG28072023
+void* CAuxGPU::ToHostAndFree(TGPUUsageArg* arg, void* devicePtr, size_t size, bool dontCopy)
 {
 #ifdef _OFFLOAD_GPU
-	TGPUUsageArg* arg = (TGPUUsageArg*)arg0;
 	if (arg == NULL)
 		return devicePtr;
 	if (arg->deviceIndex == 0)
@@ -304,11 +292,9 @@ void CAuxGPU::FreeHost(void* ptr)
 	return;
 }
 
-//void CAuxGPU::MarkUpdated(TGPUUsageArg* arg, void* ptr, bool devToHost, bool hostToDev)
-void CAuxGPU::MarkUpdated(void* arg0, void* ptr, bool devToHost, bool hostToDev) //HG28072023
+void CAuxGPU::MarkUpdated(TGPUUsageArg* arg, void* ptr, bool devToHost, bool hostToDev)
 {
 #ifdef _OFFLOAD_GPU
-	TGPUUsageArg* arg = (TGPUUsageArg*)arg0;
 	if (arg == NULL)
 		return;
 	if (arg->deviceIndex == 0)
