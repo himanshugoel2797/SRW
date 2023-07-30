@@ -62,15 +62,16 @@ __global__ void MultiplyElFieldByPhaseLin_Kernel(double xMult, double zMult, flo
 
 void srTSRWRadStructAccessData::MultiplyElFieldByPhaseLin_GPU(double xMult, double zMult, void* pGpuUsage)
 {
+	TGPUUsageArg *pGpuUsage_ = (TGPUUsageArg*)pGpuUsage;
 	if (pBaseRadX != NULL)
 	{
-		pBaseRadX = (float*)CAuxGPU::ToDevice(pGpuUsage, pBaseRadX, nz * nx * ne * 2 * sizeof(float));
-		CAuxGPU::EnsureDeviceMemoryReady(pGpuUsage, pBaseRadX);
+		pBaseRadX = (float*)CAuxGPU::ToDevice(pGpuUsage_, pBaseRadX, nz * nx * ne * 2 * sizeof(float));
+		CAuxGPU::EnsureDeviceMemoryReady(pGpuUsage_, pBaseRadX);
 	}
 	if (pBaseRadZ != NULL)
 	{
-		pBaseRadZ = (float*)CAuxGPU::ToDevice(pGpuUsage, pBaseRadZ, nz * nx * ne * 2 * sizeof(float));
-		CAuxGPU::EnsureDeviceMemoryReady(pGpuUsage, pBaseRadZ);
+		pBaseRadZ = (float*)CAuxGPU::ToDevice(pGpuUsage_, pBaseRadZ, nz * nx * ne * 2 * sizeof(float));
+		CAuxGPU::EnsureDeviceMemoryReady(pGpuUsage_, pBaseRadZ);
 	}
 
     const int bs = 256;
@@ -79,15 +80,15 @@ void srTSRWRadStructAccessData::MultiplyElFieldByPhaseLin_GPU(double xMult, doub
     MultiplyElFieldByPhaseLin_Kernel<<<blocks, threads>>> (xMult, zMult, pBaseRadX, pBaseRadZ, nz, nx, ne, zStart, zStep, xStart, xStep);
 
 	if (pBaseRadX != NULL)
-		CAuxGPU::MarkUpdated(pGpuUsage, pBaseRadX, true, false);
+		CAuxGPU::MarkUpdated(pGpuUsage_, pBaseRadX, true, false);
 	if (pBaseRadZ != NULL)
-		CAuxGPU::MarkUpdated(pGpuUsage, pBaseRadZ, true, false);
+		CAuxGPU::MarkUpdated(pGpuUsage_, pBaseRadZ, true, false);
 
 #ifdef _DEBUG
 	if (pBaseRadX != NULL)
-		pBaseRadX = (float*)CAuxGPU::ToHostAndFree(pGpuUsage, pBaseRadX, nz * nx * ne * 2 * sizeof(float));
+		pBaseRadX = (float*)CAuxGPU::ToHostAndFree(pGpuUsage_, pBaseRadX, nz * nx * ne * 2 * sizeof(float));
 	if (pBaseRadZ != NULL)
-		pBaseRadZ = (float*)CAuxGPU::ToHostAndFree(pGpuUsage, pBaseRadZ, nz * nx * ne * 2 * sizeof(float));
+		pBaseRadZ = (float*)CAuxGPU::ToHostAndFree(pGpuUsage_, pBaseRadZ, nz * nx * ne * 2 * sizeof(float));
 	cudaStreamSynchronize(0);
     //auto err = cudaGetLastError();
     //printf("%s\r\n", cudaGetErrorString(err));
@@ -263,18 +264,19 @@ template<int mode> __global__ void MirrorFieldData_Kernel(long ne, long nx, long
 
 void srTSRWRadStructAccessData::MirrorFieldData_GPU(int sx, int sz, void* pGpuUsage)
 {
+	TGPUUsageArg *pGpuUsage_ = (TGPUUsageArg*)pGpuUsage;
 	float *pEX0 = pBaseRadX;
 	float *pEZ0 = pBaseRadZ;
 
 	if (pEX0 != NULL)
 	{
-		pEX0 = (float*)CAuxGPU::ToDevice(pGpuUsage, pEX0, nz * nx * ne * 2 * sizeof(float));
-		CAuxGPU::EnsureDeviceMemoryReady(pGpuUsage, pEX0);
+		pEX0 = (float*)CAuxGPU::ToDevice(pGpuUsage_, pEX0, nz * nx * ne * 2 * sizeof(float));
+		CAuxGPU::EnsureDeviceMemoryReady(pGpuUsage_, pEX0);
 	}
 	if (pEZ0 != NULL)
 	{
-		pEZ0 = (float*)CAuxGPU::ToDevice(pGpuUsage, pEZ0, nz * nx * ne * 2 * sizeof(float));
-		CAuxGPU::EnsureDeviceMemoryReady(pGpuUsage, pEZ0);
+		pEZ0 = (float*)CAuxGPU::ToDevice(pGpuUsage_, pEZ0, nz * nx * ne * 2 * sizeof(float));
+		CAuxGPU::EnsureDeviceMemoryReady(pGpuUsage_, pEZ0);
 	}
 
 	const int bs = 256;
@@ -291,15 +293,15 @@ void srTSRWRadStructAccessData::MirrorFieldData_GPU(int sx, int sz, void* pGpuUs
 		MirrorFieldData_Kernel<2> <<<blocks, threads >>> (ne, nx, nz, pEX0, pEZ0);
 
 	if (pEX0 != NULL)
-		CAuxGPU::MarkUpdated(pGpuUsage, pEX0, true, false);
+		CAuxGPU::MarkUpdated(pGpuUsage_, pEX0, true, false);
 	if (pEZ0 != NULL)
-		CAuxGPU::MarkUpdated(pGpuUsage, pEZ0, true, false);
+		CAuxGPU::MarkUpdated(pGpuUsage_, pEZ0, true, false);
 
 #ifdef _DEBUG
 	if (pEX0 != NULL)
-		pEX0 = (float*)CAuxGPU::ToHostAndFree(pGpuUsage, pEX0, nz * nx * ne * 2 * sizeof(float));
+		pEX0 = (float*)CAuxGPU::ToHostAndFree(pGpuUsage_, pEX0, nz * nx * ne * 2 * sizeof(float));
 	if (pEZ0 != NULL)
-		pEZ0 = (float*)CAuxGPU::ToHostAndFree(pGpuUsage, pEZ0, nz * nx * ne * 2 * sizeof(float));
+		pEZ0 = (float*)CAuxGPU::ToHostAndFree(pGpuUsage_, pEZ0, nz * nx * ne * 2 * sizeof(float));
 	cudaStreamSynchronize(0);
 	//auto err = cudaGetLastError();
 	//printf("%s\r\n", cudaGetErrorString(err));
