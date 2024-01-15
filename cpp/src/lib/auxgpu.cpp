@@ -147,11 +147,15 @@ void* CAuxGPU::ToDevice(TGPUUsageArg* arg, void* hostPtr, size_t size, bool dont
 	}
 
 	void *devicePtr = NULL;
-	cudaError_t err = cudaMalloc(&devicePtr, size);
+	//cudaError_t err = cudaMalloc(&devicePtr, size);
+	cudaError_t err = cudaMallocAsync(&devicePtr, size, memcpy_stream); //HG13012024
 	if (err != cudaSuccess) // Try again after freeing up some memory HG24072023
 	{
 		cudaStreamSynchronize(0);
-		err = cudaMalloc(&devicePtr, size);
+		if (memcpy_stream != 0)	//HG13012024 Synchronize both streams
+			cudaStreamSynchronize(memcpy_stream);
+		//err = cudaMalloc(&devicePtr, size);
+		err = cudaMallocAsync(&devicePtr, size, memcpy_stream); //HG13012024
 	}
 	if (err != cudaSuccess)
 		return NULL;
@@ -167,8 +171,10 @@ void* CAuxGPU::ToDevice(TGPUUsageArg* arg, void* hostPtr, size_t size, bool dont
 	cudaEventCreateWithFlags(&info.d2h_event, cudaEventDisableTiming);
 	if (!dontCopy){
 		cudaMemcpyAsync(devicePtr, hostPtr, size, cudaMemcpyHostToDevice, memcpy_stream);
-		cudaEventRecord(info.h2d_event, memcpy_stream);
+		//cudaEventRecord(info.h2d_event, memcpy_stream);
 	}
+	cudaEventRecord(info.h2d_event, memcpy_stream); //HG13012024
+	cudaStreamWaitEvent(0, info.h2d_event, 0); //ensure that the malloc is complete before allowing the device to use the memory
 	info.size = size;
 	gpuMap[hostPtr] = info;
 	gpuMap[devicePtr] = info;
@@ -324,17 +330,30 @@ void CAuxGPU::Init() {
 	deviceOffloadInitialized = true;
 #ifdef _OFFLOAD_GPU
 	cudaGetDeviceCount(&deviceCount);
-	cudaDeviceSynchronize();
+	//cudaDeviceSynchronize(); //HG13012024
 #endif
 }
 
-void CAuxGPU::Fini() {
+//void CAuxGPU::Fini() {
+void CAuxGPU::Fini(TGPUUsageArg* arg) { //HG13012024
 #ifdef _OFFLOAD_GPU
 	SetGPUStatus(false);	//HG30112023 Disable GPU
 
 	// Copy back all updated data
 	bool updated = false;
 	bool freed = false;
+	if(arg->discardData) //HG13012024
+	{
+		for (std::map<void*, memAllocInfo_t>::const_iterator it = gpuMap.cbegin(); it != gpuMap.cend(); it++)
+		{
+			if (it->second.DevToHostUpdated){
+				gpuMap[it->second.hostPtr].DevToHostUpdated = false;
+				gpuMap[it->second.devicePtr].DevToHostUpdated = false;
+			}
+		}	
+	}
+	if(arg->keepGPUMap)
+		return;
 	for (std::map<void*, memAllocInfo_t>::const_iterator it = gpuMap.cbegin(); it != gpuMap.cend(); it++)
 	{
 		if (it->second.DevToHostUpdated){
@@ -360,7 +379,8 @@ void CAuxGPU::Fini() {
 			cudaEventDestroy(it->second.d2h_event);
 		}
 	}
-	if (updated | freed)
+	//if (updated | freed)
+	if ((updated | freed) && !arg->noSync) //HG13012024
 		cudaStreamSynchronize(0);
 	gpuMap.clear();
 //#if _DEBUG

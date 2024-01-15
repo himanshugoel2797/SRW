@@ -7645,6 +7645,12 @@ def srwl_uti_read_mag_fld_3d(_fpath, _scom='#'):
 def srwl_uti_array_alloc(_type, _n, _list_base=[0]): #OC14042019
 #def srwl_uti_array_alloc(_type, _n):
 
+    if _list_base == [0]: #HG13012024
+        import numpy as np
+        if _type == 'd': resAr = np.zeros(_n, dtype=np.float64)
+        elif _type == 'f': resAr = np.zeros(_n, dtype=np.float32)
+        return resAr
+
     # import numpy as np #OCTEST OC02112022
     # resAr = np.zeros(_n, dtype=float) #OCTEST OC02112022
     # resAr = array(_type, _list_base*_n) #OCTEST OC02112022

@@ -1552,7 +1552,8 @@ EXP int CALL srwlPropagRadMultiE(SRWLStokes* pStokes, SRWLWfr* pWfr0, SRWLOptC* 
 #ifdef _OFFLOAD_GPU //OC30102023
 EXP int CALL srwlUtiGPUProc(int op, void* pvGPU) //HG04122023
 {
-	if(op == 0) CAuxGPU::Fini();
+	//if(op == 0) CAuxGPU::Fini((TGPUUsageArg*)pvGPU);
+	if(op == 0) CAuxGPU::Fini((TGPUUsageArg*)pvGPU); //HG13012024
 	if(op == 1) CAuxGPU::Init();
 	return 0;
 }

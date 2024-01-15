@@ -148,9 +148,9 @@ opPathDif = opSmp.get_data(_typ = 3, _dep = 3)
 print('done in', round(time.time() - t, 3), 's')
 print('   Saving Optical Path Difference data from Sample Transmission optical element ... ', end='')
 t = time.time()
-srwl_uti_save_intens_ascii(
-    opPathDif, opSmp.mesh, os.path.join(os.getcwd(), strDataFolderName, strSampOptPathDifOutFileName01), 0,
-    ['Photon Energy', 'Horizontal Position', 'Vertical Position', 'Optical Path Difference'], _arUnits=['eV', 'm', 'm', 'm'])
+#srwl_uti_save_intens_ascii(
+#    opPathDif, opSmp.mesh, os.path.join(os.getcwd(), strDataFolderName, strSampOptPathDifOutFileName01), 0,
+#    ['Photon Energy', 'Horizontal Position', 'Vertical Position', 'Optical Path Difference'], _arUnits=['eV', 'm', 'm', 'm'])
 print('done in', round(time.time() - t, 3), 's')
 
 #Drift from Sample to Detector
@@ -184,41 +184,44 @@ srwl.CalcElecFieldGaussian(wfr, GsnBm, arPrecPar)
 mesh0 = deepcopy(wfr.mesh)
 arI0 = array('f', [0]*mesh0.nx*mesh0.ny) #"flat" array to take 2D intensity data
 srwl.CalcIntFromElecField(arI0, wfr, 6, 0, 3, mesh0.eStart, 0, 0) #extracts intensity
-srwl_uti_save_intens_ascii(
-    arI0, mesh0, os.path.join(os.getcwd(), strDataFolderName, strIntInitOutFileName01), 0,
-    ['Photon Energy', 'Horizontal Position', 'Vertical Position', 'Intensity'], _arUnits=['eV', 'm', 'm', 'ph/s/.1%bw/mm^2'])
+#srwl_uti_save_intens_ascii(
+#    arI0, mesh0, os.path.join(os.getcwd(), strDataFolderName, strIntInitOutFileName01), 0,
+#    ['Photon Energy', 'Horizontal Position', 'Vertical Position', 'Intensity'], _arUnits=['eV', 'm', 'm', 'ph/s/.1%bw/mm^2'])
+
+#Wait for enter key
+#sys.stdin.readline()
 
 #***********Wavefront Propagation
 print('   Propagating wavefront ... ', end='')
 t = time.time()
-srwl.PropagElecField(wfr, opBL)
+srwl.PropagElecField(wfr, opBL, None, 1)
 print('done in', round(time.time() - t), 's')
 
 print('   Extracting, projecting propagated wavefront intensity on detector and saving it to file ... ', end='')
 t = time.time()
 mesh1 = deepcopy(wfr.mesh)
 arI1 = array('f', [0]*mesh1.nx*mesh1.ny) #"flat" array to take 2D intensity data
-srwl.CalcIntFromElecField(arI1, wfr, 6, 0, 3, mesh1.eStart, 0, 0) #extracts intensity
+srwl.CalcIntFromElecField(arI1, wfr, 6, 0, 3, mesh1.eStart, 0, 0, None, None, 1) #extracts intensity
 
 stkDet = det.treat_int(arI1, _mesh = mesh1) #"Projecting" intensity on detector (by interpolation)
 mesh1 = stkDet.mesh; arI1 = stkDet.arS
-srwl_uti_save_intens_ascii(
-    arI1, mesh1, os.path.join(os.getcwd(), strDataFolderName, strIntPropOutFileName01), 0,
-    ['Photon Energy', 'Horizontal Position', 'Vertical Position', 'Spectral Fluence'], _arUnits=['eV', 'm', 'm', 'J/eV/mm^2'])
+#srwl_uti_save_intens_ascii(
+#    arI1, mesh1, os.path.join(os.getcwd(), strDataFolderName, strIntPropOutFileName01), 0,
+#    ['Photon Energy', 'Horizontal Position', 'Vertical Position', 'Spectral Fluence'], _arUnits=['eV', 'm', 'm', 'J/eV/mm^2'])
 print('done in', round(time.time() - t), 's')
 
 #**********************Plotting Results (requires 3rd party graphics package)
 print('   Plotting the results (blocks script execution; close any graph windows to proceed) ... ', end='')
 plotMesh0x = [mesh0.xStart, mesh0.xFin, mesh0.nx]
 plotMesh0y = [mesh0.yStart, mesh0.yFin, mesh0.ny]
-uti_plot2d1d(arI0, plotMesh0x, plotMesh0y, x=0, y=0, labels=['Horizontal Position', 'Vertical Position', 'Intensity at Sample'], units=['m', 'm', 'ph/s/.1%bw/mm^2'])
+#uti_plot2d1d(arI0, plotMesh0x, plotMesh0y, x=0, y=0, labels=['Horizontal Position', 'Vertical Position', 'Intensity at Sample'], units=['m', 'm', 'ph/s/.1%bw/mm^2'])
 
-uti_plot2d(imgProc, labels=['Horizontal Pixel #', 'Vertical Pixel #', 'Processed Image of Sample'])
+#uti_plot2d(imgProc, labels=['Horizontal Pixel #', 'Vertical Pixel #', 'Processed Image of Sample'])
 
 meshS = opSmp.mesh
 plotMeshSx = [meshS.xStart, meshS.xFin, meshS.nx]
 plotMeshSy = [meshS.yStart, meshS.yFin, meshS.ny]
-uti_plot2d1d(opPathDif, plotMeshSx, plotMeshSy, x=0, y=0, labels=['Horizontal Position', 'Vertical Position', 'Optical Path Diff. in Sample'], units=['m', 'm', 'm'])
+#uti_plot2d1d(opPathDif, plotMeshSx, plotMeshSy, x=0, y=0, labels=['Horizontal Position', 'Vertical Position', 'Optical Path Diff. in Sample'], units=['m', 'm', 'm'])
 
 plotMesh1x = [mesh1.xStart, mesh1.xFin, mesh1.nx]
 plotMesh1y = [mesh1.yStart, mesh1.yFin, mesh1.ny]

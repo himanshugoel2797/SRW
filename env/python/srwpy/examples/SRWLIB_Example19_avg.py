@@ -25,6 +25,7 @@ except:
 #from uti_plot import * #required for plotting
 import os
 import time
+import matplotlib.pyplot as plt
 
 npIsAvail = False
 try:
@@ -97,14 +98,14 @@ srwl.CalcElecFieldGaussian(wfr, GsnBm, arPrecPar)
 mesh0 = deepcopy(wfr.mesh)
 arI0 = array('f', [0]*mesh0.nx*mesh0.ny) #"flat" array to take 2D intensity data
 srwl.CalcIntFromElecField(arI0, wfr, 6, 0, 3, mesh0.eStart, 0, 0) #Extract intensity
-srwl_uti_save_intens_ascii( #Save Intensity of to a file
-    arI0, mesh0, os.path.join(os.getcwd(), strDataFolderName, strIntInitOutFileName), 0,
-    ['Photon Energy', 'Horizontal Position', 'Vertical Position', 'Intensity'], _arUnits=['eV', 'm', 'm', 'ph/s/.1%bw/mm^2'])
+#srwl_uti_save_intens_ascii( #Save Intensity of to a file
+#    arI0, mesh0, os.path.join(os.getcwd(), strDataFolderName, strIntInitOutFileName), 0,
+#    ['Photon Energy', 'Horizontal Position', 'Vertical Position', 'Intensity'], _arUnits=['eV', 'm', 'm', 'ph/s/.1%bw/mm^2'])
 
 #Plot the Initial Wavefront (without showing it yet)
 plotMesh0x = [mesh0.xStart, mesh0.xFin, mesh0.nx]
 plotMesh0y = [mesh0.yStart, mesh0.yFin, mesh0.ny]
-uti_plot2d1d(arI0, plotMesh0x, plotMesh0y, 0, 0, ['Horizontal Position', 'Vertical Position', 'Intensity at Sample'], ['m', 'm', 'ph/s/.1%bw/mm^2'])
+#uti_plot2d1d(arI0, plotMesh0x, plotMesh0y, 0, 0, ['Horizontal Position', 'Vertical Position', 'Intensity at Sample'], ['m', 'm', 'ph/s/.1%bw/mm^2'])
 
 #************Defining Samples (lists of 3D objects (spheres))
 #Initial set of 3D objects
@@ -116,18 +117,18 @@ yc = 0 #Vertical Center position of the Sample
 zc = 0 #Longitudinal Center position of the Sample
 
 listObjInit = srwl_uti_smp_rnd_obj3d.setup_list_obj3d( #Initial list of 3D object (sphere) parameters
-    _n = 100, #Number of 3D nano-objects
+    _n = 10000, #Number of 3D nano-objects
     _ranges = [0.95*rx, 0.95*ry, rz], #Ranges of horizontal, vertical and longitudinal position within which the 3D objects are defined
     #_ranges = [rx, ry, rz], #Ranges of horizontal, vertical and longitudinal position within which the 3D objects are defined
     _cen = [xc, yc, zc], #Horizontal, Vertical and Longitudinal coordinates of center position around which the 3D objects are defined
     _dist = 'uniform', #Type (and eventual parameters) of distributions of 3D objects
-    _obj_shape = ['S', 'uniform', 25.e-09, 250.e-09], #Type of 3D objects, their distribution type and parameters (min. and max. diameter for the 'uniform' distribution)
+    _obj_shape = ['S', 'uniform', 245.e-09, 255.e-09], #Type of 3D objects, their distribution type and parameters (min. and max. diameter for the 'uniform' distribution)
     _allow_overlap = False, #Allow or not the 3D objects to overlap
     _fp = os.path.join(os.getcwd(), strDataFolderName, strSampleSubFolderName, strListSampObjFileName%(0)))
     
 #Generate timesteps of Brownian motion of the 3D nano-objects (spheres) simulating particles suspended in water at room temperature
-timeStep = 0.1 #Time step between different Sample "snapshots" / scattering patterns
-timeInterv = 0.5 #Total time interval covered by the "snapshots"
+timeStep = 0.01 #Time step between different Sample "snapshots" / scattering patterns
+timeInterv = 0.2 #Total time interval covered by the "snapshots"
 listObjBrownian = srwl_uti_smp_rnd_obj3d.brownian_motion3d(
     _obj_crd = listObjInit, #Initial list of 3D objects
     _viscosity = 1.e-3, #[Pa*s]
@@ -142,8 +143,8 @@ matDelta = 4.773e-05 #Refractive Index Decrement
 matAttenLen = 2.48644e-06 #Attenuation Length [m]
 
 #***********Detector
-nxDet = 2048 #Detector Number of Pixels in Horizontal direction
-nyDet = 2048 #Detector Number of Pixels in Vertical direction
+nxDet = 512#2048 #Detector Number of Pixels in Horizontal direction
+nyDet = 512#2048 #Detector Number of Pixels in Vertical direction
 pSize = 75e-06 #Detector Pixel Size
 xrDet = nxDet*pSize
 yrDet = nyDet*pSize
@@ -194,15 +195,15 @@ for it in range(len(listObjBrownian)):
 
     print('   Extracting Optical Path Difference data from Sample Transmission optical element ... ', end='')
     t = time.time()
-    opPathDif = opSmp.get_data(_typ = 3, _dep = 3)
+    #opPathDif = opSmp.get_data(_typ = 3, _dep = 3)
 
     print('done in', round(time.time() - t, 3), 's')
 
     print('   Saving Optical Path Difference data from Sample Transmission optical element ... ', end='')
     t = time.time()
-    srwl_uti_save_intens_ascii(
-        opPathDif, opSmp.mesh, os.path.join(os.getcwd(), strDataFolderName, strSampOptPathDifOutFileName%(it)), 0,
-        ['Photon Energy', 'Horizontal Position', 'Vertical Position', 'Optical Path Difference'], _arUnits=['eV', 'm', 'm', 'm'])
+    #srwl_uti_save_intens_ascii(
+    #    opPathDif, opSmp.mesh, os.path.join(os.getcwd(), strDataFolderName, strSampOptPathDifOutFileName%(it)), 0,
+    #    ['Photon Energy', 'Horizontal Position', 'Vertical Position', 'Optical Path Difference'], _arUnits=['eV', 'm', 'm', 'm'])
     print('done in', round(time.time() - t, 3), 's')
 
     #Defining "Beamline" to Propagate the Wavefront through
@@ -215,23 +216,23 @@ for it in range(len(listObjBrownian)):
     print('   Propagating Wavefront ... ', end='')
     t = time.time()
     srwl.PropagElecField(wfrP, opBL, None, 1)
-    print('done in', round(time.time() - t), 's')
+    print('done in', round(time.time() - t, 3), 's')
 
     print('   Extracting, Projecting the Propagated Wavefront Intensity on Detector and Saving it to file ... ', end='')
     t = time.time()
     mesh1 = deepcopy(wfrP.mesh)
     arI1 = array('f', [0]*mesh1.nx*mesh1.ny) #"flat" array to take 2D intensity data
-    srwl.CalcIntFromElecField(arI1, wfrP, 6, 0, 3, mesh1.eStart, 0, 0, 1) #extracts intensity
+    srwl.CalcIntFromElecField(arI1, wfrP, 6, 0, 3, mesh1.eStart, 0, 0) #extracts intensity
 
     stkDet = det.treat_int(arI1, _mesh = mesh1) #"Projecting" intensity on detector (by interpolation)
     mesh1 = stkDet.mesh
     arI1 = stkDet.arS
-    srwl_uti_save_intens_ascii(
-        arI1, mesh1, os.path.join(os.getcwd(), strDataFolderName, strIntPropOutFileName%(it)), 0,
-        ['Photon Energy', 'Horizontal Position', 'Vertical Position', 'Spectral Fluence'], _arUnits=['eV', 'm', 'm', 'ph/s/.1%bw/mm^2'])
+    #srwl_uti_save_intens_ascii(
+    #    arI1, mesh1, os.path.join(os.getcwd(), strDataFolderName, strIntPropOutFileName%(it)), 0,
+    #    ['Photon Energy', 'Horizontal Position', 'Vertical Position', 'Spectral Fluence'], _arUnits=['eV', 'm', 'm', 'ph/s/.1%bw/mm^2'])
 
     if(arDetFrames is not None): arDetFrames[it] = np.reshape(arI1, (mesh1.ny, mesh1.nx)).transpose()
-    print('done in', round(time.time() - t), 's')
+    print('done in', round(time.time() - t, 3), 's')
 
     #Plotting the Results (requires 3rd party graphics package)
     print('   Plotting the results (i.e. creating plots without showing them yet) ... ', end='')
@@ -240,7 +241,7 @@ for it in range(len(listObjBrownian)):
     meshS = opSmp.mesh
     plotMeshSx = [meshS.xStart, meshS.xFin, meshS.nx]
     plotMeshSy = [meshS.yStart, meshS.yFin, meshS.ny]
-    uti_plot2d(opPathDif, plotMeshSx, plotMeshSy, ['Horizontal Position', 'Vertical Position', 'Optical Path Diff. in Sample (Time = %.3fs)' % (it*timeStep)], ['m', 'm', 'm'])
+    #uti_plot2d(opPathDif, plotMeshSx, plotMeshSy, ['Horizontal Position', 'Vertical Position', 'Optical Path Diff. in Sample (Time = %.3fs)' % (it*timeStep)], ['m', 'm', 'm'])
         
     #Scattered Radiation Intensity Distribution in Log Scale
     plotMesh1x = [mesh1.xStart, mesh1.xFin, mesh1.nx]
@@ -252,7 +253,7 @@ for it in range(len(listObjBrownian)):
         if(curI <= 0.): arLogI1[i] = 0 #?
         else: arLogI1[i] = log(curI, 10)
 
-    uti_plot2d1d(arLogI1, plotMesh1x, plotMesh1y, 0, 0, ['Horizontal Position', 'Vertical Position', 'Log of Intensity at Detector (Time = %.3f s)' % (it*timeStep)], ['m', 'm', ''])
+    #uti_plot2d1d(arLogI1, plotMesh1x, plotMesh1y, 0, 0, ['Horizontal Position', 'Vertical Position', 'Log of Intensity at Detector (Time = %.3f s)' % (it*timeStep)], ['m', 'm', ''])
 
     print('done')
 
@@ -261,5 +262,8 @@ if(arDetFrames is not None): #Saving simulated Detector data file
     srwl_uti_save_intens_hdf5_exp(arDetFrames, mesh1, os.path.join(os.getcwd(), strDataFolderName, strIntPropOutFileNameDet), 
         _exp_type = 'XPCS', _dt = timeStep, _dist_smp = distSmp_Det, _bm_size_x = GsnBm.sigX*2.35, _bm_size_y = GsnBm.sigY*2.35)
     print('done')
+
+plt.imshow(np.log10(np.mean(np.array(arDetFrames), axis=0)))
+plt.show()
 
 uti_plot_show() #Show all plots created

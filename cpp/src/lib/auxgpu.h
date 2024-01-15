@@ -28,6 +28,9 @@
 typedef struct
 {
 	int deviceIndex; // -1 means no device, TODO
+	bool noSync; // do not synchronize device/host memory on exit //HG13012024
+	bool keepGPUMap; // keep the GPU mmemory map after exit 
+	bool discardData; // discard all device data on exit instead of copying back to host
 } TGPUUsageArg; 
 
 #ifdef _OFFLOAD_GPU
@@ -45,7 +48,8 @@ class CAuxGPU
 private:
 public:
 	static void Init();
-	static void Fini();
+	//static void Fini();
+	static void Fini(TGPUUsageArg* arg); //HG13012024
 	static bool GPUAvailable(); //CheckGPUAvailable etc
 	static bool GPUEnabled(TGPUUsageArg *arg);
 	static void SetGPUStatus(bool enabled);

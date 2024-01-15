@@ -3329,13 +3329,35 @@ void ParseSructSmpObj3D(double**& arObjShapeDefs, int& nObj3D, PyObject* oListSh
  ***************************************************************************/
 void ParseDeviceParam(PyObject* oDev, TGPUUsageArg* pGpu) //HG10202021 Convert Python device specification to C++ structure
 {
+	pGpu->deviceIndex = -1; //HG13012024
+	pGpu->noSync = false;
+	pGpu->keepGPUMap = false;
+	pGpu->discardData = false;
+
 	if (oDev != 0) {
 		if (PyLong_Check(oDev)) {
 			pGpu->deviceIndex = _PyLong_AsInt(oDev);
 			return;
 		}
+		else if (PyList_Check(oDev)) {  //HG13012024
+			int nElem = (int)PyList_Size(oDev);
+			if (nElem > 0) {
+				for (int i = 0; i < nElem; i++) {
+					PyObject* oElem = PyList_GetItem(oDev, (Py_ssize_t)i);
+					if (PyLong_Check(oElem)) {
+						pGpu->deviceIndex = _PyLong_AsInt(oElem);
+					}else if (PyUnicode_Check(oElem)) {
+						if (PyUnicode_CompareWithASCIIString(oElem, "KeepGPUMap") == 0)
+							pGpu->keepGPUMap = true;
+						else if(PyUnicode_CompareWithASCIIString(oElem, "DiscardData") == 0)
+							pGpu->discardData = true;
+						else if (PyUnicode_CompareWithASCIIString(oElem, "NoSync") == 0)
+							pGpu->noSync = true;
+					}
+				}
+			}
+		}
 	}
-	pGpu->deviceIndex = 0;
 }
 #endif
 
@@ -4733,7 +4755,8 @@ static PyObject* srwlpy_CalcIntFromElecField(PyObject *self, PyObject *args)
 	}
 
 #ifdef _OFFLOAD_GPU //HG30112023
-	srwlUtiGPUProc(0); //to free GPU
+	//srwlUtiGPUProc(0, &gpu); //to free GPU
+	srwlUtiGPUProc(0, &gpu); //to free GPU //HG13012024
 #endif
 	if(pMagCnt != 0) DeallocMagCntArrays(pMagCnt);
 	ReleasePyBuffers(vBuf);
@@ -5049,7 +5072,8 @@ static PyObject* srwlpy_PropagElecField(PyObject *self, PyObject *args)
 		oWfr = 0;
 	}
 #ifdef _OFFLOAD_GPU //HG03012024
-	srwlUtiGPUProc(0); //to free GPU
+	//srwlUtiGPUProc(0, &gpu); //to free GPU
+	srwlUtiGPUProc(0, &gpu); //to free GPU //HG13012024
 #endif
 
 	DeallocOptCntArrays(&optCnt);
@@ -5214,7 +5238,8 @@ static PyObject* srwlpy_UtiFFT(PyObject *self, PyObject *args)
 		oData = 0; oMesh = 0; oDir = 0;
 	}
 #ifdef _OFFLOAD_GPU //HG03012024
-	srwlUtiGPUProc(0); //to free GPU
+	//srwlUtiGPUProc(0, &gpu); //to free GPU
+	srwlUtiGPUProc(0, &gpu); //to free GPU //HG13012024
 #endif
 
 	ReleasePyBuffers(vBuf);
