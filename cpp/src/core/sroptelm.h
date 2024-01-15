@@ -285,7 +285,7 @@ public:
 	void MakeWfrEdgeCorrection(srTSRWRadStructAccessData*, float*, float*, srTDataPtrsForWfrEdgeCorr&, void* pvGPU=0); //HG01122023
 	//void MakeWfrEdgeCorrection(srTSRWRadStructAccessData*, float*, float*, srTDataPtrsForWfrEdgeCorr&);
 #ifdef _OFFLOAD_GPU //HG01122023
-	void srTGenOptElem::MakeWfrEdgeCorrection_GPU(srTSRWRadStructAccessData* RadAccessData, float* pDataEx, float* pDataEz, srTDataPtrsForWfrEdgeCorr& DataPtrs, TGPUUsageArg* pGPU);
+	void MakeWfrEdgeCorrection_GPU(srTSRWRadStructAccessData* RadAccessData, float* pDataEx, float* pDataEz, srTDataPtrsForWfrEdgeCorr& DataPtrs, TGPUUsageArg* pGPU); //HG13012024 Remove 'srTGenOptElem::' at the beginning of the function name to comply with the C++ standard
 #endif
 
 	int SetupWfrEdgeCorrData1D(srTRadSect1D*, float*, float*, srTDataPtrsForWfrEdgeCorr1D&);

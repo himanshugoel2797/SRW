@@ -190,6 +190,14 @@ public:
 #endif
 	}
 
+#ifdef _OFFLOAD_GPU //HG13012024
+	~CGenMathFFT2D()
+	{
+		if(Plan2DFFT_cu != 0) cufftDestroy(Plan2DFFT_cu);
+		if(dPlan2DFFT_cu != 0) cufftDestroy(dPlan2DFFT_cu);
+	}
+#endif
+
 	//int Make2DFFT(CGenMathFFT2DInfo&);
 	//Modification by S.Yakubov for parallelizing SRW via OpenMP:
 #ifdef _FFTW3 //28012019
@@ -603,6 +611,14 @@ public:
 		HowMany = dHowMany = 0;
 #endif
 	}
+
+#ifdef _OFFLOAD_GPU //HG13012024
+	~CGenMathFFT1D()
+	{
+		if(Plan1DFFT_cu != 0) cufftDestroy(Plan1DFFT_cu);
+		if(dPlan1DFFT_cu != 0) cufftDestroy(dPlan1DFFT_cu);
+	}
+#endif
 
 	int Make1DFFT(CGenMathFFT1DInfo& FFT1DInfo, void* pvGPU=0); //OC05092023
 	int Make1DFFT_InPlace(CGenMathFFT1DInfo& FFT1DInfo, void* pvGPU=0); //OC05092023

@@ -239,6 +239,33 @@ int srTRadGenManip::ExtractSingleElecIntensity2DvsXZ_GPU(srTRadExtract& RadExtra
 
 	int Int_or_ReE = RadExtract.Int_or_Phase;
 	if (Int_or_ReE == 7) Int_or_ReE = 0; //OC150813: time/phot. energy integrated single-e intensity requires "normal" intensity here
+	
+	if (Int_or_ReE != 2) //HG13012024 Fixed bug: Output array was not allocated properly
+	{
+		if (allStokesReq)
+		{
+			RadExtract.pExtractedData = (float*)CAuxGPU::ToDevice(pGPU, RadExtract.pExtractedData, 4*RadAccessData.nx*RadAccessData.nz*sizeof(float), true);
+			//CAuxGPU::EnsureDeviceMemoryReady(pGPU, RadExtract.pExtractedData);
+		}
+		else
+		{
+			RadExtract.pExtractedData = (float*)CAuxGPU::ToDevice(pGPU, RadExtract.pExtractedData, RadAccessData.nx*RadAccessData.nz*sizeof(float), true);
+			//CAuxGPU::EnsureDeviceMemoryReady(pGPU, RadExtract.pExtractedData);
+		}
+	}
+	else
+	{
+		if (allStokesReq)
+		{
+			RadExtract.pExtractedDataD = (double*)CAuxGPU::ToDevice(pGPU, RadExtract.pExtractedDataD, 4*RadAccessData.nx*RadAccessData.nz*sizeof(double), true);
+			//CAuxGPU::EnsureDeviceMemoryReady(pGPU, RadExtract.pExtractedDataD);
+		}
+		else
+		{
+			RadExtract.pExtractedDataD = (double*)CAuxGPU::ToDevice(pGPU, RadExtract.pExtractedDataD, RadAccessData.nx*RadAccessData.nz*sizeof(double), true);
+			//CAuxGPU::EnsureDeviceMemoryReady(pGPU, RadExtract.pExtractedDataD);
+		}
+	}
 
 	if (allStokesReq)
 		if (intOverEnIsRequired)
@@ -251,23 +278,53 @@ int srTRadGenManip::ExtractSingleElecIntensity2DvsXZ_GPU(srTRadExtract& RadExtra
 		else
 			ExtractSingleElecIntensity2DvsXZ_GPUSub<false, false> (blocks, threads, RadExtract, RadAccessData, local_copy, arAuxInt, ie0, ie1, InvStepRelArg, Int_or_ReE);
 	
-    CAuxGPU::ToHostAndFree(pGPU, local_copy, sizeof(srTRadGenManip), true);
-    CAuxGPU::ToHostAndFree(pGPU, arAuxInt, RadAccessData.ne*sizeof(double), true);
-	CAuxGPU::MarkUpdated(pGPU, RadAccessData.pBaseRadX, true, false);
-	CAuxGPU::MarkUpdated(pGPU, RadAccessData.pBaseRadZ, true, false);
+	if(Int_or_ReE != 2) //HG13012024 Fixed bug: Output array was not allocated properly
+	{
+		if(RadExtract.pExtractedData != NULL)
+			CAuxGPU::MarkUpdated(pGPU, RadExtract.pExtractedData, true, false);
+	}
+	else
+	{
+		if(RadExtract.pExtractedDataD != NULL)
+			CAuxGPU::MarkUpdated(pGPU, RadExtract.pExtractedDataD, true, false);
+	}
 
 #ifndef _DEBUG
-	if (RadAccessData.pBaseRadX != NULL)
-		RadAccessData.pBaseRadX = (float*)CAuxGPU::GetHostPtr(pGPU, RadAccessData.pBaseRadX);
-	if (RadAccessData.pBaseRadZ != NULL)
-		RadAccessData.pBaseRadZ = (float*)CAuxGPU::GetHostPtr(pGPU, RadAccessData.pBaseRadZ);
+	if(Int_or_ReE != 2)
+	{
+		if (RadExtract.pExtractedData != NULL)
+			RadExtract.pExtractedData = (float*)CAuxGPU::GetHostPtr(pGPU, RadExtract.pExtractedData);
+	}
+	else
+	{
+		if (RadExtract.pExtractedDataD != NULL)
+			RadExtract.pExtractedDataD = (double*)CAuxGPU::GetHostPtr(pGPU, RadExtract.pExtractedDataD);
+	}
 #endif
 
 #ifdef _DEBUG
+	if(Int_or_ReE != 2)
+	{
+		if (RadExtract.pExtractedData != NULL)
+			RadExtract.pExtractedData = (float*)CAuxGPU::ToHostAndFree(pGPU, RadExtract.pExtractedData, 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz*sizeof(float));
+	}
+	else
+	{
+		if (RadExtract.pExtractedDataD != NULL)
+			RadExtract.pExtractedDataD = (double*)CAuxGPU::ToHostAndFree(pGPU, RadExtract.pExtractedDataD, 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz*sizeof(double));
+	}
+#endif
+
+    CAuxGPU::ToHostAndFree(pGPU, local_copy, sizeof(srTRadGenManip), true);
+    CAuxGPU::ToHostAndFree(pGPU, arAuxInt, RadAccessData.ne*sizeof(double), true);
+	//CAuxGPU::MarkUpdated(pGPU, RadAccessData.pBaseRadX, true, false);
+	//CAuxGPU::MarkUpdated(pGPU, RadAccessData.pBaseRadZ, true, false);
 	if (RadAccessData.pBaseRadX != NULL)
-		RadAccessData.pBaseRadX = (float*)CAuxGPU::ToHostAndFree(pGPU, RadAccessData.pBaseRadX, 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz*sizeof(float));
+		RadAccessData.pBaseRadX = (float*)CAuxGPU::ToHostAndFree(pGPU, RadAccessData.pBaseRadX, 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz*sizeof(float), true); //HG13012024 Original wavefront data does not need to be copied back to CPU
 	if (RadAccessData.pBaseRadZ != NULL)
-		RadAccessData.pBaseRadZ = (float*)CAuxGPU::ToHostAndFree(pGPU, RadAccessData.pBaseRadZ, 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz*sizeof(float));
+		RadAccessData.pBaseRadZ = (float*)CAuxGPU::ToHostAndFree(pGPU, RadAccessData.pBaseRadZ, 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz*sizeof(float), true); //HG13012024 Original wavefront data does not need to be copied back to CPU
+
+#ifdef _DEBUG
 	cudaStreamSynchronize(0);
 	auto err = cudaGetLastError();
 	printf("%s\r\n", cudaGetErrorString(err));

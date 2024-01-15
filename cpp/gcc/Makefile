@@ -48,7 +48,7 @@ CUDA_LIBS = -L$(CUDA_PATH)/lib64 -L$(CUDA_MATHLIBS_PATH)/lib64
 
 SRW_SRC_DEF += -D_OFFLOAD_GPU -DUSE_CUDA -D_FFTW3
 SRW_INCLUDES += $(CUDA_INCLUDES) 
-SRW_CFLAGS += -std=c++17
+#SRW_CFLAGS += -std=c++17 #HG01012024
 LDFLAGS += $(CUDA_LIBS) -lcudart_static -lcudadevrt -lcufft -lrt
 NVCFLAGS = -O3 -arch=sm_80 -dlto -rdc=true
 CUDA_OBJ=gmfft_gpu.o srradstr_gpu.o sroptelm_gpu.o sroptdrf_gpu.o sroptgtr_gpu.o srradmnp_gpu.o

@@ -116,7 +116,8 @@ int srTGenOptElem::PropagateRadiationMeth_0(srTSRWRadStructAccessData* pRadAcces
 
 		//if(result = PropagateRadiationSingleE_Meth_0(pRadDataSingleE, pPrevRadDataSingleE, pBuf)) return result; //from derived classes
 		//OC01102019 (restored)
-		if(result = PropagateRadiationSingleE_Meth_0(pRadDataSingleE, pPrevRadDataSingleE)) return result; //from derived classes
+		//if(result = PropagateRadiationSingleE_Meth_0(pRadDataSingleE, pPrevRadDataSingleE)) return result; //from derived classes
+		if(result = PropagateRadiationSingleE_Meth_0(pRadDataSingleE, pPrevRadDataSingleE, pvGPU)) return result; //from derived classes //HG12012024
 
 		if(pRadDataSingleE != pRadAccessData)
 		{

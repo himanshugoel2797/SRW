@@ -2607,7 +2607,8 @@ void srTSRWRadStructAccessData::AddStokesAtPoint(srTEXZ& EXZ, float* pStokesVal)
 
 //*************************************************************************
 
-void srTSRWRadStructAccessData::CheckAndSubtractPhaseTermsLin(double newXc, double newZc)
+//void srTSRWRadStructAccessData::CheckAndSubtractPhaseTermsLin(double newXc, double newZc)
+void srTSRWRadStructAccessData::CheckAndSubtractPhaseTermsLin(double newXc, double newZc, void *pvGPU) //HG12012024
 {
 	const double ratAllowSubtract = 0.2;
 	const double minNumOptCycles = 10;
@@ -2666,12 +2667,14 @@ void srTSRWRadStructAccessData::CheckAndSubtractPhaseTermsLin(double newXc, doub
 
 	if((xMult == 0) && (zMult == 0)) return;
 	
-	MultiplyElFieldByPhaseLin(xMult, zMult);
+	//MultiplyElFieldByPhaseLin(xMult, zMult);
+	MultiplyElFieldByPhaseLin(xMult, zMult, pvGPU); //HG12012024
 }
 
 //*************************************************************************
 
-void srTSRWRadStructAccessData::CheckAndResetPhaseTermsLin()
+//void srTSRWRadStructAccessData::CheckAndResetPhaseTermsLin()
+void srTSRWRadStructAccessData::CheckAndResetPhaseTermsLin(void* pvGPU) //HG12012024
 {
 	if((!m_xLinOnlyPhaseTermWasSubtracted) && (!m_zLinOnlyPhaseTermWasSubtracted)) return;
 	
@@ -2695,7 +2698,8 @@ void srTSRWRadStructAccessData::CheckAndResetPhaseTermsLin()
 	
 	if((xMult == 0) && (zMult == 0)) return;
 	
-	MultiplyElFieldByPhaseLin(xMult, zMult);
+	//MultiplyElFieldByPhaseLin(xMult, zMult);
+	MultiplyElFieldByPhaseLin(xMult, zMult, pvGPU); //HG12012024
 }
 
 //*************************************************************************
