@@ -341,7 +341,8 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 #ifdef _OFFLOAD_GPU //HG30112023
 		TGPUUsageArg* pGPU = (TGPUUsageArg*)pvGPU;
 		if (CAuxGPU::GPUEnabled(pGPU)) {
-			if (dataOnDevice && (((srTGenOptElem*)it->rep)->SupportedFeatures() & 1) == 0)
+			//if (dataOnDevice && (((srTGenOptElem*)it->rep)->SupportedFeatures() & 1) == 0)
+			if (dataOnDevice && (((srTGenOptElem*)it->rep)->GPUImplFeatures() & 1) == 0) //HG07022024
 			{
 //#if DEBUG
 //				printf("Element does not support GPU, transferring to CPU.\r\n");
@@ -352,7 +353,8 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 					wfr.pBaseRadZ = (float*)CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadZ, 2 * wfr.ne * wfr.nx * wfr.nz * sizeof(float));
 				dataOnDevice = false;
 			}
-			else if (!dataOnDevice && (((srTGenOptElem*)it->rep)->SupportedFeatures() & 1) == 1)
+			//else if (!dataOnDevice && (((srTGenOptElem*)it->rep)->SupportedFeatures() & 1) == 1)
+			else if (!dataOnDevice && (((srTGenOptElem*)it->rep)->GPUImplFeatures() & 1) == 1) //HG07022024
 			{
 					dataOnDevice = true;
 //#if DEBUG

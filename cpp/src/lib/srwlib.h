@@ -970,7 +970,7 @@ EXP int CALL srwlUtiUndFromMagFldTab(SRWLMagFldC* pUndCnt, SRWLMagFldC* pMagCnt,
  */
 EXP int CALL srwlUtiUndFindMagFldInterpInds(int* arResInds, int* pnResInds, double* arGaps, double* arPhases, int nVals, double arPrecPar[5]);
 
-#ifdef _OFFLOAD_GPU //HG30112023
+//#ifdef _OFFLOAD_GPU //HG30112023
 /**
  * Implements GPU related operations.
  * @param [in] op operation to be performed:
@@ -1018,7 +1018,7 @@ EXP int CALL srwlUtiGPUProc(int op, void* pvGpu=0);
  */
 //EXP void CALL srwlUtiGPUFini(); //OC26072023
 //EXP void CALL srwlCAuxGPUFini(); //HG
-#endif
+//#endif
 
 /**
  * These functions were added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP
