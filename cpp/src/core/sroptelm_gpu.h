@@ -20,7 +20,7 @@
 #include <srradstr.h>
 #include <srstraux.h>
 
-#ifdef __CUDACC__
+#ifdef __CUDACC__ // Automatically defined by nvcc when compiling CUDA code.
 template<class T> __global__ void RadPointModifierParallel_Kernel(srTSRWRadStructAccessData RadAccessData, void* pBufVars, T* tgt_obj)
 {
 	int ix = (blockIdx.x * blockDim.x + threadIdx.x); //nx range

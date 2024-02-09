@@ -148,7 +148,7 @@ public:
 	int RadPointModifierParallel(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars=0, long pBufVarsSz=0, double* pGPU=0) override; //HG07022024
 #endif
 
-#ifdef __CUDACC__
+#ifdef __CUDACC__ // Automatically defined by nvcc when compiling CUDA code.
 	GPU_PORTABLE void RadPointModifierPortable(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBufVars) //HG06022024
 #else
 	void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf = 0) //OC29082019
