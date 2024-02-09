@@ -243,8 +243,10 @@ public:
 	int FindAverageDistanceToSource(srTTrjDat& TrjDat, double& Robs, double& RobsAbsErr, double& xElAtYsrc, double& zElAtYsrc, double* precPar);
 	void AddStokesAtPoint(srTEXZ& EXZ, float* pStokesVal);
 	
-	void CheckAndSubtractPhaseTermsLin(double newXc, double newZc);
-	void CheckAndResetPhaseTermsLin();
+	//void CheckAndSubtractPhaseTermsLin(double newXc, double newZc);
+	void CheckAndSubtractPhaseTermsLin(double newXc, double newZc, void* pvGPU=0); //HG12012024
+	//void CheckAndResetPhaseTermsLin();
+	void CheckAndResetPhaseTermsLin(void* pvGPU=0); //HG12012024
 	void EstimateOversamplingFactors(double& estimOverSampX, double& estimOverSampZ);
 
 	void MirrorFieldData(int sx, int sz, void* pvGPU=0); //OC28072023

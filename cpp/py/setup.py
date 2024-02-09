@@ -21,7 +21,10 @@ ext_kwargs = {'define_macros': [('MAJOR_VERSION', '1'), ('MINOR_VERSION', '0')],
 if 'MODE' in os.environ: 
     sMode = str(os.environ['MODE'])
     if sMode == 'cuda': # HG30112023
-        ext_kwargs.update({'libraries': ['srw', 'm', 'cudart_static', 'cudadevrt', 'cufft', 'fftw3f', 'fftw3', 'rt'],  'extra_compile_args': ['-O3', '-mavx2', '-fno-math-errno']})
+        ext_kwargs.update({'libraries': ['srw', 'm', 'cudart_static', 'cudadevrt', 'cufft', 'fftw3f', 'fftw3', 'rt'],  'extra_compile_args': ['-O3', '-mavx2', '-fno-math-errno', '-D_OFFLOAD_GPU']})
+        ext_kwargs['define_macros'].clear() #HG13012024
+        ext_kwargs['include_dirs'].append('{0}/include'.format(os.environ['CUDA_PATH'])) #HG13012024
+        ext_kwargs['include_dirs'].append('{0}/include'.format(os.environ['CUDA_MATHLIBS_PATH'])) #HG13012024
         ext_kwargs['library_dirs'].append('{0}/lib64'.format(os.environ['CUDA_PATH']))
         ext_kwargs['library_dirs'].append('{0}/lib64'.format(os.environ['CUDA_MATHLIBS_PATH']))
     elif sMode == 'omp': 
