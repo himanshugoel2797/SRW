@@ -3322,17 +3322,17 @@ void ParseSructSmpObj3D(double**& arObjShapeDefs, int& nObj3D, PyObject* oListSh
 /************************************************************************//**
  * Convert Python device specification to C structure.
  ***************************************************************************/
-void ParseDeviceParam(PyObject* oDev, double** parGPUParam) //HG10202021 Convert Python device specification to C++ structure
+void ParseDeviceParam(PyObject* oDev, double* &parGPUParam) //HG10202021 Convert Python device specification to C++ structure
 {
 	if (oDev != 0) {
 		if (PyLong_Check(oDev)) {
-			*parGPUParam = new double[2]; //HG08022024
-			*parGPUParam[0] = 1;
-			*parGPUParam[1] = (double)_PyLong_AsInt(oDev);
+			parGPUParam = new double[2]; //HG08022024
+			parGPUParam[0] = 1;
+			parGPUParam[1] = (double)_PyLong_AsInt(oDev);
 			return;
 		}
 	}
-	*parGPUParam = nullptr; //HG08022024
+	parGPUParam = nullptr; //HG08022024
 }
 
 /************************************************************************//**
@@ -4641,9 +4641,6 @@ static PyObject* srwlpy_CalcIntFromElecField(PyObject *self, PyObject *args)
 	SRWLPrtTrj *pPrtTrj=0;
 	double* arGPUParam=0;
 
-#ifdef _OFFLOAD_GPU //HG30112023
-	srwlUtiGPUProc(1); //to prepare GPU for calculations
-#endif
 	try
 	{
 		//if(!PyArg_ParseTuple(args, "OOOOOOOO:CalcIntFromElecField", &oInt, &oWfr, &oPol, &oIntType, &oDepType, &oE, &oX, &oY)) throw strEr_BadArg_CalcIntFromElecField;
@@ -4715,7 +4712,7 @@ static PyObject* srwlpy_CalcIntFromElecField(PyObject *self, PyObject *args)
 		//ProcRes(srwlCalcIntFromElecField(arInt, &wfr, pol, intType, depType, e, x, y, pMeth)); //OC13122019
 
 //#ifdef _OFFLOAD_GPU //HG30112023
-		ParseDeviceParam(oDev, &arGPUParam);
+		ParseDeviceParam(oDev, arGPUParam);
 		ProcRes(srwlCalcIntFromElecField(arInt, &wfr, pol, intType, depType, e, x, y, pMeth, pFldTrj, (void*)arGPUParam));
 //#else
 //		ProcRes(srwlCalcIntFromElecField(arInt, &wfr, pol, intType, depType, e, x, y, pMeth, pFldTrj)); //OC23022020
@@ -5014,7 +5011,7 @@ static PyObject* srwlpy_PropagElecField(PyObject *self, PyObject *args)
 		//ProcRes(srwlPropagElecField(&wfr, &optCnt));
 //#ifdef _OFFLOAD_GPU //HG03012024
 		//ParseDeviceParam(oDev, &gpu);
-		ParseDeviceParam(oDev, &arGPUParam); //HG07022024
+		ParseDeviceParam(oDev, arGPUParam); //HG07022024
 		ProcRes(srwlPropagElecField(&wfr, &optCnt, nInt, arIntDescr, arIntMesh, arInts, (void*)arGPUParam));
 //#else
 //		ProcRes(srwlPropagElecField(&wfr, &optCnt, nInt, arIntDescr, arIntMesh, arInts)); //OC15082018
@@ -5184,7 +5181,7 @@ static PyObject* srwlpy_UtiFFT(PyObject *self, PyObject *args)
 
 //#ifdef _OFFLOAD_GPU //HG03012024
 		//ParseDeviceParam(oDev, &gpu);
-		ParseDeviceParam(oDev, &arGPUParam);
+		ParseDeviceParam(oDev, arGPUParam);
 		ProcRes(srwlUtiFFT(pcData, typeData, arMesh, nMesh, dir, (void*)arGPUParam));
 //#else
 //		ProcRes(srwlUtiFFT(pcData, typeData, arMesh, nMesh, dir));
