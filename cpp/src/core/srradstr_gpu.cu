@@ -60,7 +60,8 @@ __global__ void MultiplyElFieldByPhaseLin_Kernel(double xMult, double zMult, flo
     }
 }
 
-void srTSRWRadStructAccessData::MultiplyElFieldByPhaseLin_GPU(double xMult, double zMult, TGPUUsageArg* pGPU) //OC03082023
+void srTSRWRadStructAccessData::MultiplyElFieldByPhaseLin_GPU(double xMult, double zMult, double* pGPU) //HG07022024
+//void srTSRWRadStructAccessData::MultiplyElFieldByPhaseLin_GPU(double xMult, double zMult, TGPUUsageArg* pGPU) //OC03082023
 //void srTSRWRadStructAccessData::MultiplyElFieldByPhaseLin_GPU(double xMult, double zMult, void* pGpuUsage)
 {
 	//TGPUUsageArg *pGpuUsage_ = (TGPUUsageArg*)pGpuUsage; //OC03082023 (commented-out)
@@ -272,7 +273,8 @@ template<int mode> __global__ void MirrorFieldData_Kernel(long nx, long nz, long
 	}
 }
 
-void srTSRWRadStructAccessData::MirrorFieldData_GPU(int sx, int sz, TGPUUsageArg* pGPU) //OC03082023
+void srTSRWRadStructAccessData::MirrorFieldData_GPU(int sx, int sz, double* pGPU) //HG07022024
+//void srTSRWRadStructAccessData::MirrorFieldData_GPU(int sx, int sz, TGPUUsageArg* pGPU) //OC03082023
 //void srTSRWRadStructAccessData::MirrorFieldData_GPU(int sx, int sz, void* pGpuUsage)
 {
 	//TGPUUsageArg *pGpuUsage_ = (TGPUUsageArg*)pGpuUsage; //OC03082023 (commented-out)

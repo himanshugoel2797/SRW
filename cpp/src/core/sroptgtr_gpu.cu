@@ -21,7 +21,8 @@
 #include <iostream>
 #include <chrono>
 
-int srTGenTransmission::RadPointModifierParallel(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars, long pBufVarsSz, TGPUUsageArg* pGPU)
+//int srTGenTransmission::RadPointModifierParallel(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars, long pBufVarsSz, TGPUUsageArg* pGPU)
+int srTGenTransmission::RadPointModifierParallel(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars, long pBufVarsSz, double* pGPU) //HG07022024
 {
     GenTransNumData.pData = (char*)CAuxGPU::ToDevice(pGPU, GenTransNumData.pData, GenTransNumData.DimSizes[0] * (int)GenTransNumData.DimSizes[1] * (int)GenTransNumData.DimSizes[2] * sizeof(double) * 2);
 	CAuxGPU::EnsureDeviceMemoryReady(pGPU, GenTransNumData.pData);

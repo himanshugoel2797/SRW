@@ -2713,9 +2713,11 @@ void srTSRWRadStructAccessData::MirrorFieldData(int sx, int sz, void* pvGPU) //H
 	float *pEZ0 = pBaseRadZ;
 
 #ifdef _OFFLOAD_GPU //HG02122023
-	if (CAuxGPU::GPUEnabled((TGPUUsageArg*)pvGPU))
+	//if (CAuxGPU::GPUEnabled((TGPUUsageArg*)pvGPU))
+	if (CAuxGPU::GPUEnabled((double*)pvGPU)) //HG07022024
 	{
-		MirrorFieldData_GPU(sx, sz, (TGPUUsageArg*)pvGPU);
+		//MirrorFieldData_GPU(sx, sz, (TGPUUsageArg*)pvGPU);
+		MirrorFieldData_GPU(sx, sz, (double*)pvGPU); //HG07022024
 		return;
 	}
 #endif

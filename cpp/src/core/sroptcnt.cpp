@@ -317,7 +317,8 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 				if(res = RadResizeGen(wfr, curPropResizeInst, pvGPU)) return res; //HG30112023
 
 #ifdef _OFFLOAD_GPU //HG30112023
-				if (CAuxGPU::GPUEnabled((TGPUUsageArg*)pvGPU)) {
+				//if (CAuxGPU::GPUEnabled((TGPUUsageArg*)pvGPU)) {
+				if (CAuxGPU::GPUEnabled((double*)pvGPU)) { //HG07022024
 					dataOnDevice = true;
 				}
 #endif	
@@ -339,7 +340,8 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 		//srwlPrintTime("Iteration: precParWfrPropag",&start);
 
 #ifdef _OFFLOAD_GPU //HG30112023
-		TGPUUsageArg* pGPU = (TGPUUsageArg*)pvGPU;
+		//TGPUUsageArg* pGPU = (TGPUUsageArg*)pvGPU;
+		double* pGPU = (double*)pvGPU; //HG07022024
 		if (CAuxGPU::GPUEnabled(pGPU)) {
 			//if (dataOnDevice && (((srTGenOptElem*)it->rep)->SupportedFeatures() & 1) == 0)
 			if (dataOnDevice && (((srTGenOptElem*)it->rep)->GPUImplFeatures() & 1) == 0) //HG07022024
@@ -375,7 +377,8 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 		if(propIntIsNeeded)
 		{
 #ifdef _OFFLOAD_GPU //HG09112022 If the data is on the GPU, transfer it to CPU and synchronize before extracting the intensity
-			TGPUUsageArg* pGPU = (TGPUUsageArg*)pvGPU;
+			//TGPUUsageArg* pGPU = (TGPUUsageArg*)pvGPU;
+			double* pGPU = (double*)pvGPU; //HG07022024
 			if (CAuxGPU::GPUEnabled(pGPU)) {
 				if (dataOnDevice)
 				{

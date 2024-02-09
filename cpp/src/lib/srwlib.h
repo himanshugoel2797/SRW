@@ -729,7 +729,7 @@ EXP int CALL srwlCalcPowDenSR(SRWLStokes* pStokes, SRWLPartBeam* pElBeam, SRWLPr
  *			   arMeth[18]: used for mutual intensity calculaiton / update: index of first general conjugated position to start updating the mutual intensity
  * 			   arMeth[19]: used for mutual intensity calculaiton / update: index of last general conjugated position to finish updating the mutual intensity
  * @param [in] pFldTrj auxiliary pointer to magnetic field or trajectory of central electron
- * @param [in] pvGPU optional GPU utilization related parameters (TGPUUsageArg*)
+ * @param [in] pvGPU optional GPU utilization related parameters (double*)
  * @return	integer error (>0) or warnig (<0) code
  * @see ...
  */
@@ -801,7 +801,7 @@ EXP int CALL srwlSetRepresElecField(SRWLWfr* pWfr, char repr);
  * "Propagates" Electric Field Wavefront through Optical Elements and free spaces
  * @param [in, out] pWfr pointer to pre-calculated Wavefront structure
  * @param [in] pOpt pointer to container of optical elements the propagation should be done through
- * @param [in] pvGPU optional GPU utilization related parameters (TGPUUsageArg*)
+ * @param [in] pvGPU optional GPU utilization related parameters (double*)
  * @return	integer error (>0) or warnig (<0) code
  * @see ...
  */
@@ -850,7 +850,7 @@ EXP int CALL srwlCalcTransm(SRWLOptT* pOpTr, const double* pDelta, const double*
  *             arMesh[5]: (optional) number of points of the second argument
  * @param [in] nMesh length of arMesh array (3 or 6 elements)
  * @param [in] dir direction for the FFT (>0 means forward, <0 means backward)
- * @param [in] pvGPU optional GPU utilization related parameters (TGPUUsageArg*)
+ * @param [in] pvGPU optional GPU utilization related parameters (double*)
  * @return	integer error (>0) or warnig (<0) code
  * @see ...
  */
@@ -976,7 +976,7 @@ EXP int CALL srwlUtiUndFindMagFldInterpInds(int* arResInds, int* pnResInds, doub
  * @param [in] op operation to be performed:
  * 			   0= Deinitialize GPU
  * 			   1= Initialize GPU
- * @param [in] pvGPU optional GPU utilization related parameters (TGPUUsageArg*)
+ * @param [in] pvGPU optional GPU utilization related parameters (double*)
  * @return	integer error (>0) or warnig (<0) code
  * @see ...
  */

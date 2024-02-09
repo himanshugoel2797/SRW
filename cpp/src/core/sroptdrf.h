@@ -574,7 +574,8 @@ public:
 	int TuneRadForPropMeth_1(srTSRWRadStructAccessData*, srTRadResize&);
 
 #ifdef _OFFLOAD_GPU //HG01122023
-	int RadPointModifierParallel(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars=0, long pBufVarsSz=0, TGPUUsageArg* pGPU=0) override;
+	//int RadPointModifierParallel(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars=0, long pBufVarsSz=0, TGPUUsageArg* pGPU=0) override;
+	int RadPointModifierParallel(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars = 0, long pBufVarsSz = 0, double* pGPU = 0) override; //HG07022024
 #endif
 #ifdef _CUDACC_ //HG06022024
 	void RadPointModifierPortable(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf = 0)

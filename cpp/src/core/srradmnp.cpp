@@ -761,9 +761,11 @@ int srTRadGenManip::ExtractSingleElecIntensity2DvsXZ(srTRadExtract& RadExtract, 
 	long ix, ie;
 
 #ifdef _OFFLOAD_GPU	//HG30112023 //HG02122023
-	if(CAuxGPU::GPUEnabled((TGPUUsageArg*)pvGPU))
+	//if(CAuxGPU::GPUEnabled((TGPUUsageArg*)pvGPU))
+	if (CAuxGPU::GPUEnabled((double*)pvGPU)) //HG07022024
 	{
-		ExtractSingleElecIntensity2DvsXZ_GPU(RadExtract, arAuxInt, ie0, ie1, InvStepRelArg, (TGPUUsageArg*)pvGPU);
+		//ExtractSingleElecIntensity2DvsXZ_GPU(RadExtract, arAuxInt, ie0, ie1, InvStepRelArg, (TGPUUsageArg*)pvGPU);
+		ExtractSingleElecIntensity2DvsXZ_GPU(RadExtract, arAuxInt, ie0, ie1, InvStepRelArg, (double*)pvGPU); //HG07022024
 	}
 	else
 #endif
@@ -2121,9 +2123,11 @@ int srTRadGenManip::ExtractSingleElecMutualIntensityVsXZ(srTRadExtract& RadExtra
 	if(DontNeedInterp)
 	{
 #ifdef _OFFLOAD_GPU //HG30112023
-		if (CAuxGPU::GPUEnabled((TGPUUsageArg*)pvGPU))
+		//if (CAuxGPU::GPUEnabled((TGPUUsageArg*)pvGPU))
+		if (CAuxGPU::GPUEnabled((double*)pvGPU)) //HG07022024
 		{
-			ExtractSingleElecMutualIntensityVsXZ_GPU(pEx, pEz, pMI0, nx, nz, ne, itStart, itEnd, PerX, iter, PolCom, EhOK, EvOK, (TGPUUsageArg*)pvGPU);
+			//ExtractSingleElecMutualIntensityVsXZ_GPU(pEx, pEz, pMI0, nx, nz, ne, itStart, itEnd, PerX, iter, PolCom, EhOK, EvOK, (TGPUUsageArg*)pvGPU);
+			ExtractSingleElecMutualIntensityVsXZ_GPU(pEx, pEz, pMI0, nx, nz, ne, itStart, itEnd, PerX, iter, PolCom, EhOK, EvOK, (double*)pvGPU); //HG07022024
 		}
 		else
 #endif

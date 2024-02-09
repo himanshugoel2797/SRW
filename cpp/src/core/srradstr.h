@@ -251,9 +251,11 @@ public:
 	//void MirrorFieldData(int sx, int sz);
 
 #ifdef _OFFLOAD_GPU
-	void MirrorFieldData_GPU(int sx, int sz, TGPUUsageArg* pGPU); //OC03082023
+	void MirrorFieldData_GPU(int sx, int sz, double* pGPU); //HG07022024
+	//void MirrorFieldData_GPU(int sx, int sz, TGPUUsageArg* pGPU); //OC03082023
 	//void MirrorFieldData_GPU(int sx, int sz, void* pGpuUsage); //HG28072023
-	void MultiplyElFieldByPhaseLin_GPU(double xMult, double zMult, TGPUUsageArg* pGPU); //OC03082023
+	void MultiplyElFieldByPhaseLin_GPU(double xMult, double zMult, double* pGPU); //HG07022024
+	//void MultiplyElFieldByPhaseLin_GPU(double xMult, double zMult, TGPUUsageArg* pGPU); //OC03082023
 	//void MultiplyElFieldByPhaseLin_GPU(double xMult, double zMult, void* pGpuUsage); //HG28072023
 #endif
 
@@ -522,7 +524,8 @@ public:
 
 		//if(pvGPU != 0) //HG02122023 Null check is already done by CAuxGPU::GPUEnabled
 		//{
-			TGPUUsageArg *pGPU = (TGPUUsageArg*)pvGPU;
+			//TGPUUsageArg *pGPU = (TGPUUsageArg*)pvGPU;
+			double* pGPU = (double*)pvGPU; //HG07022024
 			if(CAuxGPU::GPUEnabled(pGPU))
 			{
 				MultiplyElFieldByPhaseLin_GPU(xMult, zMult, pGPU);

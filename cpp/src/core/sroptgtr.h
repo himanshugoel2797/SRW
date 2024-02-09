@@ -142,7 +142,8 @@ public:
 	}
 	
 #ifdef _OFFLOAD_GPU //HG01122023 Brought from sroptgtr.cpp, to reduce code duplication for GPU port
-	int RadPointModifierParallel(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars=0, long pBufVarsSz=0, TGPUUsageArg* pGPU=0) override;
+	//int RadPointModifierParallel(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars=0, long pBufVarsSz=0, TGPUUsageArg* pGPU=0) override;
+	int RadPointModifierParallel(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars=0, long pBufVarsSz=0, double* pGPU=0) override; //HG07022024
 #endif
 
 #ifdef __CUDACC__

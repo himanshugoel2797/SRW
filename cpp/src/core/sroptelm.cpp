@@ -162,9 +162,11 @@ int srTGenOptElem::TraverseRadZXE(srTSRWRadStructAccessData* pRadAccessData, voi
 	long long PerZ = PerX*pRadAccessData->nx;
 
 #ifdef _OFFLOAD_GPU //HG01122023
-	if (CAuxGPU::GPUEnabled((TGPUUsageArg*)pvGPU))
+	//if (CAuxGPU::GPUEnabled((TGPUUsageArg*)pvGPU))
+	if (CAuxGPU::GPUEnabled((double*)pvGPU)) //HG07022024
 	{
-		if (RadPointModifierParallel(pRadAccessData, pBufVars, pBufVarsSz, (TGPUUsageArg*)pvGPU) == -1) //Try to call the GPU version, if it fails, call the CPU version
+		//if (RadPointModifierParallel(pRadAccessData, pBufVars, pBufVarsSz, (TGPUUsageArg*)pvGPU) == -1) //Try to call the GPU version, if it fails, call the CPU version
+		if (RadPointModifierParallel(pRadAccessData, pBufVars, pBufVarsSz, (double*)pvGPU) == -1) //Try to call the GPU version, if it fails, call the CPU version //HG07022024
 			return TraverseRadZXE(pRadAccessData, pBufVars, pBufVarsSz, NULL);
 		return 0;
 	}
@@ -1039,9 +1041,11 @@ void srTGenOptElem::MakeWfrEdgeCorrection(srTSRWRadStructAccessData* pRadAccessD
 {
 	//HG23082022 Use GPU if requested
 #ifdef _OFFLOAD_GPU
-	if(CAuxGPU::GPUEnabled((TGPUUsageArg*)pvGPU))
+	//if(CAuxGPU::GPUEnabled((TGPUUsageArg*)pvGPU))
+	if (CAuxGPU::GPUEnabled((double*)pvGPU)) //HG07022024
 	{
-		MakeWfrEdgeCorrection_GPU(pRadAccessData, pDataEx, pDataEz, DataPtrs, (TGPUUsageArg*)pvGPU);
+		//MakeWfrEdgeCorrection_GPU(pRadAccessData, pDataEx, pDataEz, DataPtrs, (TGPUUsageArg*)pvGPU);
+		MakeWfrEdgeCorrection_GPU(pRadAccessData, pDataEx, pDataEz, DataPtrs, (double*)pvGPU); //HG07022024
 		return;
 	}
 #endif
@@ -2957,9 +2961,11 @@ int srTGenOptElem::RadResizeCore(srTSRWRadStructAccessData& OldRadAccessData, sr
 	int result = 0;
 
 #ifdef _OFFLOAD_GPU //HG01122023
-	if (CAuxGPU::GPUEnabled((TGPUUsageArg*)pvGPU))
+	//if (CAuxGPU::GPUEnabled((TGPUUsageArg*)pvGPU))
+	if (CAuxGPU::GPUEnabled((double*)pvGPU)) //HG07022024
 	{
-		RadResizeCore_GPU(OldRadAccessData, NewRadAccessData, PolComp, (TGPUUsageArg*)pvGPU);
+		//RadResizeCore_GPU(OldRadAccessData, NewRadAccessData, PolComp, (TGPUUsageArg*)pvGPU);
+		RadResizeCore_GPU(OldRadAccessData, NewRadAccessData, PolComp, (double*)pvGPU); //HG07022024
 	}
 	else 
 #endif
@@ -4695,9 +4701,11 @@ void srTGenOptElem::TreatStronglyOscillatingTerm(srTSRWRadStructAccessData& RadA
 	}
 
 #ifdef _OFFLOAD_GPU //HG01122023
-	if (CAuxGPU::GPUEnabled((TGPUUsageArg*)pvGPU))
+	//if (CAuxGPU::GPUEnabled((TGPUUsageArg*)pvGPU))
+	if (CAuxGPU::GPUEnabled((double*)pvGPU)) //HG07022024
 	{
-		TreatStronglyOscillatingTerm_GPU(RadAccessData, TreatPolCompX, TreatPolCompZ, ConstRx, ConstRz, ieStart, ieBefEnd, (TGPUUsageArg*)pvGPU);
+		//TreatStronglyOscillatingTerm_GPU(RadAccessData, TreatPolCompX, TreatPolCompZ, ConstRx, ConstRz, ieStart, ieBefEnd, (TGPUUsageArg*)pvGPU);
+		TreatStronglyOscillatingTerm_GPU(RadAccessData, TreatPolCompX, TreatPolCompZ, ConstRx, ConstRz, ieStart, ieBefEnd, (double*)pvGPU); //HG07022024
 		return;
 	}
 #endif
