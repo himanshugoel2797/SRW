@@ -50,7 +50,8 @@ public:
 		}
 	}
 
-	int SupportedFeatures() override { return 1; } //HG01122023 =1 means that it supports GPU propagation
+	//int SupportedFeatures() override { return 1; } //HG01122023 =1 means that it supports GPU propagation
+	int GPUImplFeatures() override { return 1; } //HG01122023 =1 means that it supports GPU propagation //HG05022024
 
 	void EnsureTransmissionForField();
 	double DetermineAppropriatePhotEnergyForFocDistTest(double Rx, double Rz);
@@ -139,21 +140,18 @@ public:
 		if(pSect1D->Pres != 0) if(result = SetRadRepres1D(pSect1D, 0)) return result;
 		return TraverseRad1D(pSect1D);
 	}
-
-	void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf=0) //OC29082019 //HG01122023
-	{
-		RadPointModifierPortable(EXZ, EPtrs, pBuf);
-	}
-	//void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf=0); //OC29082019
-	//void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs);
-
 	
 #ifdef _OFFLOAD_GPU //HG01122023 Brought from sroptgtr.cpp, to reduce code duplication for GPU port
 	int RadPointModifierParallel(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars=0, long pBufVarsSz=0, TGPUUsageArg* pGPU=0) override;
-
-	GPU_PORTABLE
 #endif
-	void RadPointModifierPortable(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBufVars) //OC29082019
+
+#ifdef __CUDACC__
+	void RadPointModifierPortable(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBufVars) //HG06022024
+#else
+	void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf = 0) //OC29082019
+	//void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf=0); //OC29082019
+	//void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs);
+#endif
 	//void srTGenTransmission::RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs)
 	{// e in eV; Length in m !!!
 	// Operates on Coord. side !!!

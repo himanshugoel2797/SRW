@@ -125,7 +125,8 @@ public:
 #endif
 	}
 
-	virtual int SupportedFeatures() { return 0; } //HG01122023 0=CPU only, 1=GPU supported
+	//virtual int SupportedFeatures() { return 0; } //HG01122023 0=CPU only, 1=GPU supported
+	virtual int GPUImplFeatures() { return 0; } //HG01122023 0=CPU only, 1=GPU supported //HG05022024
 
 	//virtual int PropagateRadiation(srTSRWRadStructAccessData*, srTParPrecWfrPropag&, srTRadResizeVect&) { return 0;}
 	virtual int PropagateRadiation(srTSRWRadStructAccessData*, srTParPrecWfrPropag&, srTRadResizeVect&, void* pvGPU=0) { return 0;} //HG01122023

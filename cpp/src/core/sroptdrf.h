@@ -90,7 +90,8 @@ public:
 	double Length;
 	//OC06092019 (commented-out)
 	//srTDriftPropBufVars PropBufVars;
-	int SupportedFeatures() override { return 1; }	//HG01122023 Returns 1 if the element supports GPU propagation
+	//int SupportedFeatures() override { return 1; }	//HG01122023 Returns 1 if the element supports GPU propagation
+	int GPUImplFeatures() override { return 1; }	//HG01122023 Returns 1 if the element supports GPU propagation //HG05022024
 
 	srTDriftSpace(double InLength =0., char InTreatPath =0) 
 	{ 
@@ -572,18 +573,15 @@ public:
 	}
 	int TuneRadForPropMeth_1(srTSRWRadStructAccessData*, srTRadResize&);
 
-	void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf=0) //OC29082019
-	//void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs)
-	{
-		RadPointModifierPortable(EXZ, EPtrs, pBuf); //HG01122023
-	}
-
 #ifdef _OFFLOAD_GPU //HG01122023
 	int RadPointModifierParallel(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars=0, long pBufVarsSz=0, TGPUUsageArg* pGPU=0) override;
-	
-	GPU_PORTABLE
 #endif
-	void RadPointModifierPortable(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf=0) //HG01122023
+#ifdef _CUDACC_ //HG06022024
+	void RadPointModifierPortable(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf = 0)
+#else
+	void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf = 0) //OC29082019
+#endif
+	//void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs)
 	{
 		srTDriftPropBufVars* pBufVars = (srTDriftPropBufVars*)pBuf;
 		//char LocalPropMode = pBufVars->LocalPropMode;
