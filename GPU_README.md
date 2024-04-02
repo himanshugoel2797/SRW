@@ -61,11 +61,8 @@ conda activate py39_gcc11
 
 git clone https://github.com/himanshugoel2797/SRW.git
 cd SRW
-git checkout reorg_gpu #Switch to GPU supporting branch
 
 #Environment variables I added for configuring hpc sdk location
-export CUDA_PATH=/opt/nvidia/hpc_sdk/Linux_x86_64/22.5/cuda 
-export CUDA_MATHLIBS_PATH=/opt/nvidia/hpc_sdk/Linux_x86_64/22.5/math_libs 
 MODE=cuda make fftw
 MODE=cuda make
 
