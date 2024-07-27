@@ -61,7 +61,7 @@ def uti_plot_init(backend=DEFAULT_BACKEND, fname_format=None):
             try: #HG26072024
                 from . import uti_plot_matplotlib
             except:
-                import uti_plot_matploblib
+                import uti_plot_matplotlib
             _backend = uti_plot_matplotlib.Backend(backend, fname_format)
             return
         except:
