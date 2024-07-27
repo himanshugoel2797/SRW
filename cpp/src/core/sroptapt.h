@@ -31,6 +31,7 @@ class srTAperture : public srTShapedOptElem {
 
 public:
 	srTAperture () {}
+	int GPUImplFeatures() override { return 1; } //HG26072024 Mark propagator as GPU supporting
 
 	//int PropagateRadiation(srTSRWRadStructAccessData* pRadAccessData, int MethNo, srTRadResizeVect& ResBeforeAndAfterVect)
 	//int PropagateRadiation(srTSRWRadStructAccessData* pRadAccessData, srTParPrecWfrPropag& ParPrecWfrPropag, srTRadResizeVect& ResBeforeAndAfterVect)
@@ -146,8 +147,16 @@ public:
 	}
 
 	srTRectAperture() {}
+	int GPUImplFeatures() override { return 1; } //HG26072024 Mark propagator as GPU supporting
 
-	void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBufVars=0) //OC29082019
+#ifdef _OFFLOAD_GPU //HG26072024
+	int RadPointModifierParallel(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars = 0, long pBufVarsSz = 0, TGPUUsageArg* pGPU = 0) override;
+#endif
+#ifdef __CUDACC__
+	GPU_PORTABLE void RadPointModifierPortable(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf = 0)
+#else
+	void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf = 0)
+#endif
 	//void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs)
 	{
 		const double SmallOffset = 1.E-10;
@@ -240,8 +249,16 @@ public:
 		//WfrTransmLimits.Setup(TransvCenPoint.x - 0.5*Dx, Dx, TransvCenPoint.y - 0.5*Dz, Dz);
 	}
 	srTRectObstacle() {}
+	int GPUImplFeatures() override { return 1; } //HG26072024 Mark propagator as GPU supporting
 
-	void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBufVars=0) //OC29082019
+#ifdef _OFFLOAD_GPU //HG26072024
+	int RadPointModifierParallel(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars = 0, long pBufVarsSz = 0, TGPUUsageArg* pGPU = 0) override;
+#endif
+#ifdef __CUDACC__
+	GPU_PORTABLE void RadPointModifierPortable(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf = 0)
+#else
+	void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf = 0) //OC29082019
+#endif
 	//void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs)
 	{
 		const double SmallOffset = 1.E-10;
@@ -326,8 +343,16 @@ public:
 	}
 
 	srTCircAperture() {}
+	int GPUImplFeatures() override { return 1; } //HG26072024 Mark propagator as GPU supporting
 
-	void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBufVars=0) //OC29082019
+#ifdef _OFFLOAD_GPU //HG26072024
+	int RadPointModifierParallel(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars = 0, long pBufVarsSz = 0, TGPUUsageArg* pGPU = 0) override;
+#endif
+#ifdef __CUDACC__
+	GPU_PORTABLE void RadPointModifierPortable(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf = 0)
+#else
+	void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf = 0) //OC29082019
+#endif
 	//void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs)
 	{
 		double xRel = EXZ.x - TransvCenPoint.x, zRel = EXZ.z - TransvCenPoint.y;
@@ -421,8 +446,16 @@ public:
 	}
 
 	srTCircObstacle() {}
+	int GPUImplFeatures() override { return 1; } //HG26072024 Mark propagator as GPU supporting
 
-	void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBufVars=0) //OC29082019
+#ifdef _OFFLOAD_GPU //HG26072024
+	int RadPointModifierParallel(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars = 0, long pBufVarsSz = 0, TGPUUsageArg* pGPU = 0) override;
+#endif
+#ifdef __CUDACC__
+	GPU_PORTABLE void RadPointModifierPortable(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf = 0)
+#else
+	void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf = 0) //OC29082019
+#endif
 	//void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs)
 	{
 		double xRel = EXZ.x - TransvCenPoint.x, zRel = EXZ.z - TransvCenPoint.y;
