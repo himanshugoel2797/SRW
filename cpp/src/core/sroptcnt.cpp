@@ -323,7 +323,7 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 				if(CAuxGPU::GPUEnabled(pGPU)) { //OC18022024
 					dataOnDevice = true; //HG26022024 Add explanation: If GPU is enabled, the resized wavefront is already on the GPU, so mark it appropriately so that the data can be relocated if necessary for the first optical element
 				}
-#endif	
+#endif
 			}
 
 			//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
@@ -369,7 +369,8 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 
 		srTRadResizeVect auxResizeVect;
 		//if(res = ((srTGenOptElem*)(it->rep))->PropagateRadiation(&wfr, precParWfrPropag, auxResizeVect)) return res;
-		if(res = ((srTGenOptElem*)(it->rep))->PropagateRadiation(&wfr, precParWfrPropag, auxResizeVect, pvGPU)) return res; //HG30112023
+		//if(res = ((srTGenOptElem*)(it->rep))->PropagateRadiation(&wfr, precParWfrPropag, auxResizeVect, pvGPU)) return res; //HG30112023
+		if(res = ((srTGenOptElem*)(it->rep))->PropagateRadiation(&wfr, precParWfrPropag, auxResizeVect, (((srTGenOptElem*)it->rep)->GPUImplFeatures() & 1) == 0 ? 0 : pvGPU )) return res; //HG26072024 Don't pass pvGPU to propagators that don't support it
 		//maybe to use "PropagateRadiationGuided" for srTCompositeOptElem?
 
 		//OC_DEBUG
@@ -415,12 +416,44 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 		//srwlPrintTime("PropagateRadiationGuided: GenOptElemPropResizeVect",&start);
 
 		if((::fabs(postResize.pxd - 1.) > tolRes) || (::fabs(postResize.pxm - 1.) > tolRes) ||
-		   (::fabs(postResize.pzd - 1.) > tolRes) || (::fabs(postResize.pzm - 1.) > tolRes))
-			if(res = RadResizeGen(wfr, postResize)) return res;
+			(::fabs(postResize.pzd - 1.) > tolRes) || (::fabs(postResize.pzm - 1.) > tolRes))
+		{
+			//if(res = RadResizeGen(wfr, postResize)) return res;
+			if(res = RadResizeGen(wfr, postResize, pvGPU)) return res; //HG26072024 make this resize able to use GPU
+#ifdef _OFFLOAD_GPU
+			if(CAuxGPU::GPUEnabled(pGPU)) dataOnDevice = true;
+#endif
+		}
+
+#ifdef _OFFLOAD_GPU //HG26072024 Make sure the data is return to CPU
+		if (CAuxGPU::GPUEnabled(pGPU)) {
+			if (dataOnDevice)
+			{
+				if (wfr.pBaseRadX != NULL)
+					wfr.pBaseRadX = (float*)CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadX, 2 * wfr.ne * wfr.nx * wfr.nz * sizeof(float));
+				if (wfr.pBaseRadZ != NULL)
+					wfr.pBaseRadZ = (float*)CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadZ, 2 * wfr.ne * wfr.nx * wfr.nz * sizeof(float));
+				dataOnDevice = false;
+			}
+		}
+#endif
 
 		if(propIntIsNeeded) ExtractPropagatedIntensity(wfr, nInt, arID, arIM, arI, elemCount); //OC29082018
 		//if(propIntIsNeeded) ExtractPropagatedIntensity(wfr, nInt, arID, arIM, arI, elemCount, nInt - 1);
 	}
+
+#ifdef _OFFLOAD_GPU //HG26072024 Make sure the data is return to CPU
+	if (CAuxGPU::GPUEnabled(pGPU)) {
+		if (dataOnDevice)
+		{
+			if (wfr.pBaseRadX != NULL)
+				wfr.pBaseRadX = (float*)CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadX, 2 * wfr.ne * wfr.nx * wfr.nz * sizeof(float));
+			if (wfr.pBaseRadZ != NULL)
+				wfr.pBaseRadZ = (float*)CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadZ, 2 * wfr.ne * wfr.nx * wfr.nz * sizeof(float));
+			dataOnDevice = false;
+		}
+	}
+#endif
 	return 0;
 }
 

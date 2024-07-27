@@ -25,7 +25,7 @@ template<class T> __global__ void RadPointModifierParallel_Kernel(srTSRWRadStruc
 {
 	int ix = (blockIdx.x * blockDim.x + threadIdx.x); //nx range
 	int iz = (blockIdx.y * blockDim.y + threadIdx.y); //nz range
-
+	
 	if (ix < RadAccessData.nx && iz < RadAccessData.nz)
 	{
 		srTEFieldPtrs EPtrs;

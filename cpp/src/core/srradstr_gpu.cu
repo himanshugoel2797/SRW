@@ -276,6 +276,9 @@ template<int mode> __global__ void MirrorFieldData_Kernel(long nx, long nz, long
 void srTSRWRadStructAccessData::MirrorFieldData_GPU(int sx, int sz, TGPUUsageArg* pGPU) //OC03082023
 //void srTSRWRadStructAccessData::MirrorFieldData_GPU(int sx, int sz, void* pGpuUsage)
 {
+	if ((sx > 0) && (sz > 0)) //HG26072024 Bug fix, don't touch the memory if no operation is being done
+		return;
+
 	//TGPUUsageArg *pGpuUsage_ = (TGPUUsageArg*)pGpuUsage; //OC03082023 (commented-out)
 	float *pEX0 = pBaseRadX;
 	float *pEZ0 = pBaseRadZ;
@@ -299,9 +302,10 @@ void srTSRWRadStructAccessData::MirrorFieldData_GPU(int sx, int sz, TGPUUsageArg
 	dim3 blocks(nx / bs + ((nx & (bs - 1)) != 0), nz);
 	dim3 threads(bs, 1);
 
-	if ((sx > 0) && (sz > 0))
-		return;
-	else if ((sx < 0) && (sz > 0))
+	//if ((sx > 0) && (sz > 0))
+	//	return;
+	//else if ((sx < 0) && (sz > 0))
+	if ((sx < 0) && (sz > 0)) //HG26072024 Bug fix
 		MirrorFieldData_Kernel<0> <<<blocks, threads>>>(nx, nz, ne, pEX0, pEZ0);
 	else if ((sx > 0) && (sz < 0))
 		MirrorFieldData_Kernel<1> <<<blocks, threads >>> (nx, nz, ne, pEX0, pEZ0);

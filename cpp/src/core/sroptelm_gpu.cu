@@ -103,22 +103,22 @@ void srTGenOptElem::TreatStronglyOscillatingTerm_GPU(srTSRWRadStructAccessData& 
 	CAuxGPU::MarkUpdated(pGPU, RadAccessData.pBaseRadX, true, false);
 	CAuxGPU::MarkUpdated(pGPU, RadAccessData.pBaseRadZ, true, false);
 
-#ifndef _DEBUG
+//#ifndef _DEBUG
 	if (RadAccessData.pBaseRadX != NULL)
 		RadAccessData.pBaseRadX = (float*)CAuxGPU::GetHostPtr(pGPU, RadAccessData.pBaseRadX);
 	if (RadAccessData.pBaseRadZ != NULL)
 		RadAccessData.pBaseRadZ = (float*)CAuxGPU::GetHostPtr(pGPU, RadAccessData.pBaseRadZ);
-#endif
+//#endif
 
-#ifdef _DEBUG
-	if (RadAccessData.pBaseRadX != NULL)
-		RadAccessData.pBaseRadX = (float*)CAuxGPU::ToHostAndFree(pGPU, RadAccessData.pBaseRadX, 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz*sizeof(float));
-	if (RadAccessData.pBaseRadZ != NULL)
-		RadAccessData.pBaseRadZ = (float*)CAuxGPU::ToHostAndFree(pGPU, RadAccessData.pBaseRadZ, 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz*sizeof(float));
-	cudaStreamSynchronize(0);
-	auto err = cudaGetLastError();
-	printf("%s\r\n", cudaGetErrorString(err));
-#endif
+//#ifdef _DEBUG
+//	if (RadAccessData.pBaseRadX != NULL)
+//		RadAccessData.pBaseRadX = (float*)CAuxGPU::ToHostAndFree(pGPU, RadAccessData.pBaseRadX, 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz*sizeof(float));
+//	if (RadAccessData.pBaseRadZ != NULL)
+//		RadAccessData.pBaseRadZ = (float*)CAuxGPU::ToHostAndFree(pGPU, RadAccessData.pBaseRadZ, 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz*sizeof(float));
+//	cudaStreamSynchronize(0);
+//	auto err = cudaGetLastError();
+//	printf("%s\r\n", cudaGetErrorString(err));
+//#endif
 }
 
 __global__ void MakeWfrEdgeCorrection_Kernel(srTSRWRadStructAccessData RadAccessData, float* pDataEx, float* pDataEz, srTDataPtrsForWfrEdgeCorr DataPtrs, float dxSt, float dxFi, float dzSt, float dzFi)
@@ -321,13 +321,13 @@ void srTGenOptElem::MakeWfrEdgeCorrection_GPU(srTSRWRadStructAccessData* RadAcce
 	CAuxGPU::MarkUpdated(pGPU, pDataEx, true, false);
 	CAuxGPU::MarkUpdated(pGPU, pDataEz, true, false);
 
-#ifdef _DEBUG
-	CAuxGPU::ToHostAndFree(pGPU, pDataEx, 2*RadAccessData->ne*RadAccessData->nx*RadAccessData->nz*sizeof(float));
-	CAuxGPU::ToHostAndFree(pGPU, pDataEz, 2*RadAccessData->ne*RadAccessData->nx*RadAccessData->nz*sizeof(float));
-	cudaStreamSynchronize(0);
-	auto err = cudaGetLastError();
-	printf("%s\r\n", cudaGetErrorString(err));
-#endif
+//#ifdef _DEBUG
+//	CAuxGPU::ToHostAndFree(pGPU, pDataEx, 2*RadAccessData->ne*RadAccessData->nx*RadAccessData->nz*sizeof(float));
+//	CAuxGPU::ToHostAndFree(pGPU, pDataEz, 2*RadAccessData->ne*RadAccessData->nx*RadAccessData->nz*sizeof(float));
+//	cudaStreamSynchronize(0);
+//	auto err = cudaGetLastError();
+//	printf("%s\r\n", cudaGetErrorString(err));
+//#endif
 }
 
 template<bool TreatPolCompX, bool TreatPolCompZ> __global__ void RadResizeCore_Kernel(srTSRWRadStructAccessData OldRadAccessData, srTSRWRadStructAccessData NewRadAccessData)
@@ -546,13 +546,13 @@ int srTGenOptElem::RadResizeCore_GPU(srTSRWRadStructAccessData& OldRadAccessData
 	int ne = NewRadAccessData.ne;
 	OldRadAccessData.pBaseRadX = (float*)CAuxGPU::ToDevice(pGPU, OldRadAccessData.pBaseRadX, 2*OldRadAccessData.ne*OldRadAccessData.nx*OldRadAccessData.nz*sizeof(float));
 	OldRadAccessData.pBaseRadZ = (float*)CAuxGPU::ToDevice(pGPU, OldRadAccessData.pBaseRadZ, 2*OldRadAccessData.ne*OldRadAccessData.nx*OldRadAccessData.nz*sizeof(float));
-	NewRadAccessData.pBaseRadX = (float*)CAuxGPU::ToDevice(pGPU, NewRadAccessData.pBaseRadX, 2*NewRadAccessData.ne*NewRadAccessData.nx*NewRadAccessData.nz*sizeof(float), true);
-	NewRadAccessData.pBaseRadZ = (float*)CAuxGPU::ToDevice(pGPU, NewRadAccessData.pBaseRadZ, 2*NewRadAccessData.ne*NewRadAccessData.nx*NewRadAccessData.nz*sizeof(float), true);
+	NewRadAccessData.pBaseRadX = (float*)CAuxGPU::ToDevice(pGPU, NewRadAccessData.pBaseRadX, 2*NewRadAccessData.ne*NewRadAccessData.nx*NewRadAccessData.nz*sizeof(float), true, false, 0);
+	NewRadAccessData.pBaseRadZ = (float*)CAuxGPU::ToDevice(pGPU, NewRadAccessData.pBaseRadZ, 2*NewRadAccessData.ne*NewRadAccessData.nx*NewRadAccessData.nz*sizeof(float), true, false, 0);
 	
 	CAuxGPU::EnsureDeviceMemoryReady(pGPU, OldRadAccessData.pBaseRadX);
 	CAuxGPU::EnsureDeviceMemoryReady(pGPU, OldRadAccessData.pBaseRadZ);
-	//CAuxGPU::EnsureDeviceMemoryReady(pGPU, NewRadAccessData.pBaseRadX);
-	//CAuxGPU::EnsureDeviceMemoryReady(pGPU, NewRadAccessData.pBaseRadZ);
+	CAuxGPU::EnsureDeviceMemoryReady(pGPU, NewRadAccessData.pBaseRadX);
+	CAuxGPU::EnsureDeviceMemoryReady(pGPU, NewRadAccessData.pBaseRadZ);
 
 	const int bs = 32;
 	dim3 blocks(nx / bs + ((nx & (bs - 1)) != 0), nz, ne);
@@ -568,20 +568,663 @@ int srTGenOptElem::RadResizeCore_GPU(srTSRWRadStructAccessData& OldRadAccessData
 	//NewRadAccessData.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, NewRadAccessData.pBaseRadZ, 2*NewRadAccessData.ne*NewRadAccessData.nx*NewRadAccessData.nz*sizeof(float));
 	CAuxGPU::MarkUpdated(pGPU, NewRadAccessData.pBaseRadX, true, false);
 	CAuxGPU::MarkUpdated(pGPU, NewRadAccessData.pBaseRadZ, true, false);
-#ifndef _DEBUG
+//#ifndef _DEBUG
 	NewRadAccessData.pBaseRadX = (float*)CAuxGPU::GetHostPtr(pGPU, NewRadAccessData.pBaseRadX);
 	NewRadAccessData.pBaseRadZ = (float*)CAuxGPU::GetHostPtr(pGPU, NewRadAccessData.pBaseRadZ);
-#endif
+//#endif
 
-#ifdef _DEBUG
-	NewRadAccessData.pBaseRadX = (float*)CAuxGPU::ToHostAndFree(pGPU, NewRadAccessData.pBaseRadX, 2*NewRadAccessData.ne*NewRadAccessData.nx*NewRadAccessData.nz*sizeof(float), false);
-	NewRadAccessData.pBaseRadZ = (float*)CAuxGPU::ToHostAndFree(pGPU, NewRadAccessData.pBaseRadZ, 2*NewRadAccessData.ne*NewRadAccessData.nx*NewRadAccessData.nz*sizeof(float), false);
-	cudaStreamSynchronize(0);
-	auto err = cudaGetLastError();
-	printf("%s\r\n", cudaGetErrorString(err));
+//#ifdef _DEBUG
+	//NewRadAccessData.pBaseRadX = (float*)CAuxGPU::ToHostAndFree(pGPU, NewRadAccessData.pBaseRadX, 2*NewRadAccessData.ne*NewRadAccessData.nx*NewRadAccessData.nz*sizeof(float), false);
+	//NewRadAccessData.pBaseRadZ = (float*)CAuxGPU::ToHostAndFree(pGPU, NewRadAccessData.pBaseRadZ, 2*NewRadAccessData.ne*NewRadAccessData.nx*NewRadAccessData.nz*sizeof(float), false);
+	//cudaStreamSynchronize(0);
+	//auto err = cudaGetLastError();
+	//printf("%s\r\n", cudaGetErrorString(err));
 
-#endif
+//#endif
 
+	return 0;
+}
+
+template<bool TreatPolCompX, bool TreatPolCompZ> __global__ void RadResizeCore_OnlyLargerRange_Kernel(srTSRWRadStructAccessData OldRadAccessData, srTSRWRadStructAccessData NewRadAccessData)
+{
+
+	int ixStart = int(NewRadAccessData.AuxLong1);
+	int ixEnd = int(NewRadAccessData.AuxLong2);
+	int izStart = int(NewRadAccessData.AuxLong3);
+	int izEnd = int(NewRadAccessData.AuxLong4);
+
+	double xStepInvOld = 1. / OldRadAccessData.xStep;
+	double zStepInvOld = 1. / OldRadAccessData.zStep;
+
+	int ix = (blockIdx.x * blockDim.x + threadIdx.x) + ixStart; //nx range
+	int iz = (blockIdx.y * blockDim.y + threadIdx.y) + izStart; //nz range
+	int ie = (blockIdx.z * blockDim.z + threadIdx.z); //ne range
+
+	if (ix > ixEnd) return;
+	if (iz > izEnd) return;
+
+	float* pEX0_New = NewRadAccessData.pBaseRadX;
+	float* pEZ0_New = NewRadAccessData.pBaseRadZ;
+
+	float* pEX0_Old = OldRadAccessData.pBaseRadX;
+	float* pEZ0_Old = OldRadAccessData.pBaseRadZ;
+
+	//long PerX_New = NewRadAccessData.ne << 1;
+	//long PerZ_New = PerX_New*NewRadAccessData.nx;
+	long long PerX_New = NewRadAccessData.ne << 1;
+	long long PerZ_New = PerX_New * NewRadAccessData.nx;
+
+	//long PerX_Old = PerX_New;
+	//long PerZ_Old = PerX_Old*OldRadAccessData.nx;
+	long long PerX_Old = PerX_New;
+	long long PerZ_Old = PerX_Old * OldRadAccessData.nx;
+	
+	//long Two_ie = ie << 1;
+	long long Two_ie = ie << 1;
+	
+	//long izPerZ_New = iz*PerZ_New;
+	long long izPerZ_New = iz * PerZ_New;
+	float* pEX_StartForX_New = pEX0_New + izPerZ_New;
+	float* pEZ_StartForX_New = pEZ0_New + izPerZ_New;
+
+	//long izPerZ_Old = (iz - izStart)*PerZ_Old;
+
+	double zAbs = NewRadAccessData.zStart + iz * NewRadAccessData.zStep;
+	long izOld = long((zAbs - OldRadAccessData.zStart) * zStepInvOld + 1.E-08);
+	//long izPerZ_Old = izOld*PerZ_Old;
+	long long izPerZ_Old = izOld * PerZ_Old;
+
+	float* pEX_StartForX_Old = pEX0_Old + izPerZ_Old;
+	float* pEZ_StartForX_Old = pEZ0_Old + izPerZ_Old;
+
+	//long ixPerX_New_p_Two_ie = ix*PerX_New + Two_ie;
+	long long ixPerX_New_p_Two_ie = ix * PerX_New + Two_ie;
+	float* pEX_New = pEX_StartForX_New + ixPerX_New_p_Two_ie;
+	float* pEZ_New = pEZ_StartForX_New + ixPerX_New_p_Two_ie;
+
+	//long ixPerX_Old_p_Two_ie = (ix - ixStart)*PerX_Old + Two_ie;
+
+	double xAbs = NewRadAccessData.xStart + ix * NewRadAccessData.xStep;
+	long ixOld = long((xAbs - OldRadAccessData.xStart) * xStepInvOld + 1.E-08);
+	//long ixPerX_Old_p_Two_ie = ixOld*PerX_Old + Two_ie;
+	long long ixPerX_Old_p_Two_ie = ixOld * PerX_Old + Two_ie;
+
+	float* pEX_Old = pEX_StartForX_Old + ixPerX_Old_p_Two_ie;
+	float* pEZ_Old = pEZ_StartForX_Old + ixPerX_Old_p_Two_ie;
+
+	if (TreatPolCompX) { *pEX_New = *pEX_Old; *(pEX_New + 1) = *(pEX_Old + 1); }
+	if (TreatPolCompZ) { *pEZ_New = *pEZ_Old; *(pEZ_New + 1) = *(pEZ_Old + 1); }
+}
+
+
+int srTGenOptElem::RadResizeCore_OnlyLargerRange_GPU(srTSRWRadStructAccessData& OldRadAccessData, srTSRWRadStructAccessData& NewRadAccessData, char PolComp, TGPUUsageArg* pGPU)
+{
+	char TreatPolCompX = ((PolComp == 0) || (PolComp == 'x'));
+	char TreatPolCompZ = ((PolComp == 0) || (PolComp == 'z'));
+
+	int nx = NewRadAccessData.AuxLong2 - NewRadAccessData.AuxLong1 + 1;
+	int nz = NewRadAccessData.AuxLong4 - NewRadAccessData.AuxLong3 + 1;
+	int ne = NewRadAccessData.ne;
+
+	OldRadAccessData.pBaseRadX = (float*)CAuxGPU::ToDevice(pGPU, OldRadAccessData.pBaseRadX, 2 * OldRadAccessData.ne * OldRadAccessData.nx * OldRadAccessData.nz * sizeof(float));
+	OldRadAccessData.pBaseRadZ = (float*)CAuxGPU::ToDevice(pGPU, OldRadAccessData.pBaseRadZ, 2 * OldRadAccessData.ne * OldRadAccessData.nx * OldRadAccessData.nz * sizeof(float));
+	NewRadAccessData.pBaseRadX = (float*)CAuxGPU::ToDevice(pGPU, NewRadAccessData.pBaseRadX, 2 * NewRadAccessData.ne * NewRadAccessData.nx * NewRadAccessData.nz * sizeof(float), true, false, 0);
+	NewRadAccessData.pBaseRadZ = (float*)CAuxGPU::ToDevice(pGPU, NewRadAccessData.pBaseRadZ, 2 * NewRadAccessData.ne * NewRadAccessData.nx * NewRadAccessData.nz * sizeof(float), true, false, 0);
+
+	CAuxGPU::EnsureDeviceMemoryReady(pGPU, OldRadAccessData.pBaseRadX);
+	CAuxGPU::EnsureDeviceMemoryReady(pGPU, OldRadAccessData.pBaseRadZ);
+	CAuxGPU::EnsureDeviceMemoryReady(pGPU, NewRadAccessData.pBaseRadX);
+	CAuxGPU::EnsureDeviceMemoryReady(pGPU, NewRadAccessData.pBaseRadZ);
+
+	const int bs = 32;
+	dim3 blocks(nx / bs + ((nx & (bs - 1)) != 0), nz, ne);
+	dim3 threads(bs, 1);
+
+	if (TreatPolCompX && TreatPolCompZ) RadResizeCore_OnlyLargerRange_Kernel<true, true> << <blocks, threads >> > (OldRadAccessData, NewRadAccessData);
+	else if (TreatPolCompX) RadResizeCore_OnlyLargerRange_Kernel<true, false> << <blocks, threads >> > (OldRadAccessData, NewRadAccessData);
+	else if (TreatPolCompZ) RadResizeCore_OnlyLargerRange_Kernel<false, true> << <blocks, threads >> > (OldRadAccessData, NewRadAccessData);
+
+	OldRadAccessData.pBaseRadX = (float*)CAuxGPU::ToHostAndFree(pGPU, OldRadAccessData.pBaseRadX, 2 * OldRadAccessData.ne * OldRadAccessData.nx * OldRadAccessData.nz * sizeof(float), true);
+	OldRadAccessData.pBaseRadZ = (float*)CAuxGPU::ToHostAndFree(pGPU, OldRadAccessData.pBaseRadZ, 2 * OldRadAccessData.ne * OldRadAccessData.nx * OldRadAccessData.nz * sizeof(float), true);
+	//NewRadAccessData.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, NewRadAccessData.pBaseRadX, 2*NewRadAccessData.ne*NewRadAccessData.nx*NewRadAccessData.nz*sizeof(float));
+	//NewRadAccessData.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, NewRadAccessData.pBaseRadZ, 2*NewRadAccessData.ne*NewRadAccessData.nx*NewRadAccessData.nz*sizeof(float));
+	CAuxGPU::MarkUpdated(pGPU, NewRadAccessData.pBaseRadX, true, false);
+	CAuxGPU::MarkUpdated(pGPU, NewRadAccessData.pBaseRadZ, true, false);
+	//#ifndef _DEBUG
+	NewRadAccessData.pBaseRadX = (float*)CAuxGPU::GetHostPtr(pGPU, NewRadAccessData.pBaseRadX);
+	NewRadAccessData.pBaseRadZ = (float*)CAuxGPU::GetHostPtr(pGPU, NewRadAccessData.pBaseRadZ);
+	//#endif
+
+	//#ifdef _DEBUG
+	//NewRadAccessData.pBaseRadX = (float*)CAuxGPU::ToHostAndFree(pGPU, NewRadAccessData.pBaseRadX, 2 * NewRadAccessData.ne * NewRadAccessData.nx * NewRadAccessData.nz * sizeof(float), false);
+	//NewRadAccessData.pBaseRadZ = (float*)CAuxGPU::ToHostAndFree(pGPU, NewRadAccessData.pBaseRadZ, 2 * NewRadAccessData.ne * NewRadAccessData.nx * NewRadAccessData.nz * sizeof(float), false);
+	//cudaStreamSynchronize(0);
+	//auto err = cudaGetLastError();
+	//printf("%s\r\n", cudaGetErrorString(err));
+
+	//#endif
+
+	return 0;
+}
+
+template<bool TreatPolCompX, bool TreatPolCompZ> __global__ void RadResizeCore_OnlyLargerRangeE_Kernel(srTSRWRadStructAccessData OldRadAccessData, srTSRWRadStructAccessData NewRadAccessData)
+{
+	int ieStart = int(NewRadAccessData.AuxLong1);
+	int ieEnd = int(NewRadAccessData.AuxLong2);
+
+	int ix = (blockIdx.x * blockDim.x + threadIdx.x); //nx range
+	int iz = (blockIdx.y * blockDim.y + threadIdx.y); //nz range
+	int ie = (blockIdx.z * blockDim.z + threadIdx.z) + ieStart; //ne range
+
+	if (ix > NewRadAccessData.nx) return;
+	if (iz > NewRadAccessData.nz) return;
+	
+	float* pEX0_New = NewRadAccessData.pBaseRadX;
+	float* pEZ0_New = NewRadAccessData.pBaseRadZ;
+
+	float* pEX0_Old = OldRadAccessData.pBaseRadX;
+	float* pEZ0_Old = OldRadAccessData.pBaseRadZ;
+
+	//long PerX_New = NewRadAccessData.ne << 1;
+	//long PerZ_New = PerX_New*NewRadAccessData.nx;
+	long long PerX_New = NewRadAccessData.ne << 1;
+	long long PerZ_New = PerX_New * NewRadAccessData.nx;
+
+	//long PerX_Old = OldRadAccessData.ne << 1;
+	//long PerZ_Old = PerX_Old*OldRadAccessData.nx;
+	long long PerX_Old = OldRadAccessData.ne << 1;
+	long long PerZ_Old = PerX_Old * OldRadAccessData.nx;
+
+	double eStepInvOld = 1. / OldRadAccessData.eStep;
+
+	//long iz_PerZ_New = iz*PerZ_New;
+	//long iz_PerZ_Old = iz*PerZ_Old;
+	long long iz_PerZ_New = iz * PerZ_New;
+	long long iz_PerZ_Old = iz * PerZ_Old;
+
+	//long iz_PerZ_New_p_ix_PerX_New = iz_PerZ_New + ix*PerX_New;
+	//long iz_PerZ_Old_p_ix_PerX_Old = iz_PerZ_Old + ix*PerX_Old;
+	long long iz_PerZ_New_p_ix_PerX_New = iz_PerZ_New + ix * PerX_New;
+	long long iz_PerZ_Old_p_ix_PerX_Old = iz_PerZ_Old + ix * PerX_Old;
+
+	//long ofstNew = iz_PerZ_New_p_ix_PerX_New + (ie << 1);
+	long long ofstNew = iz_PerZ_New_p_ix_PerX_New + (ie << 1);
+	float* pEX_New = pEX0_New + ofstNew;
+	float* pEZ_New = pEZ0_New + ofstNew;
+
+	double eAbs = NewRadAccessData.eStart + ie * NewRadAccessData.eStep;
+	long ieOld = long((eAbs - OldRadAccessData.eStart) * eStepInvOld + 1.E-08);
+
+	//long ofstOld = iz_PerZ_Old_p_ix_PerX_Old + (ieOld << 1);
+	long long ofstOld = iz_PerZ_Old_p_ix_PerX_Old + (ieOld << 1);
+	float* pEX_Old = pEX0_Old + ofstOld;
+	float* pEZ_Old = pEZ0_Old + ofstOld;
+
+	if (TreatPolCompX) { *pEX_New = *pEX_Old; *(pEX_New + 1) = *(pEX_Old + 1); }
+	if (TreatPolCompZ) { *pEZ_New = *pEZ_Old; *(pEZ_New + 1) = *(pEZ_Old + 1); }
+}
+
+
+int srTGenOptElem::RadResizeCore_OnlyLargerRangeE_GPU(srTSRWRadStructAccessData& OldRadAccessData, srTSRWRadStructAccessData& NewRadAccessData, char PolComp, TGPUUsageArg* pGPU)
+{
+	char TreatPolCompX = ((PolComp == 0) || (PolComp == 'x')) && (OldRadAccessData.pBaseRadX != 0);
+	char TreatPolCompZ = ((PolComp == 0) || (PolComp == 'z')) && (OldRadAccessData.pBaseRadZ != 0);
+
+	int ne = NewRadAccessData.AuxLong2 - NewRadAccessData.AuxLong1 + 1;
+
+	OldRadAccessData.pBaseRadX = (float*)CAuxGPU::ToDevice(pGPU, OldRadAccessData.pBaseRadX, 2 * OldRadAccessData.ne * OldRadAccessData.nx * OldRadAccessData.nz * sizeof(float));
+	OldRadAccessData.pBaseRadZ = (float*)CAuxGPU::ToDevice(pGPU, OldRadAccessData.pBaseRadZ, 2 * OldRadAccessData.ne * OldRadAccessData.nx * OldRadAccessData.nz * sizeof(float));
+	NewRadAccessData.pBaseRadX = (float*)CAuxGPU::ToDevice(pGPU, NewRadAccessData.pBaseRadX, 2 * NewRadAccessData.ne * NewRadAccessData.nx * NewRadAccessData.nz * sizeof(float), true);
+	NewRadAccessData.pBaseRadZ = (float*)CAuxGPU::ToDevice(pGPU, NewRadAccessData.pBaseRadZ, 2 * NewRadAccessData.ne * NewRadAccessData.nx * NewRadAccessData.nz * sizeof(float), true);
+
+	CAuxGPU::EnsureDeviceMemoryReady(pGPU, OldRadAccessData.pBaseRadX);
+	CAuxGPU::EnsureDeviceMemoryReady(pGPU, OldRadAccessData.pBaseRadZ);
+	CAuxGPU::EnsureDeviceMemoryReady(pGPU, NewRadAccessData.pBaseRadX);
+	CAuxGPU::EnsureDeviceMemoryReady(pGPU, NewRadAccessData.pBaseRadZ);
+
+	const int bs = 32;
+	dim3 blocks(NewRadAccessData.nx / bs + ((NewRadAccessData.nx & (bs - 1)) != 0), NewRadAccessData.nz, ne);
+	dim3 threads(bs, 1);
+
+	if (TreatPolCompX && TreatPolCompZ) RadResizeCore_OnlyLargerRangeE_Kernel<true, true> << <blocks, threads >> > (OldRadAccessData, NewRadAccessData);
+	else if (TreatPolCompX) RadResizeCore_OnlyLargerRangeE_Kernel<true, false> << <blocks, threads >> > (OldRadAccessData, NewRadAccessData);
+	else if (TreatPolCompZ) RadResizeCore_OnlyLargerRangeE_Kernel<false, true> << <blocks, threads >> > (OldRadAccessData, NewRadAccessData);
+
+	OldRadAccessData.pBaseRadX = (float*)CAuxGPU::ToHostAndFree(pGPU, OldRadAccessData.pBaseRadX, 2 * OldRadAccessData.ne * OldRadAccessData.nx * OldRadAccessData.nz * sizeof(float), true);
+	OldRadAccessData.pBaseRadZ = (float*)CAuxGPU::ToHostAndFree(pGPU, OldRadAccessData.pBaseRadZ, 2 * OldRadAccessData.ne * OldRadAccessData.nx * OldRadAccessData.nz * sizeof(float), true);
+	//NewRadAccessData.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, NewRadAccessData.pBaseRadX, 2*NewRadAccessData.ne*NewRadAccessData.nx*NewRadAccessData.nz*sizeof(float));
+	//NewRadAccessData.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, NewRadAccessData.pBaseRadZ, 2*NewRadAccessData.ne*NewRadAccessData.nx*NewRadAccessData.nz*sizeof(float));
+	CAuxGPU::MarkUpdated(pGPU, NewRadAccessData.pBaseRadX, true, false);
+	CAuxGPU::MarkUpdated(pGPU, NewRadAccessData.pBaseRadZ, true, false);
+	//#ifndef _DEBUG
+	NewRadAccessData.pBaseRadX = (float*)CAuxGPU::GetHostPtr(pGPU, NewRadAccessData.pBaseRadX);
+	NewRadAccessData.pBaseRadZ = (float*)CAuxGPU::GetHostPtr(pGPU, NewRadAccessData.pBaseRadZ);
+	//#endif
+
+	//#ifdef _DEBUG
+	//NewRadAccessData.pBaseRadX = (float*)CAuxGPU::ToHostAndFree(pGPU, NewRadAccessData.pBaseRadX, 2 * NewRadAccessData.ne * NewRadAccessData.nx * NewRadAccessData.nz * sizeof(float), false);
+	//NewRadAccessData.pBaseRadZ = (float*)CAuxGPU::ToHostAndFree(pGPU, NewRadAccessData.pBaseRadZ, 2 * NewRadAccessData.ne * NewRadAccessData.nx * NewRadAccessData.nz * sizeof(float), false);
+	//cudaStreamSynchronize(0);
+	//auto err = cudaGetLastError();
+	//printf("%s\r\n", cudaGetErrorString(err));
+
+	//#endif
+
+	return 0;
+}
+
+__global__ void ExtractRadSliceConstE_Kernel(srTSRWRadStructAccessData RadAccessData, long ie, float* pOutEx, float* pOutEz)
+{
+	int ix = (blockIdx.x * blockDim.x + threadIdx.x); //nx range
+	int iz = (blockIdx.y * blockDim.y + threadIdx.y); //nz range
+	
+	if(ix >= RadAccessData.nx) return;
+	if(iz >= RadAccessData.nz) return;
+
+	float *pEx0 = RadAccessData.pBaseRadX;
+	float *pEz0 = RadAccessData.pBaseRadZ;
+	long long  PerX = RadAccessData.ne << 1;
+	long long PerZ = PerX*RadAccessData.nx;
+	long long izPerZ = iz * PerZ;
+	long long ixPerX = ix * PerX;
+	long long iePerE = ie << 1;
+	long long ixPerX_p_iePerE = ixPerX + iePerE;
+	
+	float *tOutEx = pOutEx, *tOutEz = pOutEz;
+	float *pEx = pEx0 + izPerZ + ixPerX_p_iePerE;
+	float *pEz = pEz0 + izPerZ + ixPerX_p_iePerE;
+
+	tOutEx += (iz*RadAccessData.nx + ix) << 1;
+	*tOutEx = *pEx; *(tOutEx + 1) = *(pEx + 1);
+
+	tOutEz += (iz*RadAccessData.nx + ix) << 1;
+	*tOutEz = *pEz; *(tOutEz + 1) = *(pEz + 1);
+}
+
+int srTGenOptElem::ExtractRadSliceConstE_GPU(srTSRWRadStructAccessData* pRadAccessData, long ie, float*& pOutEx, float*& pOutEz, TGPUUsageArg* pGPU)
+{
+	float* pBaseRadX = (float*)CAuxGPU::ToDevice(pGPU, pRadAccessData->pBaseRadX, 2 * pRadAccessData->ne * pRadAccessData->nx * pRadAccessData->nz * sizeof(float));
+	if (pBaseRadX == 0) return -1;
+	pRadAccessData->pBaseRadX = pBaseRadX;
+
+	float* pBaseRadZ = (float*)CAuxGPU::ToDevice(pGPU, pRadAccessData->pBaseRadZ, 2 * pRadAccessData->ne * pRadAccessData->nx * pRadAccessData->nz * sizeof(float));
+	if (pRadAccessData->pBaseRadZ == 0)
+	{
+		pRadAccessData->pBaseRadX = (float*)CAuxGPU::ToHostAndFree(pGPU, pRadAccessData->pBaseRadX, 2 * pRadAccessData->ne * pRadAccessData->nx * pRadAccessData->nz * sizeof(float), true);
+		return -1;
+	}
+	pRadAccessData->pBaseRadZ = pBaseRadZ;
+	
+	float* pOutEx_tmp = (float*)CAuxGPU::ToDevice(pGPU, pOutEx, 2 * pRadAccessData->nx * pRadAccessData->nz * sizeof(float));
+	if (pOutEx_tmp == 0)
+	{
+		pRadAccessData->pBaseRadX = (float*)CAuxGPU::ToHostAndFree(pGPU, pRadAccessData->pBaseRadX, 2 * pRadAccessData->ne * pRadAccessData->nx * pRadAccessData->nz * sizeof(float), true);
+		pRadAccessData->pBaseRadZ = (float*)CAuxGPU::ToHostAndFree(pGPU, pRadAccessData->pBaseRadZ, 2 * pRadAccessData->ne * pRadAccessData->nx * pRadAccessData->nz * sizeof(float), true);
+		return -1;
+	}
+	pOutEx = pOutEx_tmp;
+
+	float* pOutEZ_tmp = (float*)CAuxGPU::ToDevice(pGPU, pOutEz, 2 * pRadAccessData->nx * pRadAccessData->nz * sizeof(float));
+	if (pOutEz == 0)
+	{
+		pRadAccessData->pBaseRadX = (float*)CAuxGPU::ToHostAndFree(pGPU, pRadAccessData->pBaseRadX, 2 * pRadAccessData->ne * pRadAccessData->nx * pRadAccessData->nz * sizeof(float), true);
+		pRadAccessData->pBaseRadZ = (float*)CAuxGPU::ToHostAndFree(pGPU, pRadAccessData->pBaseRadZ, 2 * pRadAccessData->ne * pRadAccessData->nx * pRadAccessData->nz * sizeof(float), true);
+		pOutEx = (float*)CAuxGPU::ToHostAndFree(pGPU, pOutEx, 2 * pRadAccessData->nx * pRadAccessData->nz * sizeof(float), true);
+		return -1;
+	}
+	pOutEz = pOutEZ_tmp;
+
+	CAuxGPU::EnsureDeviceMemoryReady(pGPU, pRadAccessData->pBaseRadX);
+	CAuxGPU::EnsureDeviceMemoryReady(pGPU, pRadAccessData->pBaseRadZ);
+	CAuxGPU::EnsureDeviceMemoryReady(pGPU, pOutEx);
+	CAuxGPU::EnsureDeviceMemoryReady(pGPU, pOutEz);
+	
+	const int bs = 256;
+	dim3 blocks(pRadAccessData->nx / bs + ((pRadAccessData->nx & (bs - 1)) != 0), pRadAccessData->nz, 1);
+	dim3 threads(bs, 1);
+
+	ExtractRadSliceConstE_Kernel <<<blocks, threads >>> (*pRadAccessData, ie, pOutEx, pOutEz);
+	
+	CAuxGPU::MarkUpdated(pGPU, pOutEx, true, false);
+	CAuxGPU::MarkUpdated(pGPU, pOutEz, true, false);
+	pRadAccessData->pBaseRadX = (float*)CAuxGPU::GetHostPtr(pGPU, pRadAccessData->pBaseRadX);
+	pRadAccessData->pBaseRadZ = (float*)CAuxGPU::GetHostPtr(pGPU, pRadAccessData->pBaseRadZ);
+	pOutEx = (float*)CAuxGPU::GetHostPtr(pGPU, pOutEx);
+	pOutEz = (float*)CAuxGPU::GetHostPtr(pGPU, pOutEz);
+
+	return 0;
+}
+
+__global__ void UpdateGenRadStructSliceConstE_Meth_0_Kernel(srTSRWRadStructAccessData RadDataSliceConstE, int ie, srTSRWRadStructAccessData RadAccessData)
+{
+	int ix = (blockIdx.x * blockDim.x + threadIdx.x); //nx range
+	int iz = (blockIdx.y * blockDim.y + threadIdx.y); //nz range
+	
+	int neCom = RadAccessData.ne;
+	int nxCom = RadAccessData.nx;
+	int nzCom = RadAccessData.nz;
+
+	if(ix >= nxCom) return;
+	if(iz >= nzCom) return;
+	
+	float *pEx0 = RadAccessData.pBaseRadX;
+	float *pEz0 = RadAccessData.pBaseRadZ;
+
+	long long PerX = neCom << 1;
+	long long PerZ = PerX*nxCom;
+	long long iePerE = ie << 1;
+
+	float *tSliceEx = RadDataSliceConstE.pBaseRadX + iz*nxCom*2 + ix*2;
+	float *tSliceEz = RadDataSliceConstE.pBaseRadZ + iz*nxCom*2 + ix*2;
+
+	float *pEx = pEx0 + iz*PerZ + ix*PerX + iePerE;
+	float *pEz = pEz0 + iz*PerZ + ix*PerX + iePerE;
+
+	*(pEx++) = *(tSliceEx++); *pEx = *(tSliceEx);
+	*(pEz++) = *(tSliceEz++); *pEz = *(tSliceEz);
+}
+
+int srTGenOptElem::UpdateGenRadStructSliceConstE_Meth_0_GPU(srTSRWRadStructAccessData* pRadDataSliceConstE, int ie, srTSRWRadStructAccessData* pRadAccessData, TGPUUsageArg* pGPU)
+{
+	float* pBaseRadX = (float*)CAuxGPU::ToDevice(pGPU, pRadAccessData->pBaseRadX, 2 * pRadAccessData->ne * pRadAccessData->nx * pRadAccessData->nz * sizeof(float));
+	if (pBaseRadX == 0) return -1;
+	pRadAccessData->pBaseRadX = pBaseRadX;
+
+	float* pBaseRadZ = (float*)CAuxGPU::ToDevice(pGPU, pRadAccessData->pBaseRadZ, 2 * pRadAccessData->ne * pRadAccessData->nx * pRadAccessData->nz * sizeof(float));
+	if (pBaseRadZ == 0)
+	{
+		pRadAccessData->pBaseRadX = (float*)CAuxGPU::ToHostAndFree(pGPU, pRadAccessData->pBaseRadX, 2 * pRadAccessData->ne * pRadAccessData->nx * pRadAccessData->nz * sizeof(float), true);
+		return -1;
+	}
+	pRadAccessData->pBaseRadZ = pBaseRadZ;
+
+	pBaseRadX = (float*)CAuxGPU::ToDevice(pGPU, pRadDataSliceConstE->pBaseRadX, 2 * pRadAccessData->nx * pRadAccessData->nz * sizeof(float));
+	if (pBaseRadX == 0)
+	{
+		pRadAccessData->pBaseRadX = (float*)CAuxGPU::ToHostAndFree(pGPU, pRadAccessData->pBaseRadX, 2 * pRadAccessData->ne * pRadAccessData->nx * pRadAccessData->nz * sizeof(float), true);
+		pRadAccessData->pBaseRadZ = (float*)CAuxGPU::ToHostAndFree(pGPU, pRadAccessData->pBaseRadZ, 2 * pRadAccessData->ne * pRadAccessData->nx * pRadAccessData->nz * sizeof(float), true);
+		return -1;
+	}
+	pRadDataSliceConstE->pBaseRadX = pBaseRadX;
+
+	pBaseRadZ = (float*)CAuxGPU::ToDevice(pGPU, pRadDataSliceConstE->pBaseRadZ, 2 * pRadAccessData->nx * pRadAccessData->nz * sizeof(float));
+	if (pBaseRadZ == 0)
+	{
+		pRadAccessData->pBaseRadX = (float*)CAuxGPU::ToHostAndFree(pGPU, pRadAccessData->pBaseRadX, 2 * pRadAccessData->ne * pRadAccessData->nx * pRadAccessData->nz * sizeof(float), true);
+		pRadAccessData->pBaseRadZ = (float*)CAuxGPU::ToHostAndFree(pGPU, pRadAccessData->pBaseRadZ, 2 * pRadAccessData->ne * pRadAccessData->nx * pRadAccessData->nz * sizeof(float), true);
+		pRadDataSliceConstE->pBaseRadX = (float*)CAuxGPU::ToHostAndFree(pGPU, pRadDataSliceConstE->pBaseRadX, 2 * pRadAccessData->nx * pRadAccessData->nz * sizeof(float), true);
+		return -1;
+	}
+	pRadDataSliceConstE->pBaseRadZ = pBaseRadZ;
+
+	CAuxGPU::EnsureDeviceMemoryReady(pGPU, pRadAccessData->pBaseRadX);
+	CAuxGPU::EnsureDeviceMemoryReady(pGPU, pRadAccessData->pBaseRadZ);
+	CAuxGPU::EnsureDeviceMemoryReady(pGPU, pRadDataSliceConstE->pBaseRadX);
+	CAuxGPU::EnsureDeviceMemoryReady(pGPU, pRadDataSliceConstE->pBaseRadZ);
+	
+	const int bs = 256;
+	dim3 blocks(pRadAccessData->nx / bs + ((pRadAccessData->nx & (bs - 1)) != 0), pRadAccessData->nz, 1);
+	dim3 threads(bs, 1);
+
+	UpdateGenRadStructSliceConstE_Meth_0_Kernel <<<blocks, threads >>> (*pRadDataSliceConstE, ie, *pRadAccessData);
+	
+	CAuxGPU::ToHostAndFree(pGPU, pRadDataSliceConstE->pBaseRadX, 2 * pRadAccessData->nx * pRadAccessData->nz * sizeof(float), true);
+	CAuxGPU::ToHostAndFree(pGPU, pRadDataSliceConstE->pBaseRadZ, 2 * pRadAccessData->nx * pRadAccessData->nz * sizeof(float), true);
+
+	CAuxGPU::MarkUpdated(pGPU, pRadAccessData->pBaseRadX, true, false);
+	CAuxGPU::MarkUpdated(pGPU, pRadAccessData->pBaseRadZ, true, false);
+	pRadAccessData->pBaseRadX = (float*)CAuxGPU::GetHostPtr(pGPU, pRadAccessData->pBaseRadX);
+	pRadAccessData->pBaseRadZ = (float*)CAuxGPU::GetHostPtr(pGPU, pRadAccessData->pBaseRadZ);
+	
+	return 0;
+}
+
+__global__ void ReInterpolateWfrSliceSingleE_Kernel(srTSRWRadStructAccessData oldRadSingleE, srTSRWRadStructAccessData newRadMultiE, int ie)
+{
+	const double DistAbsTol = 1.E-10;
+	bool TreatPolCompX=true, TreatPolCompZ=true;
+
+	int ixStart = 0; //int(NewRadAccessData.AuxLong1);
+	int ixEnd = newRadMultiE.nx - 1; //int(NewRadAccessData.AuxLong2);
+	int izStart = 0; //int(NewRadAccessData.AuxLong3);
+	int izEnd = newRadMultiE.nz - 1; //int(NewRadAccessData.AuxLong4);
+
+	int ix = (blockIdx.x * blockDim.x + threadIdx.x) + ixStart; //nx range
+	int iz = (blockIdx.y * blockDim.y + threadIdx.y) + izStart; //nz range
+
+	if(ix > ixEnd) return;
+	if(iz > izEnd) return;
+
+	double xStepInvOld = 1./oldRadSingleE.xStep;
+	double zStepInvOld = 1./oldRadSingleE.zStep;
+	int nx_mi_1Old = oldRadSingleE.nx - 1;
+	int nz_mi_1Old = oldRadSingleE.nz - 1;
+	int nx_mi_2Old = nx_mi_1Old - 1;
+	int nz_mi_2Old = nz_mi_1Old - 1;
+
+	srTInterpolAux01 InterpolAux01;
+	srTInterpolAux02 InterpolAux02[4], InterpolAux02I[2];
+	srTInterpolAuxF AuxF[4], AuxFI[2];
+	int ixStOld, izStOld, ixStOldPrev = -1000, izStOldPrev = -1000;
+
+	float *pEX0_New = 0, *pEZ0_New = 0;
+	if(TreatPolCompX) pEX0_New = newRadMultiE.pBaseRadX;
+	if(TreatPolCompZ) pEZ0_New = newRadMultiE.pBaseRadZ;
+
+	//long PerX_New = newRadMultiE.ne << 1;
+	//long PerZ_New = PerX_New*newRadMultiE.nx;
+	long long PerX_New = newRadMultiE.ne << 1;
+	long long PerZ_New = PerX_New*newRadMultiE.nx;
+
+	//long PerX_Old = 2; //PerX_New;
+	//long PerZ_Old = PerX_Old*oldRadSingleE.nx;
+	long long PerX_Old = 2; //PerX_New;
+	long long PerZ_Old = PerX_Old*oldRadSingleE.nx;
+
+	float BufF[4], BufFI[2];
+	int UseLowOrderInterp_PolCompX, UseLowOrderInterp_PolCompZ;
+	int result = 0;
+
+	//for(int ie=0; ie<NewRadAccessData.ne; ie++)
+	//{
+	//ixStOldPrev = -1000; izStOldPrev = -1000;
+
+	//long Two_ie = ie << 1;
+	long long Two_ie = ie << 1;
+
+	double zAbs = newRadMultiE.zStart + iz*newRadMultiE.zStep;
+	char FieldShouldBeZeroedDueToZ = 0;
+	if(newRadMultiE.WfrEdgeCorrShouldBeDone)
+	{
+		if((zAbs < newRadMultiE.zWfrMin - DistAbsTol) || (zAbs > newRadMultiE.zWfrMax + DistAbsTol)) FieldShouldBeZeroedDueToZ = 1;
+	}
+	int izcOld = int((zAbs - oldRadSingleE.zStart)*zStepInvOld + 1.E-06);
+	if((izcOld < 0) || (izcOld > nz_mi_1Old))
+	{
+		//set El. field to 0 for all ix
+		FieldShouldBeZeroedDueToZ = 1;
+	}
+
+	double zRel = zAbs - (oldRadSingleE.zStart + izcOld*oldRadSingleE.zStep);
+
+	if(izcOld == nz_mi_1Old) { izStOld = izcOld - 3; zRel += 2.*oldRadSingleE.zStep;}
+	else if(izcOld == nz_mi_2Old) { izStOld = izcOld - 2; zRel += oldRadSingleE.zStep;}
+	else if(izcOld == 0) { izStOld = izcOld; zRel -= oldRadSingleE.zStep;}
+	else izStOld = izcOld - 1;
+
+	zRel *= zStepInvOld;
+	int izcOld_mi_izStOld = izcOld - izStOld;
+	//long izPerZ_New = iz*PerZ_New;
+	long long izPerZ_New = iz*PerZ_New;
+
+	float *pEX_StartForX_New = 0, *pEZ_StartForX_New = 0;
+	if(TreatPolCompX) pEX_StartForX_New = pEX0_New + izPerZ_New;
+	if(TreatPolCompZ) pEZ_StartForX_New = pEZ0_New + izPerZ_New;
+
+	//long ixPerX_New_p_Two_ie = ix*PerX_New + Two_ie;
+	long long ixPerX_New_p_Two_ie = ix*PerX_New + Two_ie;
+	float *pEX_New = 0, *pEZ_New = 0;
+	if(TreatPolCompX) pEX_New = pEX_StartForX_New + ixPerX_New_p_Two_ie;
+	if(TreatPolCompZ) pEZ_New = pEZ_StartForX_New + ixPerX_New_p_Two_ie;
+
+	double xAbs = newRadMultiE.xStart + ix*newRadMultiE.xStep;
+	char FieldShouldBeZeroedDueToX = 0;
+	if(newRadMultiE.WfrEdgeCorrShouldBeDone)
+	{
+		if((xAbs < newRadMultiE.xWfrMin - DistAbsTol) || (xAbs > newRadMultiE.xWfrMax + DistAbsTol)) FieldShouldBeZeroedDueToX = 1;
+	}
+
+	int ixcOld = int((xAbs - oldRadSingleE.xStart)*xStepInvOld + 1.E-06);
+	if((ixcOld < 0) || (ixcOld > nx_mi_1Old))
+	{
+		FieldShouldBeZeroedDueToX = 1;
+	}
+	char FieldShouldBeZeroed = (FieldShouldBeZeroedDueToX || FieldShouldBeZeroedDueToZ);
+
+	if(FieldShouldBeZeroed)
+	{
+		//*BufF = 0.; *(BufF+1) = 0.;
+		if(TreatPolCompX)
+		{
+			*pEX_New = 0.;
+			*(pEX_New+1) = 0.;
+		}
+		if(TreatPolCompZ)
+		{
+			*pEZ_New = 0.;
+			*(pEZ_New+1) = 0.;
+		}
+		return;
+	}
+
+	double xRel = xAbs - (oldRadSingleE.xStart + ixcOld*oldRadSingleE.xStep);
+
+	if(ixcOld == nx_mi_1Old) { ixStOld = ixcOld - 3; xRel += 2.*oldRadSingleE.xStep;}
+	else if(ixcOld == nx_mi_2Old) { ixStOld = ixcOld - 2; xRel += oldRadSingleE.xStep;}
+	else if(ixcOld == 0) { ixStOld = ixcOld; xRel -= oldRadSingleE.xStep;}
+	else ixStOld = ixcOld - 1;
+
+	xRel *= xStepInvOld;
+	int ixcOld_mi_ixStOld = ixcOld - ixStOld;
+
+	if((izStOld != izStOldPrev) || (ixStOld != ixStOldPrev))
+	{
+		UseLowOrderInterp_PolCompX = 0, UseLowOrderInterp_PolCompZ = 0;
+		//long TotOffsetOld = izStOld*PerZ_Old + ixStOld*PerX_Old + Two_ie;
+		//long TotOffsetOld = izStOld*PerZ_Old + ixStOld*PerX_Old; //old is single slice
+		long long TotOffsetOld = izStOld*PerZ_Old + ixStOld*PerX_Old; //old is single slice
+
+		if(TreatPolCompX)
+		{
+			float* pExSt_Old = oldRadSingleE.pBaseRadX + TotOffsetOld;
+			srTGenOptElem::GetCellDataForInterpol(pExSt_Old, PerX_Old, PerZ_Old, AuxF);
+			srTGenOptElem::SetupCellDataI(AuxF, AuxFI);
+			UseLowOrderInterp_PolCompX = srTGenOptElem::CheckForLowOrderInterp(AuxF, AuxFI, ixcOld_mi_ixStOld, izcOld_mi_izStOld, &InterpolAux01, InterpolAux02, InterpolAux02I);
+
+			if(!UseLowOrderInterp_PolCompX)
+			{
+				for(int i=0; i<2; i++) 
+				{
+					srTGenOptElem::SetupInterpolAux02(AuxF + i, &InterpolAux01, InterpolAux02 + i);
+				}
+				srTGenOptElem::SetupInterpolAux02(AuxFI, &InterpolAux01, InterpolAux02I);
+			}
+		}
+		if(TreatPolCompZ)
+		{
+			float* pEzSt_Old = oldRadSingleE.pBaseRadZ + TotOffsetOld;
+			srTGenOptElem::GetCellDataForInterpol(pEzSt_Old, PerX_Old, PerZ_Old, AuxF+2);
+			srTGenOptElem::SetupCellDataI(AuxF+2, AuxFI+1);
+			UseLowOrderInterp_PolCompZ = srTGenOptElem::CheckForLowOrderInterp(AuxF+2, AuxFI+1, ixcOld_mi_ixStOld, izcOld_mi_izStOld, &InterpolAux01, InterpolAux02+2, InterpolAux02I+1);
+
+			if(!UseLowOrderInterp_PolCompZ)
+			{
+				for(int i=0; i<2; i++) 
+				{
+					srTGenOptElem::SetupInterpolAux02(AuxF+2+i, &InterpolAux01, InterpolAux02+2+i);
+				}
+				srTGenOptElem::SetupInterpolAux02(AuxFI+1, &InterpolAux01, InterpolAux02I+1);
+			}
+		}
+		ixStOldPrev = ixStOld; izStOldPrev = izStOld;
+	}
+
+	if(TreatPolCompX)
+	{
+		if(UseLowOrderInterp_PolCompX) 
+		{
+			srTGenOptElem::InterpolF_LowOrder(InterpolAux02, xRel, zRel, BufF, 0);
+			srTGenOptElem::InterpolFI_LowOrder(InterpolAux02I, xRel, zRel, BufFI, 0);
+		}
+		else
+		{
+			srTGenOptElem::InterpolF(InterpolAux02, xRel, zRel, BufF, 0);
+			srTGenOptElem::InterpolFI(InterpolAux02I, xRel, zRel, BufFI, 0);
+		}
+
+		(*BufFI) *= AuxFI->fNorm;
+		srTGenOptElem::ImproveReAndIm(BufF, BufFI);
+
+		//if(FieldShouldBeZeroed)
+		//{
+		//	*BufF = 0.; *(BufF+1) = 0.;
+		//}
+
+		*pEX_New = *BufF;
+		*(pEX_New+1) = *(BufF+1);
+	}
+	if(TreatPolCompZ)
+	{
+		if(UseLowOrderInterp_PolCompZ) 
+		{
+			srTGenOptElem::InterpolF_LowOrder(InterpolAux02, xRel, zRel, BufF, 2);
+			srTGenOptElem::InterpolFI_LowOrder(InterpolAux02I, xRel, zRel, BufFI, 1);
+		}
+		else
+		{
+			srTGenOptElem::InterpolF(InterpolAux02, xRel, zRel, BufF, 2);
+			srTGenOptElem::InterpolFI(InterpolAux02I, xRel, zRel, BufFI, 1);
+		}
+
+		(*(BufFI+1)) *= (AuxFI+1)->fNorm;
+		srTGenOptElem::ImproveReAndIm(BufF+2, BufFI+1);
+
+		//if(FieldShouldBeZeroed)
+		//{
+		//	*(BufF+2) = 0.; *(BufF+3) = 0.;
+		//}
+
+		*pEZ_New = *(BufF+2);
+		*(pEZ_New+1) = *(BufF+3);
+	}
+}
+
+int srTGenOptElem::ReInterpolateWfrSliceSingleE_GPU(srTSRWRadStructAccessData& oldRadSingleE, srTSRWRadStructAccessData& newRadMultiE, int ie, TGPUUsageArg* pGPU)
+{
+	oldRadSingleE.pBaseRadX = (float*)CAuxGPU::ToDevice(pGPU, oldRadSingleE.pBaseRadX, 2 * oldRadSingleE.ne * oldRadSingleE.nx * oldRadSingleE.nz * sizeof(float));
+	oldRadSingleE.pBaseRadZ = (float*)CAuxGPU::ToDevice(pGPU, oldRadSingleE.pBaseRadZ, 2 * oldRadSingleE.ne * oldRadSingleE.nx * oldRadSingleE.nz * sizeof(float));
+	newRadMultiE.pBaseRadX = (float*)CAuxGPU::ToDevice(pGPU, newRadMultiE.pBaseRadX, 2 * newRadMultiE.ne * newRadMultiE.nx * newRadMultiE.nz * sizeof(float));
+	newRadMultiE.pBaseRadZ = (float*)CAuxGPU::ToDevice(pGPU, newRadMultiE.pBaseRadZ, 2 * newRadMultiE.ne * newRadMultiE.nx * newRadMultiE.nz * sizeof(float));
+
+	CAuxGPU::EnsureDeviceMemoryReady(pGPU, oldRadSingleE.pBaseRadX);
+	CAuxGPU::EnsureDeviceMemoryReady(pGPU, oldRadSingleE.pBaseRadZ);
+	CAuxGPU::EnsureDeviceMemoryReady(pGPU, newRadMultiE.pBaseRadX);
+	CAuxGPU::EnsureDeviceMemoryReady(pGPU, newRadMultiE.pBaseRadZ);
+
+	const int bs = 32;
+	dim3 blocks(newRadMultiE.nx / bs + ((newRadMultiE.nx & (bs - 1)) != 0), newRadMultiE.nz, 1);
+	dim3 threads(bs, 1);
+
+	ReInterpolateWfrSliceSingleE_Kernel << <blocks, threads >> > (oldRadSingleE, newRadMultiE, ie);
+
+	oldRadSingleE.pBaseRadX = (float*)CAuxGPU::ToHostAndFree(pGPU, oldRadSingleE.pBaseRadX, 2 * oldRadSingleE.ne * oldRadSingleE.nx * oldRadSingleE.nz * sizeof(float), true);
+	oldRadSingleE.pBaseRadZ = (float*)CAuxGPU::ToHostAndFree(pGPU, oldRadSingleE.pBaseRadZ, 2 * oldRadSingleE.ne * oldRadSingleE.nx * oldRadSingleE.nz * sizeof(float), true);
+	
+	CAuxGPU::MarkUpdated(pGPU, newRadMultiE.pBaseRadX, true, false);
+	CAuxGPU::MarkUpdated(pGPU, newRadMultiE.pBaseRadZ, true, false);
+	newRadMultiE.pBaseRadX = (float*)CAuxGPU::GetHostPtr(pGPU, newRadMultiE.pBaseRadX);
+	newRadMultiE.pBaseRadZ = (float*)CAuxGPU::GetHostPtr(pGPU, newRadMultiE.pBaseRadZ);
+	
 	return 0;
 }
 

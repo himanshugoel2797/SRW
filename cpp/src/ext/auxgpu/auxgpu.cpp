@@ -14,6 +14,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <new>
+#include <cstring> //HG26072024
 
 #ifdef _OFFLOAD_GPU
 #include <cuda_runtime.h>
@@ -118,7 +119,8 @@ int CAuxGPU::GetDevice(TGPUUsageArg* arg)
 #endif
 }
 
-void* CAuxGPU::ToDevice(TGPUUsageArg* arg, void* hostPtr, size_t size, bool dontCopy)
+//void* CAuxGPU::ToDevice(TGPUUsageArg* arg, void* hostPtr, size_t size, bool dontCopy)
+void* CAuxGPU::ToDevice(TGPUUsageArg* arg, void* hostPtr, size_t size, bool dontCopy, bool pinOnHost, int zeroMode) //HG26072024
 {
 #ifdef _OFFLOAD_GPU
 	if (arg == NULL)
@@ -147,11 +149,22 @@ void* CAuxGPU::ToDevice(TGPUUsageArg* arg, void* hostPtr, size_t size, bool dont
 	}
 
 	void *devicePtr = NULL;
-	cudaError_t err = cudaMalloc(&devicePtr, size);
-	if (err != cudaSuccess) // Try again after freeing up some memory HG24072023
+	//cudaError_t err = cudaMalloc(&devicePtr, size);
+	cudaError_t err = cudaSuccess; //HG26072024 Switch to asynchronous malloc
+	if (!pinOnHost)
 	{
-		cudaStreamSynchronize(0);
-		err = cudaMalloc(&devicePtr, size);
+		err = cudaMallocAsync(&devicePtr, size, memcpy_stream); //Try asynchronous allocation
+		if (err != cudaSuccess) // Try again after freeing up some memory HG24072023
+		{
+			cudaStreamSynchronize(0);
+			err = cudaMalloc(&devicePtr, size);
+			if (err != cudaSuccess) pinOnHost = true; //HG26072024 If allocation still fails, try pinning on host
+		}
+	}
+	if (pinOnHost) //HG26072024 Fallback to pinning host memory directly
+	{
+		err = cudaHostRegister(hostPtr, size, cudaHostRegisterDefault);
+		devicePtr = hostPtr;
 	}
 	if (err != cudaSuccess)
 		return NULL;
@@ -165,8 +178,22 @@ void* CAuxGPU::ToDevice(TGPUUsageArg* arg, void* hostPtr, size_t size, bool dont
 	info.HostToDevUpdated = false;
 	cudaEventCreateWithFlags(&info.h2d_event, cudaEventDisableTiming);
 	cudaEventCreateWithFlags(&info.d2h_event, cudaEventDisableTiming);
-	if (!dontCopy){
-		cudaMemcpyAsync(devicePtr, hostPtr, size, cudaMemcpyHostToDevice, memcpy_stream);
+	//if (!dontCopy){
+	//	cudaMemcpyAsync(devicePtr, hostPtr, size, cudaMemcpyHostToDevice, memcpy_stream);
+	//	cudaEventRecord(info.h2d_event, memcpy_stream);
+	//}
+	if (devicePtr != hostPtr) //HG26072024
+	{
+		info.HostToDevUpdated = true;
+		if (!dontCopy)
+		{
+			cudaMemcpyAsync(devicePtr, hostPtr, size, cudaMemcpyHostToDevice, memcpy_stream);
+		}
+		else 
+		{
+			if (zeroMode == 0)
+				cudaMemsetAsync(devicePtr, 0, size, memcpy_stream);
+		}
 		cudaEventRecord(info.h2d_event, memcpy_stream);
 	}
 	info.size = size;
@@ -191,12 +218,14 @@ void CAuxGPU::EnsureDeviceMemoryReady(TGPUUsageArg* arg, void* hostPtr)
 		return;
 	if (gpuMap.find(hostPtr) != gpuMap.end()){
 		void* devPtr = gpuMap[hostPtr].devicePtr;
-		if (gpuMap[devPtr].HostToDevUpdated){
-			cudaStreamWaitEvent(0, gpuMap[devPtr].h2d_event);
-		}
 //#if _DEBUG
 //		printf("EnsureDeviceMemoryReady: %p -> %p, %d, D2H: %d, H2D: %d\n", hostPtr, devPtr, gpuMap[devPtr].size, gpuMap[devPtr].DevToHostUpdated, gpuMap[devPtr].HostToDevUpdated); //HG28072023
 //#endif
+		if (gpuMap[devPtr].HostToDevUpdated){
+			cudaStreamWaitEvent(0, gpuMap[devPtr].h2d_event);
+			gpuMap[devPtr].HostToDevUpdated = false; //HG26072024 After this event the latest data is known to be on device
+			gpuMap[gpuMap[devPtr].hostPtr].HostToDevUpdated = false; //HG26072024
+		}
 	}
 #endif
 }
@@ -247,17 +276,22 @@ void* CAuxGPU::ToHostAndFree(TGPUUsageArg* arg, void* devicePtr, size_t size, bo
 	if (!dontCopy && info.DevToHostUpdated)
 	{
 		cudaStreamWaitEvent(memcpy_stream, info.d2h_event, 0);
-		cudaMemcpyAsync(hostPtr, devicePtr, size, cudaMemcpyDeviceToHost, memcpy_stream);
-		cudaEventRecord(info.d2h_event);
+		//cudaMemcpyAsync(hostPtr, devicePtr, size, cudaMemcpyDeviceToHost, memcpy_stream);
+		if(hostPtr != devicePtr) cudaMemcpyAsync(hostPtr, devicePtr, size, cudaMemcpyDeviceToHost, memcpy_stream); //HG26072024 only copy if not using pinned memory
+		cudaFreeAsync(devicePtr, memcpy_stream); //HG26072024 Doing the async free here is  slightly more efficient and eliminates a potential use-after-free
 		cudaEventSynchronize(info.d2h_event); // we can't treat host memory as valid until the copy is complete
 	}
+	else //HG26072024
+	{
+		//cudaStreamWaitEvent(0, info.h2d_event);
+		if(hostPtr != devicePtr) cudaStreamWaitEvent(0, info.h2d_event); //HG26072024 H2D events are meaningless when the memory is on host
+		cudaStreamWaitEvent(0, info.d2h_event);
+		cudaFreeAsync(devicePtr, 0);
+	}
 //#if _DEBUG
-//	printf("ToHostAndFree: %p -> %p, %d\n", devicePtr, hostPtr, size); //HG28072023
+//	printf("ToHostAndFree: %p -> %p, %d, D2H:%d, dontCopy: %d\n", devicePtr, hostPtr, size, info.DevToHostUpdated, dontCopy); //HG28072023
 //#endif
-	cudaStreamWaitEvent(0, info.h2d_event);
-	cudaStreamWaitEvent(0, info.d2h_event);
-	cudaFreeAsync(devicePtr, 0);
-    cudaEventDestroy(info.h2d_event);
+	cudaEventDestroy(info.h2d_event);
 	cudaEventDestroy(info.d2h_event);
 	gpuMap.erase(devicePtr);
 	gpuMap.erase(hostPtr);
@@ -267,30 +301,70 @@ void* CAuxGPU::ToHostAndFree(TGPUUsageArg* arg, void* devicePtr, size_t size, bo
 #endif
 }
 
-void CAuxGPU::FreeHost(void* ptr)
+//void CAuxGPU::FreeHost(void* ptr) //HG26072024 Commented out function
+//{
+//#ifdef _OFFLOAD_GPU
+//	if (ptr == NULL)
+//		return;
+//	if (gpuMap.find(ptr) == gpuMap.end())
+//		return;
+//	memAllocInfo_t info = gpuMap[ptr];
+//	void *hostPtr = info.hostPtr;
+//	void *devicePtr = info.devicePtr;
+////#if _DEBUG
+////	printf("FreeHost: %p, %p\n", devicePtr, hostPtr);
+////#endif
+//    //cudaStreamWaitEvent(0, info.h2d_event);
+//	//cudaStreamWaitEvent(0, info.d2h_event);
+//	cudaFreeAsync(devicePtr, 0);
+//	//cudaEventDestroy(info.h2d_event);
+//	//cudaEventDestroy(info.d2h_event);
+//	std::free(hostPtr); //OC02082023
+//	//CAuxGPU::free(hostPtr);
+//	gpuMap.erase(devicePtr);
+//	gpuMap.erase(hostPtr);
+//#endif
+//	return;
+//}
+
+int CAuxGPU::SetHostPtr(TGPUUsageArg* arg, void* origPtr, void* newPtr, size_t size) //HG26072024 Add function
 {
 #ifdef _OFFLOAD_GPU
-	if (ptr == NULL)
-		return;
-	if (gpuMap.find(ptr) == gpuMap.end())
-		return;
-	memAllocInfo_t info = gpuMap[ptr];
-	void *hostPtr = info.hostPtr;
-	void *devicePtr = info.devicePtr;
+	if (arg == NULL)
+		return -1;
+	if (arg->deviceIndex == 0)
+		return -1;
+	if (origPtr == NULL)
+		return -1;
+	if (newPtr == NULL)
+		return -1;
+	if (!GPUEnabled(arg))
+		return -1;
+	if (gpuMap.find(origPtr) == gpuMap.end())
+	{
+		memcpy(newPtr, origPtr, size);
+		return 0;
+	}
+	memAllocInfo_t info = gpuMap[origPtr];
+	if (gpuMap.find(newPtr) != gpuMap.end())
+		return -1;	//The new pointer should not already be known to the GPU memory map, else we will have a memory leak
+
+	if (info.DevToHostUpdated) 
+	{
+		gpuMap.erase(origPtr);
+		info.hostPtr = newPtr;
+		gpuMap[info.hostPtr] = info;
+		gpuMap[info.devicePtr] = info;
+	}
+	else 
+	{
+		memcpy(newPtr, origPtr, size);
+	}
 //#if _DEBUG
-//	printf("FreeHost: %p, %p\n", devicePtr, hostPtr);
+//	printf("SetHostPtr: %p -> %p\n", origPtr, newPtr);
 //#endif
-    //cudaStreamWaitEvent(0, info.h2d_event);
-	//cudaStreamWaitEvent(0, info.d2h_event);
-	cudaFreeAsync(devicePtr, 0);
-	//cudaEventDestroy(info.h2d_event);
-	//cudaEventDestroy(info.d2h_event);
-	std::free(hostPtr); //OC02082023
-	//CAuxGPU::free(hostPtr);
-	gpuMap.erase(devicePtr);
-	gpuMap.erase(hostPtr);
 #endif
-	return;
+	return 0;
 }
 
 void CAuxGPU::MarkUpdated(TGPUUsageArg* arg, void* ptr, bool devToHost, bool hostToDev)
@@ -308,12 +382,19 @@ void CAuxGPU::MarkUpdated(TGPUUsageArg* arg, void* ptr, bool devToHost, bool hos
 		return;
 	void* devPtr = gpuMap[ptr].devicePtr;
 	void* hostPtr = gpuMap[ptr].hostPtr;
+	if ((devToHost | gpuMap[devPtr].DevToHostUpdated) && (hostToDev | gpuMap[devPtr].HostToDevUpdated)) //HG26072024 Trying to perform both a copy to host and then a copy back to device doesn't make sense
+		return;
 	gpuMap[devPtr].DevToHostUpdated = devToHost;
 	gpuMap[devPtr].HostToDevUpdated = hostToDev;
 	gpuMap[hostPtr].DevToHostUpdated = devToHost;
 	gpuMap[hostPtr].HostToDevUpdated = hostToDev;
 	if (devToHost)
 		cudaEventRecord(gpuMap[devPtr].d2h_event, 0);
+	if (hostToDev) //HG26072024 If host data has been updated, copy it over
+	{
+		cudaMemcpyAsync(devPtr, hostPtr, gpuMap[devPtr].size, cudaMemcpyHostToDevice, memcpy_stream);
+		cudaEventRecord(gpuMap[devPtr].h2d_event, memcpy_stream);
+	}
 //#if _DEBUG
 //	printf("MarkUpdated: %p -> %p, D2H: %d, H2D: %d\n", ptr, devPtr, devToHost, hostToDev);
 //#endif

@@ -165,7 +165,8 @@ public:
 		//OC01102019 (restored)
 		//if(MethNo == 0) result = PropagateRadiationMeth_0(pRadAccessData);
 		if(MethNo == 0) result = PropagateRadiationMeth_0(pRadAccessData, pvGPU); //HG01122023
-		else if(MethNo == 1) result = PropagateRadiationMeth_1(pRadAccessData);
+		//else if(MethNo == 1) result = PropagateRadiationMeth_1(pRadAccessData);
+		else if(MethNo == 1) result = PropagateRadiationMeth_1(pRadAccessData, pvGPU); //HG26072024
 		else if(MethNo == 2) result = PropagateRadiationMeth_2(pRadAccessData, ParPrecWfrPropag, ResizeBeforeAndAfterVect);
 		
 		//if(ParPrecWfrPropag.AnalTreatment == 1)
@@ -213,12 +214,14 @@ public:
 			pRadAccessData->SetNonZeroWavefrontLimitsToFullRange();
 			//return srTGenOptElem::PropagateRadiationMeth_0(pRadAccessData, pBuf); //OC06092019
 			//OC01102019 (restored)
-			return srTGenOptElem::PropagateRadiationMeth_0(pRadAccessData);
+			//return srTGenOptElem::PropagateRadiationMeth_0(pRadAccessData);
+			return srTGenOptElem::PropagateRadiationMeth_0(pRadAccessData, pvGPU); //HG26072024
 			//return srTGenOptElem::PropagateRadiationMeth_0(pRadAccessData); //since (LocalPropMode == 1) and (LocalPropMode == 2) - propagation to/from waist introduces some dispersion and can potentially modify mesh
 		}
 	}
 
-	int PropagateRadiationMeth_1(srTSRWRadStructAccessData*);
+	//int PropagateRadiationMeth_1(srTSRWRadStructAccessData*);
+	int PropagateRadiationMeth_1(srTSRWRadStructAccessData*, void* =0); //HG26072024
 
 	char ChooseLocalPropMode(srTSRWRadStructAccessData* pRadAccessData, srTParPrecWfrPropag& ParPrecWfrPropag, char& AnalTreatMode) //OC06092019
 	//void ChooseLocalPropMode(srTSRWRadStructAccessData* pRadAccessData, srTParPrecWfrPropag& ParPrecWfrPropag)
@@ -572,7 +575,8 @@ public:
 		pOutRadAccessData->AuxLong1 = 1;
 		return 0;
 	}
-	int TuneRadForPropMeth_1(srTSRWRadStructAccessData*, srTRadResize&);
+	//int TuneRadForPropMeth_1(srTSRWRadStructAccessData*, srTRadResize&);
+	int TuneRadForPropMeth_1(srTSRWRadStructAccessData*, srTRadResize&, void* = 0); //HG26072024
 
 //	void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf=0) //OC29082019
 //	//void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs)

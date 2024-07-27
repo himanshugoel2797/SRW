@@ -200,8 +200,13 @@ public:
 	virtual int PropagateRadiationMeth_0(srTSRWRadStructAccessData* pRadAccessData, void* pvGPU=0); //moved from derived classes: loops over E, calls derived PropagateRadiationSingleE_Meth_0 //HG01122023
 
 	void FindWidestWfrMeshParam(vector<srTSRWRadStructAccessData>& vRadSlices, srTSRWRadStructAccessData* pRad, bool keepConstNumPoints);
-	int ReInterpolateWfrDataOnNewTransvMesh(vector<srTSRWRadStructAccessData>& vRadSlices, srTSRWRadStructAccessData* pAuxRadSingleE, srTSRWRadStructAccessData* pRadRes);
-	int ReInterpolateWfrSliceSingleE(srTSRWRadStructAccessData& oldRadSingleE, srTSRWRadStructAccessData& newRadMultiE, int ie);
+	//int ReInterpolateWfrDataOnNewTransvMesh(vector<srTSRWRadStructAccessData>& vRadSlices, srTSRWRadStructAccessData* pAuxRadSingleE, srTSRWRadStructAccessData* pRadRes);
+	int ReInterpolateWfrDataOnNewTransvMesh(vector<srTSRWRadStructAccessData>& vRadSlices, srTSRWRadStructAccessData* pAuxRadSingleE, srTSRWRadStructAccessData* pRadRes, void* pvGPU=0); //HG26072024
+	//int ReInterpolateWfrSliceSingleE(srTSRWRadStructAccessData& oldRadSingleE, srTSRWRadStructAccessData& newRadMultiE, int ie);
+	int ReInterpolateWfrSliceSingleE(srTSRWRadStructAccessData& oldRadSingleE, srTSRWRadStructAccessData& newRadMultiE, int ie, void* pvGPU=0); //HG26072024
+#ifdef _OFFLOAD_GPU //HG27072024
+	int ReInterpolateWfrSliceSingleE_GPU(srTSRWRadStructAccessData& oldRadSingleE, srTSRWRadStructAccessData& newRadMultiE, int ie, TGPUUsageArg* parGPU=0);
+#endif
 	
 	int SetupCharacteristicSections1D(srTSRWRadStructAccessData*, srTRadSect1D*);
 	//int DefinePropagScenario(srTSRWRadStructAccessData*, srTPredictedPropagData1D*, srTPropagScenario1D*);
@@ -257,21 +262,29 @@ public:
 	int TraverseRad1D(srTRadSect1D*, void* pBufVars=0); //OC29082019
 	//int TraverseRad1D(srTRadSect1D*);
 
-	int ExtractRadSliceConstE(srTSRWRadStructAccessData*, long, float*&, float*&, bool forceCopyField=false); //OC120908
+	//int ExtractRadSliceConstE(srTSRWRadStructAccessData*, long, float*&, float*&, bool forceCopyField=false); //OC120908
+	int ExtractRadSliceConstE(srTSRWRadStructAccessData*, long, float*&, float*&, bool forceCopyField=false, void* pvGPU=0); //HG26072024
 	int SetupRadSliceConstE(srTSRWRadStructAccessData*, long, float*, float*);
 	inline void SetupRadXorZSectFromSliceConstE(float*, float*, long, long, char, long, float*, float*);
 
 	int ExtractRadSectVsXorZ(srTSRWRadStructAccessData*, long, long, char, float*, float*);
 	int SetupSectionArraysVsXandZ(srTSRWRadStructAccessData*, srTRadSect1D&, srTRadSect1D&);
 
-	int SetupNewRadStructFromSliceConstE(srTSRWRadStructAccessData* pRadAccessData, long, srTSRWRadStructAccessData*& pRadDataSingleE);
+	//int SetupNewRadStructFromSliceConstE(srTSRWRadStructAccessData* pRadAccessData, long, srTSRWRadStructAccessData*& pRadDataSingleE);
+	int SetupNewRadStructFromSliceConstE(srTSRWRadStructAccessData* pRadAccessData, long, srTSRWRadStructAccessData*& pRadDataSingleE, void* pvGPU=0); //HG26072024
 	//int UpdateGenRadStructFromSlicesConstE(srTSRWRadStructAccessData*, srTSRWRadStructAccessData*);
 	//int UpdateGenRadStructSliceConstE_Meth_0(srTSRWRadStructAccessData*, int, srTSRWRadStructAccessData*);
 	//OC28102018: modified by S.Yakubov to adopt the code for OpenMP parallelization
-	int UpdateGenRadStructSliceConstE_Meth_0(srTSRWRadStructAccessData*, int, srTSRWRadStructAccessData*, int update_mode=0);
+	//int UpdateGenRadStructSliceConstE_Meth_0(srTSRWRadStructAccessData*, int, srTSRWRadStructAccessData*, int update_mode=0);
+	int UpdateGenRadStructSliceConstE_Meth_0(srTSRWRadStructAccessData*, int, srTSRWRadStructAccessData*, int update_mode=0, void* pvGPU=0); //HG26072024
 
 	int UpdateGenRadStructSliceConstE_Meth_2(srTSRWRadStructAccessData*, int, srTSRWRadStructAccessData*);
 	int RemoveSliceConstE_FromGenRadStruct(srTSRWRadStructAccessData*, long);
+
+#ifdef _OFFLOAD_GPU //HG26072024
+	int ExtractRadSliceConstE_GPU(srTSRWRadStructAccessData*, long, float*&, float*&, TGPUUsageArg* pGPU=0);
+	int UpdateGenRadStructSliceConstE_Meth_0_GPU(srTSRWRadStructAccessData*, int, srTSRWRadStructAccessData*, TGPUUsageArg* pGPU=0);
+#endif
 
 	//int SetRadRepres(srTSRWRadStructAccessData*, char);
 	//int SetRadRepres(srTSRWRadStructAccessData*, char, double* ar_xStartInSlicesE=0, double* ar_zStartInSlicesE=0);
@@ -291,7 +304,8 @@ public:
 	int SetupWfrEdgeCorrData1D(srTRadSect1D*, float*, float*, srTDataPtrsForWfrEdgeCorr1D&);
 	void MakeWfrEdgeCorrection1D(srTRadSect1D*, float*, float*, srTDataPtrsForWfrEdgeCorr1D&);
 
-	int ComputeRadMoments(srTSRWRadStructAccessData*);
+	//int ComputeRadMoments(srTSRWRadStructAccessData*);
+	int ComputeRadMoments(srTSRWRadStructAccessData*, void* =0); //HG26072024
 
 	int RadResizeGen(srTSRWRadStructAccessData&, srTRadResize&, void* pvGPU=0); //HG01122023
 	//int RadResizeGen(srTSRWRadStructAccessData&, srTRadResize&);
@@ -300,10 +314,14 @@ public:
 	//int RadResizeCore(srTSRWRadStructAccessData&, srTSRWRadStructAccessData&, srTRadResize&, char =0);
 #ifdef _OFFLOAD_GPU //HG01122023
 	int RadResizeCore_GPU(srTSRWRadStructAccessData&, srTSRWRadStructAccessData&, char =0, TGPUUsageArg* =0);
+	int RadResizeCore_OnlyLargerRange_GPU(srTSRWRadStructAccessData& OldRadAccessData, srTSRWRadStructAccessData& NewRadAccessData, char PolComp, TGPUUsageArg* pGPU =0); //HG26072024
+	int RadResizeCore_OnlyLargerRangeE_GPU(srTSRWRadStructAccessData& OldRadAccessData, srTSRWRadStructAccessData& NewRadAccessData, char PolComp, TGPUUsageArg* pGPU =0); //HG26072024
 #endif
 	int RadResizeCoreE(srTSRWRadStructAccessData&, srTSRWRadStructAccessData&, srTRadResize&, char =0);
-	int RadResizeCore_OnlyLargerRange(srTSRWRadStructAccessData& OldRadAccessData, srTSRWRadStructAccessData& NewRadAccessData, srTRadResize& RadResizeStruct, char PolComp);
-	int RadResizeCore_OnlyLargerRangeE(srTSRWRadStructAccessData& OldRadAccessData, srTSRWRadStructAccessData& NewRadAccessData, srTRadResize& RadResizeStruct, char PolComp);
+	//int RadResizeCore_OnlyLargerRange(srTSRWRadStructAccessData& OldRadAccessData, srTSRWRadStructAccessData& NewRadAccessData, srTRadResize& RadResizeStruct, char PolComp);
+	//int RadResizeCore_OnlyLargerRangeE(srTSRWRadStructAccessData& OldRadAccessData, srTSRWRadStructAccessData& NewRadAccessData, srTRadResize& RadResizeStruct, char PolComp);
+	int RadResizeCore_OnlyLargerRange(srTSRWRadStructAccessData& OldRadAccessData, srTSRWRadStructAccessData& NewRadAccessData, srTRadResize& RadResizeStruct, char PolComp, void* pvGPU=0); //HG26072024
+	int RadResizeCore_OnlyLargerRangeE(srTSRWRadStructAccessData& OldRadAccessData, srTSRWRadStructAccessData& NewRadAccessData, srTRadResize& RadResizeStruct, char PolComp, void* pvGPU=0); //HG26072024
 
 	//inline void GetCellDataForInterpol(float*, long long , long long, srTInterpolAuxF*);
 #ifdef _OFFLOAD_GPU //HG01122023

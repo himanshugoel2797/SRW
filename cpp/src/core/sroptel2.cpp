@@ -61,13 +61,15 @@ int srTGenOptElem::PropagateRadiationMeth_0(srTSRWRadStructAccessData* pRadAcces
 	}
 	else
 	{
-		if(result = SetupNewRadStructFromSliceConstE(pRadAccessData, -1, pRadDataSingleE)) return result;
+		//if(result = SetupNewRadStructFromSliceConstE(pRadAccessData, -1, pRadDataSingleE)) return result;
+		if(result = SetupNewRadStructFromSliceConstE(pRadAccessData, -1, pRadDataSingleE, pvGPU)) return result; //HG26072024
 		//allocates new pRadDataSingleE !
 	}
 
 	if(!m_PropWfrInPlace)
 	{
-		if(result = SetupNewRadStructFromSliceConstE(pRadAccessData, -1, pPrevRadDataSingleE)) return result;
+		//if(result = SetupNewRadStructFromSliceConstE(pRadAccessData, -1, pPrevRadDataSingleE)) return result;
+		if (result = SetupNewRadStructFromSliceConstE(pRadAccessData, -1, pPrevRadDataSingleE, pvGPU)) return result; //HG26072024
 	}
 
 	//separate processing of wavefront radius is necessary
@@ -86,7 +88,8 @@ int srTGenOptElem::PropagateRadiationMeth_0(srTSRWRadStructAccessData* pRadAcces
 	{
 		if(pRadDataSingleE != pRadAccessData)
 		{
-			if(result = ExtractRadSliceConstE(pRadAccessData, ie, pRadDataSingleE->pBaseRadX, pRadDataSingleE->pBaseRadZ)) return result;
+			//if(result = ExtractRadSliceConstE(pRadAccessData, ie, pRadDataSingleE->pBaseRadX, pRadDataSingleE->pBaseRadZ)) return result;
+			if(result = ExtractRadSliceConstE(pRadAccessData, ie, pRadDataSingleE->pBaseRadX, pRadDataSingleE->pBaseRadZ, false, pvGPU)) return result; //HG26072024
 			pRadDataSingleE->eStart = pRadAccessData->eStart + ie*pRadAccessData->eStep;
 			long OffsetMom = AmOfMoments*ie;
 			pRadDataSingleE->pMomX = pRadAccessData->pMomX + OffsetMom;
@@ -105,10 +108,16 @@ int srTGenOptElem::PropagateRadiationMeth_0(srTSRWRadStructAccessData* pRadAcces
 			pRadDataSingleE->xStep = pRadAccessData->xStep;
 			pRadDataSingleE->zStart = pRadAccessData->zStart;
 			pRadDataSingleE->zStep = pRadAccessData->zStep;
+
+			pRadDataSingleE->xWfrMin = pRadAccessData->xWfrMin; //HG26072024 Fix wavefront limits update bug
+			pRadDataSingleE->xWfrMax = pRadAccessData->xWfrMax;
+			pRadDataSingleE->zWfrMin = pRadAccessData->zWfrMin;
+			pRadDataSingleE->zWfrMax = pRadAccessData->zWfrMax;
 		}
 		if(pPrevRadDataSingleE != 0)
 		{
-			if(result = ExtractRadSliceConstE(pRadAccessData, ie, pPrevRadDataSingleE->pBaseRadX, pPrevRadDataSingleE->pBaseRadZ, true)) return result; //OC120908
+			//if(result = ExtractRadSliceConstE(pRadAccessData, ie, pPrevRadDataSingleE->pBaseRadX, pPrevRadDataSingleE->pBaseRadZ, true)) return result; //OC120908
+			if(result = ExtractRadSliceConstE(pRadAccessData, ie, pPrevRadDataSingleE->pBaseRadX, pPrevRadDataSingleE->pBaseRadZ, true, pvGPU)) return result; //HG26072024
 			pPrevRadDataSingleE->eStart = pRadDataSingleE->eStart;
 			pPrevRadDataSingleE->pMomX = pRadDataSingleE->pMomX;
 			pPrevRadDataSingleE->pMomZ = pRadDataSingleE->pMomZ;
@@ -121,7 +130,10 @@ int srTGenOptElem::PropagateRadiationMeth_0(srTSRWRadStructAccessData* pRadAcces
 
 		if(pRadDataSingleE != pRadAccessData)
 		{
-			if(result = UpdateGenRadStructSliceConstE_Meth_0(pRadDataSingleE, ie, pRadAccessData)) return result;
+			//if(result = UpdateGenRadStructSliceConstE_Meth_0(pRadDataSingleE, ie, pRadAccessData)) return result;
+			int update_mode = 0; //HG26072024 Fix wavefront limits update bug
+			if (ie < neOrig - 1) update_mode = 1;
+			if(result = UpdateGenRadStructSliceConstE_Meth_0(pRadDataSingleE, ie, pRadAccessData, update_mode, pvGPU)) return result;
 			//the above doesn't change the transverse grid parameters in *pRadAccessData
 
 			//vRadSlices.push_back(*pRadDataSingleE); //this automatically calls destructor, which can eventually delete "emulated" structs!
@@ -141,7 +153,8 @@ int srTGenOptElem::PropagateRadiationMeth_0(srTSRWRadStructAccessData* pRadAcces
 	//OCTEST (commented-out)
 	if(gridParamWereModifInSlices)
 	{//to test!
-		if(result = ReInterpolateWfrDataOnNewTransvMesh(vRadSlices, pRadDataSingleE, pRadAccessData)) return result;
+		//if(result = ReInterpolateWfrDataOnNewTransvMesh(vRadSlices, pRadDataSingleE, pRadAccessData)) return result;
+		if(result = ReInterpolateWfrDataOnNewTransvMesh(vRadSlices, pRadDataSingleE, pRadAccessData, pvGPU)) return result; //HG26072024
 	}
 
 	if((pRadDataSingleE != 0) && (pRadDataSingleE != pRadAccessData)) delete pRadDataSingleE;
@@ -536,7 +549,8 @@ void srTGenOptElem::FindWidestWfrMeshParam(vector<srTSRWRadStructAccessData>& vR
 
 //*************************************************************************
 
-int srTGenOptElem::ReInterpolateWfrDataOnNewTransvMesh(vector<srTSRWRadStructAccessData>& vRadSlices, srTSRWRadStructAccessData* pAuxRadSingleE, srTSRWRadStructAccessData* pRadRes)
+//int srTGenOptElem::ReInterpolateWfrDataOnNewTransvMesh(vector<srTSRWRadStructAccessData>& vRadSlices, srTSRWRadStructAccessData* pAuxRadSingleE, srTSRWRadStructAccessData* pRadRes)
+int srTGenOptElem::ReInterpolateWfrDataOnNewTransvMesh(vector<srTSRWRadStructAccessData>& vRadSlices, srTSRWRadStructAccessData* pAuxRadSingleE, srTSRWRadStructAccessData* pRadRes, void* pvGPU) //HG26072024
 {//this requires same nx, nz in all rad. structures
  //assumes that field data was allocated for pAuxRadSingleE, pRadRes;
 
@@ -566,7 +580,7 @@ int srTGenOptElem::ReInterpolateWfrDataOnNewTransvMesh(vector<srTSRWRadStructAcc
 		if((radMesh.nx == pRadRes->nx) && (::fabs(radMesh.xStart - pRadRes->xStart) < xAbsTol) && (::fabs(radMesh.xStep - pRadRes->xStep) < xAbsTol) &&
 		   (radMesh.nz == pRadRes->nz) && (::fabs(radMesh.zStart - pRadRes->zStart) < zAbsTol) && (::fabs(radMesh.zStep - pRadRes->zStep) < zAbsTol)) continue;
 
-		if(result = ExtractRadSliceConstE(pRadRes, ie, pOrigBufEX, pOrigBufEZ, true)) return result;
+		if(result = ExtractRadSliceConstE(pRadRes, ie, pOrigBufEX, pOrigBufEZ, true, pvGPU)) return result;
 		*pAuxRadSingleE = radMesh;
 		pAuxRadSingleE->pBaseRadX = pOrigBufEX; pAuxRadSingleE->pBaseRadZ = pOrigBufEZ;
 		//we require transverse mesh parameters and wfr radii of curvature and their errors!
@@ -575,7 +589,8 @@ int srTGenOptElem::ReInterpolateWfrDataOnNewTransvMesh(vector<srTSRWRadStructAcc
 		pRadRes->RobsZ = radMesh.RobsZ; pRadRes->RobsZAbsErr = radMesh.RobsZAbsErr;
 		//to allow for removing / adding the quadratic phase term
 
-		if(result = ReInterpolateWfrSliceSingleE(*pAuxRadSingleE, *pRadRes, ie)) return result;
+		//if(result = ReInterpolateWfrSliceSingleE(*pAuxRadSingleE, *pRadRes, ie)) return result;
+		if(result = ReInterpolateWfrSliceSingleE(*pAuxRadSingleE, *pRadRes, ie, pvGPU)) return result; //HG26072024
 	}
 	pRadRes->RobsX = origMultiRobsX; pRadRes->RobsXAbsErr = origMultiErrRobsX;
 	pRadRes->RobsZ = origMultiRobsZ; pRadRes->RobsZAbsErr = origMultiErrRobsZ;

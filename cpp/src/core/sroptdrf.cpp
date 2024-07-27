@@ -196,14 +196,16 @@ int srTDriftSpace::PropagateElecBeamMoments(srTEbmDat* pEbm)
 
 //*************************************************************************
 
-int srTDriftSpace::TuneRadForPropMeth_1(srTSRWRadStructAccessData* pRadAccessData, srTRadResize& PostResize)
+//int srTDriftSpace::TuneRadForPropMeth_1(srTSRWRadStructAccessData* pRadAccessData, srTRadResize& PostResize)
+int srTDriftSpace::TuneRadForPropMeth_1(srTSRWRadStructAccessData* pRadAccessData, srTRadResize& PostResize, void* pvGPU) //HG26072024
 {
 	srTMomentsRatios* MomRatArray = new srTMomentsRatios[pRadAccessData->ne];
 	if(MomRatArray == 0) return MEMORY_ALLOCATION_FAILURE;
 
 	int result;
 	if(pRadAccessData->Pres != 0) // Go to spatial...
-		if(result = SetRadRepres(pRadAccessData, 0)) return result;
+		//if (result = SetRadRepres(pRadAccessData, 0)) return result;
+		if(result = SetRadRepres(pRadAccessData, 0, 0, 0, pvGPU)) return result; //HG26072024
 
 	if(result = PropagateRadMoments(pRadAccessData, MomRatArray)) return result;
 	
@@ -251,7 +253,8 @@ int srTDriftSpace::TuneRadForPropMeth_1(srTSRWRadStructAccessData* pRadAccessDat
 	char zResizeNeeded = (pzMax - 1. > ResizeTol);
 	if(xResizeNeeded) RadResize.pxm = DiffractionFactor*pxMax;
 	if(zResizeNeeded) RadResize.pzm = DiffractionFactor*pzMax;
-	if(xResizeNeeded || zResizeNeeded) if(result = RadResizeGen(*pRadAccessData, RadResize)) return result;
+	//if (xResizeNeeded || zResizeNeeded) if (result = RadResizeGen(*pRadAccessData, RadResize)) return result;
+	if(xResizeNeeded || zResizeNeeded) if(result = RadResizeGen(*pRadAccessData, RadResize, pvGPU)) return result; //HG26072024
 
 	PostResize.pxm = PostResize.pzm = PostResize.pxd = PostResize.pzd = 1.;
 
@@ -281,7 +284,8 @@ int srTDriftSpace::TuneRadForPropMeth_1(srTSRWRadStructAccessData* pRadAccessDat
 
 //*************************************************************************
 
-int srTDriftSpace::PropagateRadiationMeth_1(srTSRWRadStructAccessData* pRadAccessData)
+//int srTDriftSpace::PropagateRadiationMeth_1(srTSRWRadStructAccessData* pRadAccessData)
+int srTDriftSpace::PropagateRadiationMeth_1(srTSRWRadStructAccessData* pRadAccessData, void* pvGPU) //HG26072024
 {
 	int result;
 	srTRadResize PostResize;
@@ -299,22 +303,28 @@ int srTDriftSpace::PropagateRadiationMeth_1(srTSRWRadStructAccessData* pRadAcces
 	//float *NewMxxArr = 0, *NewMzzArr = 0;
 	double *NewMxxArr = 0, *NewMzzArr = 0;
 
-	if(result = TuneRadForPropMeth_1(pRadAccessData, PostResize)) return result;
+	//if (result = TuneRadForPropMeth_1(pRadAccessData, PostResize)) return result;
+	if(result = TuneRadForPropMeth_1(pRadAccessData, PostResize, pvGPU)) return result; //HG26072024
 	if(result = PropagateWaveFrontRadius(pRadAccessData)) return result;
 
-	if(pRadAccessData->Pres != 1) if(result = SetRadRepres(pRadAccessData, 1)) return result;
-	if(result = TraverseRadZXE(pRadAccessData)) return result;
-	if(result = SetRadRepres(pRadAccessData, 0)) return result;
+	//if(pRadAccessData->Pres != 1) if(result = SetRadRepres(pRadAccessData, 1)) return result;
+	//if(result = TraverseRadZXE(pRadAccessData)) return result;
+	//if(result = SetRadRepres(pRadAccessData, 0)) return result;
+	if(pRadAccessData->Pres != 1) if(result = SetRadRepres(pRadAccessData, 1, 0, 0, pvGPU)) return result; //HG26072024
+	if(result = TraverseRadZXE(pRadAccessData, 0, 0, pvGPU)) return result;
+	if(result = SetRadRepres(pRadAccessData, 0, 0, 0, pvGPU)) return result;
 
 	//const double ResizeTol = 0.15;
 	if((PostResize.pxm != -1) && (PostResize.pzm != -1))
 	{
 		char PostResizeNeeded = (::fabs(PostResize.pxm - 1.) || ::fabs(PostResize.pzm - 1.));
-		if(PostResizeNeeded) if(result = RadResizeGen(*pRadAccessData, PostResize)) return result;
+		//if(PostResizeNeeded) if(result = RadResizeGen(*pRadAccessData, PostResize)) return result;
+		if(PostResizeNeeded) if(result = RadResizeGen(*pRadAccessData, PostResize, pvGPU)) return result; //HG26072024
 	}
 	else
 	{
-		if(result = ComputeRadMoments(pRadAccessData)) return result;
+		//if(result = ComputeRadMoments(pRadAccessData)) return result;
+		if(result = ComputeRadMoments(pRadAccessData, pvGPU)) return result; //HG26072024
 
 		//NewMxxArr = new float[pRadAccessData->ne];
 		NewMxxArr = new double[pRadAccessData->ne]; //OC130311
@@ -334,7 +344,8 @@ int srTDriftSpace::PropagateRadiationMeth_1(srTSRWRadStructAccessData* pRadAcces
 		PostResize.pzm = sqrt(pzmMaxE2);
 		char PostResizeNeeded = (::fabs(PostResize.pxm - 1.) || ::fabs(PostResize.pzm - 1.));
 
-		if(PostResizeNeeded) if(result = RadResizeGen(*pRadAccessData, PostResize)) return result;
+		//if(PostResizeNeeded) if(result = RadResizeGen(*pRadAccessData, PostResize)) return result;
+		if(PostResizeNeeded) if(result = RadResizeGen(*pRadAccessData, PostResize, pvGPU)) return result; //HG26072024
 	}
 
 	if(result = Propagate4x4PropMatr(pRadAccessData)) return result;
@@ -853,7 +864,8 @@ int srTDriftSpace::PropagateRadiationSimple_AnalytTreatQuadPhaseTerm(srTSRWRadSt
 	//pRadAccessData->MirrorFieldData(sign(kx), sign(kz));
 	//pRadAccessData->MirrorFieldData((int)sign(pBufVars->kx_AnalytTreatQuadPhaseTerm), (int)sign(pBufVars->kz_AnalytTreatQuadPhaseTerm)); //OC06092019
 	//OC01102019 (restored)
-	pRadAccessData->MirrorFieldData((int)sign(BufVars.kx_AnalytTreatQuadPhaseTerm), (int)sign(BufVars.kz_AnalytTreatQuadPhaseTerm)); //OC30082019
+	//pRadAccessData->MirrorFieldData((int)sign(BufVars.kx_AnalytTreatQuadPhaseTerm), (int)sign(BufVars.kz_AnalytTreatQuadPhaseTerm)); //OC30082019
+	pRadAccessData->MirrorFieldData((int)sign(BufVars.kx_AnalytTreatQuadPhaseTerm), (int)sign(BufVars.kz_AnalytTreatQuadPhaseTerm), pvGPU); //HG26072024
 	//pRadAccessData->MirrorFieldData((int)sign(PropBufVars.kx_AnalytTreatQuadPhaseTerm), (int)sign(PropBufVars.kz_AnalytTreatQuadPhaseTerm));
 
 	//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
