@@ -130,7 +130,8 @@ public:
 	//virtual int PropagateRadiation(srTSRWRadStructAccessData*, srTParPrecWfrPropag&, srTRadResizeVect&) { return 0;}
 	virtual int PropagateRadiation(srTSRWRadStructAccessData*, srTParPrecWfrPropag&, srTRadResizeVect&, void* pvGPU=0) { return 0;} //HG01122023
 
-	virtual int PropagateRadMoments(srTSRWRadStructAccessData*, srTMomentsRatios*) { return 0;}
+	//virtual int PropagateRadMoments(srTSRWRadStructAccessData*, srTMomentsRatios*) { return 0;}
+	virtual int PropagateRadMoments(srTSRWRadStructAccessData*, srTMomentsRatios*, void* =0) { return 0;} //HG27072024
 	virtual int PropagateWaveFrontRadius(srTSRWRadStructAccessData*) { return 0;}
 	virtual int PropagateWaveFrontRadius1D(srTRadSect1D*) { return 0;}
 	virtual int Propagate4x4PropMatr(srTSRWRadStructAccessData*) { return 0;}
@@ -264,7 +265,11 @@ public:
 
 	//int ExtractRadSliceConstE(srTSRWRadStructAccessData*, long, float*&, float*&, bool forceCopyField=false); //OC120908
 	int ExtractRadSliceConstE(srTSRWRadStructAccessData*, long, float*&, float*&, bool forceCopyField=false, void* pvGPU=0); //HG26072024
-	int SetupRadSliceConstE(srTSRWRadStructAccessData*, long, float*, float*);
+	//int SetupRadSliceConstE(srTSRWRadStructAccessData*, long, float*, float*);
+	int SetupRadSliceConstE(srTSRWRadStructAccessData*, long, float*, float*, void* =0); //HG27072024
+#ifdef _OFFLOAD_GPU //HG27072024
+	int SetupRadSliceConstE_GPU(srTSRWRadStructAccessData*, long, float*, float*, TGPUUsageArg* =0);
+#endif
 	inline void SetupRadXorZSectFromSliceConstE(float*, float*, long, long, char, long, float*, float*);
 
 	int ExtractRadSectVsXorZ(srTSRWRadStructAccessData*, long, long, char, float*, float*);
@@ -282,7 +287,7 @@ public:
 	int RemoveSliceConstE_FromGenRadStruct(srTSRWRadStructAccessData*, long);
 
 #ifdef _OFFLOAD_GPU //HG26072024
-	int ExtractRadSliceConstE_GPU(srTSRWRadStructAccessData*, long, float*&, float*&, TGPUUsageArg* pGPU=0);
+	int ExtractRadSliceConstE_GPU(srTSRWRadStructAccessData*, long, float*, float*, TGPUUsageArg* pGPU=0);
 	int UpdateGenRadStructSliceConstE_Meth_0_GPU(srTSRWRadStructAccessData*, int, srTSRWRadStructAccessData*, TGPUUsageArg* pGPU=0);
 #endif
 
@@ -306,6 +311,9 @@ public:
 
 	//int ComputeRadMoments(srTSRWRadStructAccessData*);
 	int ComputeRadMoments(srTSRWRadStructAccessData*, void* =0); //HG26072024
+#ifdef _OFFLOAD_GPU //HG31072024
+	void ComputeRadMoments_GPU(srTSRWRadStructAccessData* pSRWRadStructAccessData, int ie, double* SumsZ, int* IndLims, TGPUUsageArg* pGPU);
+#endif
 
 	int RadResizeGen(srTSRWRadStructAccessData&, srTRadResize&, void* pvGPU=0); //HG01122023
 	//int RadResizeGen(srTSRWRadStructAccessData&, srTRadResize&);

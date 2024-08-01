@@ -204,7 +204,8 @@ public:
 		//OC17022024 Fixed an important bug: wrong PropagateRadiationSimple was called
 		if(result = PropagateRadiationSimple(pRadAccessData, pvGPU)) return result; //in first place because previous wavefront radius may be required for some derived classes
 		//if(result = PropagateRadiationSimple(pRadAccessData)) return result; //in first place because previous wavefront radius may be required for some derived classes
-		if(result = PropagateRadMoments(pRadAccessData, 0)) return result;
+		//if(result = PropagateRadMoments(pRadAccessData, 0)) return result;
+		if(result = PropagateRadMoments(pRadAccessData, 0, pvGPU)) return result; //HG27072024
 		if(!m_wfrRadWasProp) { if(result = PropagateWaveFrontRadius(pRadAccessData)) return result;} //already propagated
 		if(result = Propagate4x4PropMatr(pRadAccessData)) return result;
 		return 0;

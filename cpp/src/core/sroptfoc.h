@@ -27,7 +27,8 @@ public:
 	double FocDistX, FocDistZ;
 	srTFocusingElem() {}
 
-	int PropagateRadMoments(srTSRWRadStructAccessData* pRadAccessData, srTMomentsRatios* MomRatArray)
+	//int PropagateRadMoments(srTSRWRadStructAccessData* pRadAccessData, srTMomentsRatios* MomRatArray)
+	int PropagateRadMoments(srTSRWRadStructAccessData* pRadAccessData, srTMomentsRatios* MomRatArray, void* pvGPU=0) //HG27072024
 	{
 		//float aStr0[] = { 1., 0. };
 		//float axStr1[] = { (float)(-1./FocDistX), 1. };
@@ -122,7 +123,8 @@ public:
 		//if(result = Propagate4x4PropMatr(pRadAccessData)) return result;
 		//if(result = PropagateRadiationSimple(pRadAccessData)) return result; //in first place because previous wavefront radius may be required for some derived classes
 		if(result = PropagateRadiationSimple(pRadAccessData, pvGPU)) return result; //OC17022024 //in first place because previous wavefront radius may be required for some derived classes
-		if(result = PropagateRadMoments(pRadAccessData, 0)) return result;
+		//if(result = PropagateRadMoments(pRadAccessData, 0)) return result;
+		if(result = PropagateRadMoments(pRadAccessData, 0, pvGPU)) return result; //HG27072024
 		if(result = PropagateWaveFrontRadius(pRadAccessData)) return result;
 		if(result = Propagate4x4PropMatr(pRadAccessData)) return result;
 		return 0;
