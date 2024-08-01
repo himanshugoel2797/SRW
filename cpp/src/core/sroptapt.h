@@ -58,7 +58,8 @@ public:
 		if(pRadAccessData->Pres != 0) if(result = SetRadRepres(pRadAccessData, 0, 0, 0, pvGPU)) return result; //HG30112023
 		//if(result = TraverseRadZXE(pRadAccessData)) return result;
 		if(result = TraverseRadZXE(pRadAccessData, 0, 0, pvGPU)) return result; //HG30112023
-		if(result = PropagateRadMoments(pRadAccessData, 0)) return result;
+		//if(result = PropagateRadMoments(pRadAccessData, 0)) return result;
+		if(result = PropagateRadMoments(pRadAccessData, 0, pvGPU)) return result; //HG27072024
 
 		SetNewNonZeroWfrLimits(pRadAccessData);
 		return 0;
@@ -109,7 +110,8 @@ public:
 	int RangeShouldBeAdjustedAtPropag() { return 1;}
 	int ResolutionShouldBeAdjustedAtPropag() { return 0;}
 
-	int PropagateRadMoments(srTSRWRadStructAccessData*, srTMomentsRatios*);
+	//int PropagateRadMoments(srTSRWRadStructAccessData*, srTMomentsRatios*);
+	int PropagateRadMoments(srTSRWRadStructAccessData*, srTMomentsRatios*, void* =0); //HG27072024
 	//virtual int CheckIfMomentsShouldBeRecomputed(float MomX_X, float MomX_Z, float MomZ_X, float MomZ_Z, float MomX_SqrtMxx_Mult, float MomX_SqrtMzz_Mult, float MomZ_SqrtMxx_Mult, float MomZ_SqrtMzz_Mult) { return 1;}
 	virtual int CheckIfMomentsShouldBeRecomputed(double MomX_X, double MomX_Z, double MomZ_X, double MomZ_Z, double MomX_SqrtMxx_Mult, double MomX_SqrtMzz_Mult, double MomZ_SqrtMxx_Mult, double MomZ_SqrtMzz_Mult) { return 1;} //OC130311
 };
@@ -152,7 +154,8 @@ public:
 #ifdef _OFFLOAD_GPU //HG26072024
 	int RadPointModifierParallel(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars = 0, long pBufVarsSz = 0, TGPUUsageArg* pGPU = 0) override;
 #endif
-#ifdef __CUDACC__
+//#ifdef __CUDACC__ //HG28072024 Commented out
+#ifdef __CUDA_ARCH__
 	GPU_PORTABLE void RadPointModifierPortable(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf = 0)
 #else
 	void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf = 0)
@@ -254,7 +257,8 @@ public:
 #ifdef _OFFLOAD_GPU //HG26072024
 	int RadPointModifierParallel(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars = 0, long pBufVarsSz = 0, TGPUUsageArg* pGPU = 0) override;
 #endif
-#ifdef __CUDACC__
+//#ifdef __CUDACC__ //HG28072024 Commented out
+#ifdef __CUDA_ARCH__
 	GPU_PORTABLE void RadPointModifierPortable(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf = 0)
 #else
 	void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf = 0) //OC29082019
@@ -348,7 +352,8 @@ public:
 #ifdef _OFFLOAD_GPU //HG26072024
 	int RadPointModifierParallel(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars = 0, long pBufVarsSz = 0, TGPUUsageArg* pGPU = 0) override;
 #endif
-#ifdef __CUDACC__
+//#ifdef __CUDACC__ //HG28072024 Commented out
+#ifdef __CUDA_ARCH__
 	GPU_PORTABLE void RadPointModifierPortable(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf = 0)
 #else
 	void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf = 0) //OC29082019
@@ -451,7 +456,8 @@ public:
 #ifdef _OFFLOAD_GPU //HG26072024
 	int RadPointModifierParallel(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars = 0, long pBufVarsSz = 0, TGPUUsageArg* pGPU = 0) override;
 #endif
-#ifdef __CUDACC__
+//#ifdef __CUDACC__ //HG28072024 Commented out
+#ifdef __CUDA_ARCH__
 	GPU_PORTABLE void RadPointModifierPortable(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf = 0)
 #else
 	void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf = 0) //OC29082019
