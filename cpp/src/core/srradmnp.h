@@ -163,21 +163,33 @@ public:
 	//	ExtractRadiation((int)polar, (int)intType, (int)depType, (int)transvPres, e, x, z, pData);
 	//}
 
-	int ExtractRadiation(srTRadExtract& RadExtract, srTWaveAccessData& ExtractedWaveData)
+	//int ExtractRadiation(srTRadExtract& RadExtract, srTWaveAccessData& ExtractedWaveData)
+	int ExtractRadiation(srTRadExtract& RadExtract, srTWaveAccessData& ExtractedWaveData, void* pvGPU=0) //HG30072024
 	{
 		int result;
         srTSRWRadStructAccessData& RadAccessData = *((srTSRWRadStructAccessData*)(hRadAccessData.ptr()));
 
 		srTGenOptElem GenOptElem;
 		if(RadExtract.TransvPres != RadAccessData.Pres)
-			if(result = GenOptElem.SetRadRepres(&RadAccessData, char(RadExtract.TransvPres))) return result;
+			//if(result = GenOptElem.SetRadRepres(&RadAccessData, char(RadExtract.TransvPres))) return result;
+			if(result = GenOptElem.SetRadRepres(&RadAccessData, char(RadExtract.TransvPres), 0, 0, pvGPU)) return result; //HG30072024
 		if(RadExtract.Int_or_Phase == 1)
 		{
+#ifdef _OFFLOAD_GPU //HG30072024
+			TGPUUsageArg parGPU(pvGPU);
+			if(CAuxGPU::GPUEnabled(&parGPU))
+			{
+				RadAccessData.pBaseRadX = (float*)CAuxGPU::ToHostAndFree(&parGPU, RadAccessData.pBaseRadX, 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz*sizeof(float));
+				RadAccessData.pBaseRadZ = (float*)CAuxGPU::ToHostAndFree(&parGPU, RadAccessData.pBaseRadZ, 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz*sizeof(float));
+			}
+#endif
+
 			if(result = ComputeConvolutedIntensity(RadExtract)) return result;
 		}
 		else
 		{
-			if(result = ExtractSingleElecIntensity(RadExtract)) return result;
+			//if(result = ExtractSingleElecIntensity(RadExtract)) return result;
+			if(result = ExtractSingleElecIntensity(RadExtract, pvGPU)) return result; //HG30072024
 		}
 		if(result = SetupExtractedWaveData(RadExtract, ExtractedWaveData)) return result;
 
@@ -266,7 +278,8 @@ public:
 
 #ifdef _OFFLOAD_GPU //HG30112023
 	int ExtractSingleElecMutualIntensityVsXZ_GPU(float* pEx, float* pEz, float* pMI, long nx, long nz, long ne, long itStart, long itEnd, long PerX, long iter, int PolCom, bool EhOK, bool EvOK, TGPUUsageArg* pGPU);
-	int ExtractSingleElecIntensity2DvsXZ_GPU(srTRadExtract& RadExtract, double* arAuxInt, long long ie0, long long ie1, double InvStepRelArg, TGPUUsageArg* pGPU);
+	//int ExtractSingleElecIntensity2DvsXZ_GPU(srTRadExtract& RadExtract, double* arAuxInt, long long ie0, long long ie1, double InvStepRelArg, TGPUUsageArg* pGPU);
+	int ExtractSingleElecIntensity2DvsXZ_GPU(srTRadExtract& RadExtract, long long ie0, long long ie1, double InvStepRelArg, TGPUUsageArg* pGPU); //HG31072024
 #endif
 //#ifdef _OFFLOAD_GPU
 //	int ExtractSingleElecMutualIntensityVsXZ_GPU(float* pEx, float* pEz, float* pMI, long nxnz, long itStart, long itEnd, long PerX, long iter, int PolCom, bool EhOK, bool EvOK, gpuUsageArg *pGpuUsage);

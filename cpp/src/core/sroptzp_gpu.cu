@@ -24,7 +24,7 @@
 //Implementation of the RadPointModifier's GPU function for the srTRectAperture class
 int srTZonePlate::RadPointModifierParallel(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars, long pBufVarsSz, TGPUUsageArg *pGPU) 
 { 
-    return RadPointModifierParallelImpl<srTZonePlate>(pRadAccessData, pBufVars, pBufVarsSz, this, pGPU); 
+    return RadPointModifierParallelImpl<srTZonePlate>(pRadAccessData, pBufVars, pBufVarsSz, this, pGPU, 0, true); 
 }
 
 #endif

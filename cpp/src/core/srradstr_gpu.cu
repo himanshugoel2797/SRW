@@ -85,12 +85,23 @@ void srTSRWRadStructAccessData::MultiplyElFieldByPhaseLin_GPU(double xMult, doub
     MultiplyElFieldByPhaseLin_Kernel<<<blocks, threads>>> (xMult, zMult, pBaseRadX, pBaseRadZ, nx, nz, ne, (float)xStart, (float)zStart, (float)xStep, (float)zStep);
     //MultiplyElFieldByPhaseLin_Kernel<<<blocks, threads>>> (xMult, zMult, pBaseRadX, pBaseRadZ, nz, nx, ne, zStart, zStep, xStart, xStep);
 
-	if (pBaseRadX != NULL)
-		CAuxGPU::MarkUpdated(pGPU, pBaseRadX, true, false); //OC03082023
-		//CAuxGPU::MarkUpdated(pGpuUsage_, pBaseRadX, true, false);
+	//if (pBaseRadX != NULL)
+	//	CAuxGPU::MarkUpdated(pGPU, pBaseRadX, true, false); //OC03082023
+	//	//CAuxGPU::MarkUpdated(pGpuUsage_, pBaseRadX, true, false);
+	//if (pBaseRadZ != NULL)
+	//	CAuxGPU::MarkUpdated(pGPU, pBaseRadZ, true, false); //OC03082023
+	//	//CAuxGPU::MarkUpdated(pGpuUsage_, pBaseRadZ, true, false);
+	
+	if (pBaseRadX != NULL) //HG27072024
+	{
+		CAuxGPU::MarkUpdated(pGPU, pBaseRadX, true, false);
+		pBaseRadX = (float*)CAuxGPU::GetHostPtr(pGPU, pBaseRadX);
+	}
 	if (pBaseRadZ != NULL)
-		CAuxGPU::MarkUpdated(pGPU, pBaseRadZ, true, false); //OC03082023
-		//CAuxGPU::MarkUpdated(pGpuUsage_, pBaseRadZ, true, false);
+	{
+		CAuxGPU::MarkUpdated(pGPU, pBaseRadZ, true, false);
+		pBaseRadZ = (float*)CAuxGPU::GetHostPtr(pGPU, pBaseRadZ);
+	}
 
 //HG26022024 (commented out)
 //#ifdef _DEBUG

@@ -347,13 +347,28 @@ int srTAuxMatStat::ValidateSpotData(srTWaveAccessData& InWaveData)
 
 //*************************************************************************
 
-double srTAuxMatStat::IntegrateSimple(srTWaveAccessData& InWaveData)
+//double srTAuxMatStat::IntegrateSimple(srTWaveAccessData& InWaveData)
+double srTAuxMatStat::IntegrateSimple(srTWaveAccessData& InWaveData, void* pvGPU) //HG30072024
 {
 	bool Is2D = (InWaveData.AmOfDims == 2);
 
 	//long AmOfVals = (InWaveData.DimSizes)[0];
 	long long AmOfVals = (InWaveData.DimSizes)[0];
 	if(Is2D) AmOfVals *= (InWaveData.DimSizes)[1];
+
+#ifdef _OFFLOAD_GPU //HG30072024
+	TGPUUsageArg parGPU(pvGPU);
+	if(CAuxGPU::GPUEnabled(&parGPU))
+	{
+		double multiplier = InWaveData.DimSteps[0];
+		if(Is2D) multiplier *= InWaveData.DimSteps[1];
+
+		double Sum = 0.;
+		if(*(InWaveData.WaveType) == 'f') IntegrateSimple_GPU((float*)(InWaveData.pWaveData), AmOfVals, multiplier, &Sum, &parGPU);
+		else IntegrateSimple_GPU((double*)(InWaveData.pWaveData), AmOfVals, multiplier, &Sum, &parGPU);
+		return Sum;
+	}
+#endif
 
 	double Sum = 0.;
 	if(*(InWaveData.WaveType) == 'f') Sum = SumUpArray((float*)(InWaveData.pWaveData), 0, AmOfVals - 1, 1);
@@ -449,7 +464,8 @@ template <class T> long long srTAuxMatStat::FindLimit1DRight(T* p0, long long n,
 
 //*************************************************************************
 
-int srTAuxMatStat::FindIntensityLimits2D(srTWaveAccessData& InWaveData, double RelPowLevel, srTWaveAccessData& OutSpotInfo)
+//int srTAuxMatStat::FindIntensityLimits2D(srTWaveAccessData& InWaveData, double RelPowLevel, srTWaveAccessData& OutSpotInfo)
+int srTAuxMatStat::FindIntensityLimits2D(srTWaveAccessData& InWaveData, double RelPowLevel, srTWaveAccessData& OutSpotInfo, void* pvGPU) //HG31072024
 {
 	//long Nx = (InWaveData.DimSizes)[0], Ny = (InWaveData.DimSizes)[1];
 	long Nx = (long)((InWaveData.DimSizes)[0]), Ny = (long)((InWaveData.DimSizes)[1]); //OC28042019
@@ -473,14 +489,16 @@ int srTAuxMatStat::FindIntensityLimits2D(srTWaveAccessData& InWaveData, double R
 
 	if(pf0 != 0) 
 	{ 
-		if(res = IntegrateOverX(pf0, 0, Nx - 1, xStep, Nx, Ny, AuxArrIntOverX)) 
+		//if(res = IntegrateOverX(pf0, 0, Nx - 1, xStep, Nx, Ny, AuxArrIntOverX)) 
+		if(res = IntegrateOverX(pf0, 0, Nx - 1, xStep, Nx, Ny, AuxArrIntOverX, pvGPU)) //HG30072024
 		{
 			delete[] AuxArrIntOverX; return res;
 		}
 	}
 	else 
 	{ 
-		if(res = IntegrateOverX(pD0, 0, Nx - 1, xStep, Nx, Ny, AuxArrIntOverX)) 
+		//if(res = IntegrateOverX(pD0, 0, Nx - 1, xStep, Nx, Ny, AuxArrIntOverX)) 
+		if(res = IntegrateOverX(pD0, 0, Nx - 1, xStep, Nx, Ny, AuxArrIntOverX, pvGPU)) //HG30072024
 		{
 			delete[] AuxArrIntOverX; return res;
 		}
@@ -503,14 +521,16 @@ int srTAuxMatStat::FindIntensityLimits2D(srTWaveAccessData& InWaveData, double R
 
 	if(pf0 != 0) 
 	{ 
-		if(res = IntegrateOverY(pf0, iyStart, iyEnd, yStep, Nx, AuxArrIntOverY)) 
+		//if(res = IntegrateOverY(pf0, iyStart, iyEnd, yStep, Nx, AuxArrIntOverY)) 
+		if(res = IntegrateOverY(pf0, iyStart, iyEnd, yStep, Nx, AuxArrIntOverY, pvGPU)) //HG30072024 
 		{
 			delete[] AuxArrIntOverY; return res;
 		}
 	}
 	else 
 	{ 
-		if(res = IntegrateOverY(pD0, iyStart, iyEnd, yStep, Nx, AuxArrIntOverY)) 
+		//if(res = IntegrateOverY(pD0, iyStart, iyEnd, yStep, Nx, AuxArrIntOverY))
+		if(res = IntegrateOverY(pD0, iyStart, iyEnd, yStep, Nx, AuxArrIntOverY, pvGPU)) //HG30072024 
 		{
 			delete[] AuxArrIntOverY; return res;
 		}
@@ -531,11 +551,21 @@ int srTAuxMatStat::FindIntensityLimits2D(srTWaveAccessData& InWaveData, double R
 //*************************************************************************
 
 //template <class T> int srTAuxMatStat::IntegrateOverX(T* p0, long ixStart, long ixEnd, double xStep, long Nx, long Ny, double* AuxArrIntOverX)
-template <class T> int srTAuxMatStat::IntegrateOverX(T* p0, long long ixStart, long long ixEnd, double xStep, long long Nx, long long Ny, double* AuxArrIntOverX)
+//template <class T> int srTAuxMatStat::IntegrateOverX(T* p0, long long ixStart, long long ixEnd, double xStep, long long Nx, long long Ny, double* AuxArrIntOverX)
+template <class T> int srTAuxMatStat::IntegrateOverX(T* p0, long long ixStart, long long ixEnd, double xStep, long long Nx, long long Ny, double* AuxArrIntOverX, void* pvGPU) //HG30072024
 {
 	if((p0 == 0) || (AuxArrIntOverX == 0) || (Nx <= 0) || (Ny <= 0) || (ixStart >= ixEnd) || (ixEnd <= 0)) return INCORRECT_ARGUMENTS;
 	if(ixStart < 0) ixStart = 0;
 	
+#ifdef _OFFLOAD_GPU //HG30072024
+	TGPUUsageArg parGPU(pvGPU);
+	if(CAuxGPU::GPUEnabled(&parGPU))
+	{
+		if(typeid(T) == typeid(float)) return IntegrateOverX_GPU((float*)p0, ixStart, ixEnd, xStep, Nx, Ny, AuxArrIntOverX, &parGPU);
+		else return IntegrateOverX_GPU((double*)p0, ixStart, ixEnd, xStep, Nx, Ny, AuxArrIntOverX, &parGPU);
+	}
+#endif
+
 	T* t = p0;
 	//for(int i=0; i<Ny; i++)
 	for(long long i=0; i<Ny; i++)
@@ -549,10 +579,20 @@ template <class T> int srTAuxMatStat::IntegrateOverX(T* p0, long long ixStart, l
 //*************************************************************************
 
 //template <class T> int srTAuxMatStat::IntegrateOverY(T* p0, long iyStart, long iyEnd, double yStep, long Nx, double* AuxArrIntOverY)
-template <class T> int srTAuxMatStat::IntegrateOverY(T* p0, long long iyStart, long long iyEnd, double yStep, long long Nx, double* AuxArrIntOverY)
+//template <class T> int srTAuxMatStat::IntegrateOverY(T* p0, long long iyStart, long long iyEnd, double yStep, long long Nx, double* AuxArrIntOverY)
+template <class T> int srTAuxMatStat::IntegrateOverY(T* p0, long long iyStart, long long iyEnd, double yStep, long long Nx, double* AuxArrIntOverY, void* pvGPU) //HG30072024
 {
 	if((p0 == 0) || (AuxArrIntOverY == 0) || (Nx <= 0) || (iyStart >= iyEnd) || (iyEnd <= 0)) return INCORRECT_ARGUMENTS;
 	if(iyStart < 0) iyStart = 0;
+
+#ifdef _OFFLOAD_GPU //HG30072024
+	TGPUUsageArg parGPU(pvGPU);
+	if(CAuxGPU::GPUEnabled(&parGPU))
+	{
+		if(typeid(T) == typeid(float)) return IntegrateOverY_GPU((float*)p0, iyStart, iyEnd, yStep, Nx, AuxArrIntOverY, &parGPU);
+		else return IntegrateOverY_GPU((double*)p0, iyStart, iyEnd, yStep, Nx, AuxArrIntOverY, &parGPU);
+	}
+#endif
 
 	T* t = p0;
 	//long iyStartNx = iyStart*Nx, iyEndNx = iyEnd*Nx;
@@ -569,7 +609,8 @@ template <class T> int srTAuxMatStat::IntegrateOverY(T* p0, long long iyStart, l
 //*************************************************************************
 
 //int srTAuxMatStat::FindIntensityLimitsInds(srTSRWRadStructAccessData& Rad, int ie, double RelPow, int* IndLims)
-int srTAuxMatStat::FindIntensityLimitsInds(CHGenObj& hRad, int ie, double RelPow, int* IndLims)
+//int srTAuxMatStat::FindIntensityLimitsInds(CHGenObj& hRad, int ie, double RelPow, int* IndLims)
+int srTAuxMatStat::FindIntensityLimitsInds(CHGenObj& hRad, int ie, double RelPow, int* IndLims, void* pvGPU) //HG30072024
 {
 	srTSRWRadStructAccessData& Rad = *((srTSRWRadStructAccessData*)(hRad.ptr()));
 
@@ -593,8 +634,14 @@ int srTAuxMatStat::FindIntensityLimitsInds(CHGenObj& hRad, int ie, double RelPow
 		srTRadGenManip RadGenManip(hRad);
 		srTWaveAccessData ExtractedWaveData;
 		int res = 0;
-		if(res = RadGenManip.ExtractRadiation(RadExtract, ExtractedWaveData))
+		//if(res = RadGenManip.ExtractRadiation(RadExtract, ExtractedWaveData))
+		if(res = RadGenManip.ExtractRadiation(RadExtract, ExtractedWaveData)) //HG30072024
 		{
+#ifdef _OFFLOAD_GPU //HG30072024
+			TGPUUsageArg parGPU(pvGPU);
+			if(CAuxGPU::GPUEnabled(&parGPU))
+				CAuxGPU::ToHostAndFree(&parGPU, RadExtract.pExtractedData, Rad.nx*Rad.nz*sizeof(float), true);
+#endif
 			delete[] RadExtract.pExtractedData; return res;
 		}
 
@@ -609,9 +656,16 @@ int srTAuxMatStat::FindIntensityLimitsInds(CHGenObj& hRad, int ie, double RelPow
 		(OutInfoData.DimSteps)[0] = 1;
 		OutInfoData.pWaveData = (char*)AuxArrF;
 		for(int i=0; i<5; i++) AuxArrF[i] = 0.;
-		AuxArrF[0] = (float)IntegrateSimple(ExtractedWaveData);
-		if(res = FindIntensityLimits2D(ExtractedWaveData, RelPow, OutInfoData))
+		//AuxArrF[0] = (float)IntegrateSimple(ExtractedWaveData);
+		AuxArrF[0] = (float)IntegrateSimple(ExtractedWaveData, pvGPU); //HG30072024
+		//if(res = FindIntensityLimits2D(ExtractedWaveData, RelPow, OutInfoData))
+		if(res = FindIntensityLimits2D(ExtractedWaveData, RelPow, OutInfoData, pvGPU)) //HG30072024
 		{
+#ifdef _OFFLOAD_GPU //HG30072024
+			TGPUUsageArg parGPU(pvGPU);
+			if(CAuxGPU::GPUEnabled(&parGPU))
+				CAuxGPU::ToHostAndFree(&parGPU, RadExtract.pExtractedData, Rad.nx*Rad.nz*sizeof(float), true);
+#endif
 			delete[] RadExtract.pExtractedData; return res;
 		}
 
@@ -624,6 +678,11 @@ int srTAuxMatStat::FindIntensityLimitsInds(CHGenObj& hRad, int ie, double RelPow
 		IndLims[3] = (int)((AuxArrF[4] - Rad.zStart)*1.0000001/Rad.zStep);
 		if(IndLims[3] >= Rad.nz) IndLims[3] = Rad.nz - 1;
 
+#ifdef _OFFLOAD_GPU //HG30072024
+			TGPUUsageArg parGPU(pvGPU);
+			if(CAuxGPU::GPUEnabled(&parGPU))
+				CAuxGPU::ToHostAndFree(&parGPU, RadExtract.pExtractedData, Rad.nx*Rad.nz*sizeof(float), true);
+#endif
 		delete[] RadExtract.pExtractedData;
 	}
 	catch(...)

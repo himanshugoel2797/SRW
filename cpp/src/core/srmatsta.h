@@ -26,6 +26,10 @@
 #endif
 #endif
 
+#ifdef _OFFLOAD_GPU //HG31072024
+#include "auxgpu.h"
+#endif
+
 #include <complex>
 
 //*************************************************************************
@@ -49,9 +53,21 @@ public:
 	
 	int FindIntensityLimits(srTWaveAccessData& InWaveData, double PowLevel, srTWaveAccessData& OutSpotInfoData);
 	int FindIntensityLimits1D(srTWaveAccessData& InWaveData, double RelPowLevel, srTWaveAccessData& OutSpotInfo);
-	int FindIntensityLimits2D(srTWaveAccessData& InWaveData, double RelPowLevel, srTWaveAccessData& OutSpotInfo);
+	//int FindIntensityLimits2D(srTWaveAccessData& InWaveData, double RelPowLevel, srTWaveAccessData& OutSpotInfo);
+	int FindIntensityLimits2D(srTWaveAccessData& InWaveData, double RelPowLevel, srTWaveAccessData& OutSpotInfo, void* pvGPU=0); //HG30072024
+#ifdef _OFFLOAD_GPU //HG31072024
+    int IntegrateOverX_GPU(float* p0, long long ixStart, long long ixEnd, double xStep, long long Nx, long long Ny, double* AuxArrIntOverX, TGPUUsageArg* pGPU);
+	int IntegrateOverY_GPU(float* p0, long long iyStart, long long iyEnd, double yStep, long long Nx, double* AuxArrIntOverY, TGPUUsageArg* pGPU);
+	int IntegrateSimple_GPU(float* p0, long long LenArr, double Multiplier, double* OutVal, TGPUUsageArg* pGPU);
+	
+    int IntegrateOverX_GPU(double* p0, long long ixStart, long long ixEnd, double xStep, long long Nx, long long Ny, double* AuxArrIntOverX, TGPUUsageArg* pGPU);
+	int IntegrateOverY_GPU(double* p0, long long iyStart, long long iyEnd, double yStep, long long Nx, double* AuxArrIntOverY, TGPUUsageArg* pGPU);
+	int IntegrateSimple_GPU(double* p0, long long LenArr, double Multiplier, double* OutVal, TGPUUsageArg* pGPU);
+#endif
+
 	//int FindIntensityLimitsInds(srTSRWRadStructAccessData&, int ie, double RelPow, int* IndLims);
-	int FindIntensityLimitsInds(CHGenObj&, int ie, double RelPow, int* IndLims);
+	//int FindIntensityLimitsInds(CHGenObj&, int ie, double RelPow, int* IndLims);
+	int FindIntensityLimitsInds(CHGenObj&, int ie, double RelPow, int* IndLims, void* pvGPU =0); //HG30072924
 
 	//void FindMax1D(float* p0, long LenArr, double& MaxVal, long& iMax);
 	//void FindMax1D(DOUBLE* p0, long LenArr, double& MaxVal, long& iMax);
@@ -62,7 +78,8 @@ public:
 	//void FindIndHalfMaxLeftRight1D(DOUBLE* p0, long LenArr, double HalfMaxVal, long& iHalfMaxLeft, long& iHalfMaxRight);
 	//void FindIndHalfMaxLeftRight1D(float* p0, long long LenArr, double HalfMaxVal, long long& iHalfMaxLeft, long long& iHalfMaxRight);
 	//void FindIndHalfMaxLeftRight1D(DOUBLE* p0, long long LenArr, double HalfMaxVal, long long& iHalfMaxLeft, long long& iHalfMaxRight);
-	double IntegrateSimple(srTWaveAccessData& InWaveData);
+	//double IntegrateSimple(srTWaveAccessData& InWaveData);
+	double IntegrateSimple(srTWaveAccessData& InWaveData, void* pvGPU=0); //HG30072024
 
 	//template <class T> long FindLimit1DLeft(T* p0, long n, double IntToStop);
 	//template <class T> long FindLimit1DRight(T* p0, long n, double IntToStop);
@@ -70,8 +87,10 @@ public:
 	template <class T> long long FindLimit1DRight(T* p0, long long n, double IntToStop);
 	//template <class T> int IntegrateOverX(T* p0, long ixStart, long ixEnd, double xStep, long Nx, long Ny, double* AuxArrIntOverX);
 	//template <class T> int IntegrateOverY(T* p0, long iyStart, long iyEnd, double yStep, long Nx, double* AuxArrIntOverY);
-	template <class T> int IntegrateOverX(T* p0, long long ixStart, long long ixEnd, double xStep, long long Nx, long long Ny, double* AuxArrIntOverX);
-	template <class T> int IntegrateOverY(T* p0, long long iyStart, long long iyEnd, double yStep, long long Nx, double* AuxArrIntOverY);
+	//template <class T> int IntegrateOverX(T* p0, long long ixStart, long long ixEnd, double xStep, long long Nx, long long Ny, double* AuxArrIntOverX);
+	template <class T> int IntegrateOverX(T* p0, long long ixStart, long long ixEnd, double xStep, long long Nx, long long Ny, double* AuxArrIntOverX, void* pvGPU=0); //HG30072024
+	//template <class T> int IntegrateOverY(T* p0, long long iyStart, long long iyEnd, double yStep, long long Nx, double* AuxArrIntOverY);
+	template <class T> int IntegrateOverY(T* p0, long long iyStart, long long iyEnd, double yStep, long long Nx, double* AuxArrIntOverY, void* pvGPU=0); //HG30072024
 
 	template <class T> void FindIndHalfMaxLeftRightFromPeak1D(T* ar, long long lenArr, double halfMaxVal, long long iMax, long long& iHalfMaxLeft, long long& iHalfMaxRight)
 	{//OC02012019

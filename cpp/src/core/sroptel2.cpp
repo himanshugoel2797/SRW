@@ -52,6 +52,18 @@ int srTGenOptElem::PropagateRadiationMeth_0(srTSRWRadStructAccessData* pRadAcces
 
 	int result=0;
 
+#ifdef _OFFLOAD_GPU
+	TGPUUsageArg parGPU(pvGPU); //HG31072024 Try to pin the wavefront data instead of uploading to save GPU memory for the actual propagation
+	if (CAuxGPU::GPUEnabled(&parGPU))
+	{
+		if (pRadAccessData->ne > 1)
+		{
+			CAuxGPU::ToDevice(&parGPU, pRadAccessData->pBaseRadX, 2*pRadAccessData->ne*pRadAccessData->nx*pRadAccessData->nz*sizeof(float), false, true);
+			CAuxGPU::ToDevice(&parGPU, pRadAccessData->pBaseRadZ, 2*pRadAccessData->ne*pRadAccessData->nx*pRadAccessData->nz*sizeof(float), false, true);
+		}
+	}
+#endif
+
 #ifndef _WITH_OMP //OC31102018
 
 	srTSRWRadStructAccessData *pRadDataSingleE = 0, *pPrevRadDataSingleE = 0;
@@ -159,6 +171,18 @@ int srTGenOptElem::PropagateRadiationMeth_0(srTSRWRadStructAccessData* pRadAcces
 
 	if((pRadDataSingleE != 0) && (pRadDataSingleE != pRadAccessData)) delete pRadDataSingleE;
 	if((pPrevRadDataSingleE != 0) && (pPrevRadDataSingleE != pRadAccessData)) delete pPrevRadDataSingleE;
+
+
+#ifdef _OFFLOAD_GPU //HG31072024
+	if (CAuxGPU::GPUEnabled(&parGPU))
+	{
+		if (pRadAccessData->ne > 1)
+		{
+			CAuxGPU::ToHostAndFree(&parGPU, pRadAccessData->pBaseRadX, 2*pRadAccessData->ne*pRadAccessData->nx*pRadAccessData->nz*sizeof(float));
+			CAuxGPU::ToHostAndFree(&parGPU, pRadAccessData->pBaseRadZ, 2*pRadAccessData->ne*pRadAccessData->nx*pRadAccessData->nz*sizeof(float));
+		}
+	}
+#endif
 
 #else //OC31102018: modified by SY at parallelizing SRW via OpenMP
 //#ifdef SWITCH_OFF //OCTEST
