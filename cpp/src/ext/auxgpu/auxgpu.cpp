@@ -148,6 +148,13 @@ void* CAuxGPU::ToDevice(TGPUUsageArg* arg, void* hostPtr, size_t size, bool dont
 		return devPtr;
 	}
 
+	size_t free_mem, total_mem;  //HG26072024 If the memory request is very large, it may be more optimal to pin to host memory
+	cudaMemGetInfo(&free_mem, &total_mem);
+	if(size >= free_mem * 0.9)
+	{
+		pinOnHost = true;
+	}
+
 	void *devicePtr = NULL;
 	//cudaError_t err = cudaMalloc(&devicePtr, size);
 	cudaError_t err = cudaSuccess; //HG26072024 Switch to asynchronous malloc
@@ -156,7 +163,7 @@ void* CAuxGPU::ToDevice(TGPUUsageArg* arg, void* hostPtr, size_t size, bool dont
 		err = cudaMallocAsync(&devicePtr, size, memcpy_stream); //Try asynchronous allocation
 		if (err != cudaSuccess) // Try again after freeing up some memory HG24072023
 		{
-			cudaStreamSynchronize(0);
+			cudaDeviceSynchronize();
 			err = cudaMalloc(&devicePtr, size);
 			if (err != cudaSuccess) pinOnHost = true; //HG26072024 If allocation still fails, try pinning on host
 		}
@@ -191,8 +198,18 @@ void* CAuxGPU::ToDevice(TGPUUsageArg* arg, void* hostPtr, size_t size, bool dont
 		}
 		else 
 		{
-			if (zeroMode == 0)
-				cudaMemsetAsync(devicePtr, 0, size, memcpy_stream);
+			switch(zeroMode) //HG27072024 Add memset options
+			{
+				case 0:
+					cudaMemsetAsync(devicePtr, 0, size, memcpy_stream);
+					break;
+				case 1:
+					Memset_GPU((float*)devicePtr, 0.0f, size/sizeof(float), (long long)memcpy_stream);
+					break;
+				case 2:
+					Memset_GPU((double*)devicePtr, 0.0, size/sizeof(double), (long long)memcpy_stream);
+					break;
+			}
 		}
 		cudaEventRecord(info.h2d_event, memcpy_stream);
 	}
@@ -277,9 +294,20 @@ void* CAuxGPU::ToHostAndFree(TGPUUsageArg* arg, void* devicePtr, size_t size, bo
 	{
 		cudaStreamWaitEvent(memcpy_stream, info.d2h_event, 0);
 		//cudaMemcpyAsync(hostPtr, devicePtr, size, cudaMemcpyDeviceToHost, memcpy_stream);
-		if(hostPtr != devicePtr) cudaMemcpyAsync(hostPtr, devicePtr, size, cudaMemcpyDeviceToHost, memcpy_stream); //HG26072024 only copy if not using pinned memory
-		cudaFreeAsync(devicePtr, memcpy_stream); //HG26072024 Doing the async free here is  slightly more efficient and eliminates a potential use-after-free
-		cudaEventSynchronize(info.d2h_event); // we can't treat host memory as valid until the copy is complete
+		//if(hostPtr != devicePtr) cudaMemcpyAsync(hostPtr, devicePtr, size, cudaMemcpyDeviceToHost, memcpy_stream); //HG26072024 only copy if not using pinned memory
+		//cudaFreeAsync(devicePtr, memcpy_stream); //HG26072024 Doing the async free here is  slightly more efficient and eliminates a potential use-after-free
+		//cudaEventSynchronize(info.d2h_event); // we can't treat host memory as valid until the copy is complete
+		if(hostPtr != devicePtr) //HG30072024 Properly handle pinned memory
+		{
+			cudaMemcpyAsync(hostPtr, devicePtr, size, cudaMemcpyDeviceToHost, memcpy_stream); //HG26072024 only copy if not using pinned memory
+			cudaFreeAsync(devicePtr, memcpy_stream); //HG26072024 Doing the async free here is  slightly more efficient and eliminates a potential use-after-free
+			cudaEventSynchronize(info.d2h_event); // we can't treat host memory as valid until the copy is complete
+		}
+		else
+		{
+			cudaEventSynchronize(info.d2h_event); // we can't treat host memory as valid until the copy is complete
+			cudaHostUnregister(hostPtr);
+		}
 	}
 	else //HG26072024
 	{
@@ -340,6 +368,9 @@ int CAuxGPU::SetHostPtr(TGPUUsageArg* arg, void* origPtr, void* newPtr, size_t s
 		return -1;
 	if (!GPUEnabled(arg))
 		return -1;
+//#if _DEBUG
+//	printf("SetHostPtr: %p -> %p\n", origPtr, newPtr);
+//#endif
 	if (gpuMap.find(origPtr) == gpuMap.end())
 	{
 		memcpy(newPtr, origPtr, size);
@@ -360,9 +391,6 @@ int CAuxGPU::SetHostPtr(TGPUUsageArg* arg, void* origPtr, void* newPtr, size_t s
 	{
 		memcpy(newPtr, origPtr, size);
 	}
-//#if _DEBUG
-//	printf("SetHostPtr: %p -> %p\n", origPtr, newPtr);
-//#endif
 #endif
 	return 0;
 }

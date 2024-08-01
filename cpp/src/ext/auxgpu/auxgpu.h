@@ -83,7 +83,7 @@ public:
 	* @param [in] size size in bytes of the memory region
 	* @param [in] dontCopy do not copy the host memory to device if true
 	* @param [in] pinOnHost attempt to allocate this memory by pinning/page locking the hostPtr
-	* @param [in] zeroMode Initialization to use for device memory: =-1 -none, =0 set all bytes to 0
+	* @param [in] zeroMode Initialization to use for device memory: =-1 -none, =0 set all bytes to 0, =1 set all floats to 0.0, =2 set all doubles to 0.0
 	* @return pointer to device memory, NULL on error
 	*/
 	static void* ToDevice(TGPUUsageArg* arg, void* hostPtr, size_t size, bool dontCopy = false, bool pinOnHost = false, int zeroMode = -1);
@@ -134,6 +134,9 @@ public:
 	* @param [in] hostToDev true if host memory has the latest version of the data. Cannot be true if devToHost is true
 	*/
 	static void MarkUpdated(TGPUUsageArg* arg, void* ptr, bool devToHost, bool hostToDev);
+
+	static void Memset_GPU(float* p, float val, long long n, long long streamIdx); //HG27072024
+	static void Memset_GPU(double* p, double val, long long n, long long streamIdx); //HG27072024
 };
 
 //*************************************************************************
