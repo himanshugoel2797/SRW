@@ -54,10 +54,14 @@ int srTGenOptElem::PropagateRadiationMeth_0(srTSRWRadStructAccessData* pRadAcces
 
 #ifdef _OFFLOAD_GPU
 	TGPUUsageArg parGPU(pvGPU); //HG31072024 Try to pin the wavefront data instead of uploading to save GPU memory for the actual propagation
+	bool large_memory = false;
 	if (CAuxGPU::GPUEnabled(&parGPU))
 	{
-		if (pRadAccessData->ne > 1)
+		if (pRadAccessData->ne * pRadAccessData->nx * pRadAccessData->nz * 2 * sizeof(float) > 5000000000ull)
 		{
+			large_memory = true;
+			CAuxGPU::ToHostAndFree(&parGPU, pRadAccessData->pBaseRadX, 2*pRadAccessData->ne*pRadAccessData->nx*pRadAccessData->nz*sizeof(float));
+			CAuxGPU::ToHostAndFree(&parGPU, pRadAccessData->pBaseRadZ, 2*pRadAccessData->ne*pRadAccessData->nx*pRadAccessData->nz*sizeof(float));
 			CAuxGPU::ToDevice(&parGPU, pRadAccessData->pBaseRadX, 2*pRadAccessData->ne*pRadAccessData->nx*pRadAccessData->nz*sizeof(float), false, true);
 			CAuxGPU::ToDevice(&parGPU, pRadAccessData->pBaseRadZ, 2*pRadAccessData->ne*pRadAccessData->nx*pRadAccessData->nz*sizeof(float), false, true);
 		}
@@ -174,13 +178,10 @@ int srTGenOptElem::PropagateRadiationMeth_0(srTSRWRadStructAccessData* pRadAcces
 
 
 #ifdef _OFFLOAD_GPU //HG31072024
-	if (CAuxGPU::GPUEnabled(&parGPU))
+	if (CAuxGPU::GPUEnabled(&parGPU) && large_memory)
 	{
-		if (pRadAccessData->ne > 1)
-		{
-			CAuxGPU::ToHostAndFree(&parGPU, pRadAccessData->pBaseRadX, 2*pRadAccessData->ne*pRadAccessData->nx*pRadAccessData->nz*sizeof(float));
-			CAuxGPU::ToHostAndFree(&parGPU, pRadAccessData->pBaseRadZ, 2*pRadAccessData->ne*pRadAccessData->nx*pRadAccessData->nz*sizeof(float));
-		}
+		CAuxGPU::ToHostAndFree(&parGPU, pRadAccessData->pBaseRadX, 2*pRadAccessData->ne*pRadAccessData->nx*pRadAccessData->nz*sizeof(float));
+		CAuxGPU::ToHostAndFree(&parGPU, pRadAccessData->pBaseRadZ, 2*pRadAccessData->ne*pRadAccessData->nx*pRadAccessData->nz*sizeof(float));
 	}
 #endif
 

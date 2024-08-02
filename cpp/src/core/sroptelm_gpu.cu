@@ -910,6 +910,8 @@ __global__ void ExtractRadSliceConstE_Kernel(srTSRWRadStructAccessData *pRadAcce
 
 int srTGenOptElem::ExtractRadSliceConstE_GPU(srTSRWRadStructAccessData* pRadAccessData, long ie, float* pOutEx, float* pOutEz, TGPUUsageArg* pGPU)
 {
+	//printf("ExtractRadSliceConstE_GPU\r\n Data Size: %llu\r\n", 2 * pRadAccessData->ne * pRadAccessData->nx * pRadAccessData->nz * sizeof(float));
+	//printf("Dst Size: %llu\r\n", 2 * pRadAccessData->nx * pRadAccessData->nz * sizeof(float));
 	pRadAccessData->pBaseRadX = (float*)CAuxGPU::ToDevice(pGPU, pRadAccessData->pBaseRadX, 2 * pRadAccessData->ne * pRadAccessData->nx * pRadAccessData->nz * sizeof(float));
 	pRadAccessData->pBaseRadZ = (float*)CAuxGPU::ToDevice(pGPU, pRadAccessData->pBaseRadZ, 2 * pRadAccessData->ne * pRadAccessData->nx * pRadAccessData->nz * sizeof(float));
 	pOutEx = (float*)CAuxGPU::ToDevice(pGPU, pOutEx, 2 * pRadAccessData->nx * pRadAccessData->nz * sizeof(float), true);
@@ -938,6 +940,8 @@ int srTGenOptElem::ExtractRadSliceConstE_GPU(srTSRWRadStructAccessData* pRadAcce
 	pOutEx = (float*)CAuxGPU::GetHostPtr(pGPU, pOutEx);
 	pOutEz = (float*)CAuxGPU::GetHostPtr(pGPU, pOutEz);
 
+	//pRadAccessData->pBaseRadX = (float*)CAuxGPU::ToHostAndFree(pGPU, pRadAccessData->pBaseRadX, 2 * pRadAccessData->ne * pRadAccessData->nx * pRadAccessData->nz * sizeof(float), true);
+	//pRadAccessData->pBaseRadZ = (float*)CAuxGPU::ToHostAndFree(pGPU, pRadAccessData->pBaseRadZ, 2 * pRadAccessData->ne * pRadAccessData->nx * pRadAccessData->nz * sizeof(float), true);
 	return 0;
 }
 
@@ -1002,8 +1006,11 @@ int srTGenOptElem::UpdateGenRadStructSliceConstE_Meth_0_GPU(srTSRWRadStructAcces
 
 	CAuxGPU::MarkUpdated(pGPU, pRadAccessData->pBaseRadX, true, false);
 	CAuxGPU::MarkUpdated(pGPU, pRadAccessData->pBaseRadZ, true, false);
-	pRadAccessData->pBaseRadX = (float*)CAuxGPU::GetHostPtr(pGPU, pRadAccessData->pBaseRadX);
-	pRadAccessData->pBaseRadZ = (float*)CAuxGPU::GetHostPtr(pGPU, pRadAccessData->pBaseRadZ);
+	//pRadAccessData->pBaseRadX = (float*)CAuxGPU::GetHostPtr(pGPU, pRadAccessData->pBaseRadX);
+	//pRadAccessData->pBaseRadZ = (float*)CAuxGPU::GetHostPtr(pGPU, pRadAccessData->pBaseRadZ);
+	
+	//pRadAccessData->pBaseRadX = (float*)CAuxGPU::ToHostAndFree(pGPU, pRadAccessData->pBaseRadX, 2 * pRadAccessData->ne * pRadAccessData->nx * pRadAccessData->nz * sizeof(float));
+	//pRadAccessData->pBaseRadZ = (float*)CAuxGPU::ToHostAndFree(pGPU, pRadAccessData->pBaseRadZ, 2 * pRadAccessData->ne * pRadAccessData->nx * pRadAccessData->nz * sizeof(float));
 	
 	return 0;
 }

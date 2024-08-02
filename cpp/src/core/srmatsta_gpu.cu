@@ -180,7 +180,7 @@ int srTAuxMatStat::IntegrateOverY_GPU(double* p0, long long iyStart, long long i
 template <class T>
 int IntegrateSimple_GPU_base(T* p0, long long LenArr, double Multiplier, double* OutVal, TGPUUsageArg* pGPU)
 {
-    int bs = 1024;
+    int bs = 256;
     int nblocks = 1;
     if (LenArr > bs * PerThreadSum)
     {
