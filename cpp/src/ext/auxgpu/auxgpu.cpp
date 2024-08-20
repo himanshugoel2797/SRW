@@ -42,8 +42,9 @@ typedef struct
 } memAllocInfo_t;
 static std::map<void*, memAllocInfo_t> gpuMap;
 static cudaStream_t memcpy_stream;
-static bool memcpy_stream_initialized = false;
+//static bool memcpy_stream_initialized = false; //HG02082024 (commented-out)
 static int current_device = -1;
+static std::map<int, cudaStream_t*> streams; //HG02082024
 #endif
 
 static void CheckGPUAvailability() 
@@ -83,16 +84,21 @@ bool CAuxGPU::GPUEnabled(TGPUUsageArg *arg)
 	if (arg->deviceIndex > 0) {
 		if (arg->deviceIndex <= deviceCount)
 		{
-			if (memcpy_stream_initialized && current_device != arg->deviceIndex)
+			//if (memcpy_stream_initialized && current_device != arg->deviceIndex) //HG02082024 (commented-out)
+			//{
+			//	cudaStreamDestroy(memcpy_stream);
+			//	memcpy_stream_initialized = false;
+			//}
+			if (current_device != arg->deviceIndex) //HG02082024 Only set device if it is different from the current device
 			{
-				cudaStreamDestroy(memcpy_stream);
-				memcpy_stream_initialized = false;
+				//cudaSetDevice(arg->deviceIndex - 1);
+				//if (!memcpy_stream_initialized)
+				//	cudaStreamCreateWithFlags(&memcpy_stream, cudaStreamNonBlocking);
+				if (streams.find(arg->deviceIndex) == streams.end()) Init(arg); //HG02082024
+				memcpy_stream = streams[arg->deviceIndex][0]; //HG02082024
+				current_device = arg->deviceIndex;
+				//memcpy_stream_initialized = true;
 			}
-			cudaSetDevice(arg->deviceIndex - 1);
-			if (!memcpy_stream_initialized)
-				cudaStreamCreateWithFlags(&memcpy_stream, cudaStreamNonBlocking);
-			current_device = arg->deviceIndex;
-			memcpy_stream_initialized = true;
 		}
 		//TODO: Add warning that GPU isn't available
 		return GPUAvailable();
@@ -435,17 +441,67 @@ void CAuxGPU::MarkUpdated(TGPUUsageArg* arg, void* ptr, bool devToHost, bool hos
 #endif
 }
 
-void CAuxGPU::Init() {
+long long CAuxGPU::GetComputeStream(TGPUUsageArg* arg, int idx) //HG02082024
+{
+#ifdef _OFFLOAD_GPU
+	if (arg == NULL)
+		return 0;
+	if (arg->deviceIndex == 0)
+		return 0;
+	if (idx < 0)
+		return 0;
+	if (idx > 3)
+		return 0;
+	if (streams.find(arg->deviceIndex) == streams.end())
+		return 0;
+	return (long long)streams[arg->deviceIndex][idx + 1];
+#endif
+	return -1;
+}
+
+//void CAuxGPU::Init() 
+void CAuxGPU::Init(TGPUUsageArg* arg) //HG02082024
+{
 	deviceOffloadInitialized = true;
 #ifdef _OFFLOAD_GPU
+	if (arg == NULL) //HG02082024
+		return;
+	if (arg->deviceIndex <= 0)
+		return;
 	cudaGetDeviceCount(&deviceCount);
-	//cudaSetDeviceFlags(cudaDeviceMapHost);
+	if (arg->deviceIndex > deviceCount)
+		return;
+	if (streams.find(arg->deviceIndex) == streams.end()) //HG02082024
+	{
+		cudaInitDevice(arg->deviceIndex - 1, cudaDeviceMapHost, cudaInitDeviceFlagsAreValid);
+		cudaSetDevice(arg->deviceIndex - 1);
+
+		cudaStream_t *cur_streams = new cudaStream_t[4];
+		for (int i = 0; i < 4; i++)
+		{
+			cudaStreamCreateWithFlags(&cur_streams[i], cudaStreamNonBlocking);
+		}
+		streams[arg->deviceIndex] = cur_streams;
+	}
+	else
+	{
+		cudaSetDevice(arg->deviceIndex - 1);
+		memcpy_stream = streams[arg->deviceIndex][0];
+	}
+	current_device = arg->deviceIndex;
 	cudaDeviceSynchronize();
 #endif
 }
 
-void CAuxGPU::Fini() {
+//void CAuxGPU::Fini() 
+void CAuxGPU::Fini(TGPUUsageArg* arg) //HG02082024
+{
 #ifdef _OFFLOAD_GPU
+	if (arg == NULL) //HG02082024
+		return;
+	if (arg->deviceIndex == 0)
+		return;
+
 	SetGPUStatus(false); //HG30112023 Disable GPU
 
 	// Copy back all updated data

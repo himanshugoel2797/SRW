@@ -122,6 +122,8 @@ template<class T, bool combinedE> __global__ void RadPointModifierParallel_Kerne
 
 template<class T> void RadPointModifierParallelImpl_Launcher(srTSRWRadStructAccessData* pRadAccessData, srTSRWRadStructAccessData* pRadAccessData_dev, void* pBufVars_dev, T* local_copy, int xStart, int xFin, int zStart, int zFin, bool combined_e)
 {
+	if (xFin - xStart <= 0 || zFin - zStart <= 0) return; //HG17082024
+
 	const int bs = 256;
 	dim3 blocks(pRadAccessData->ne, xFin - xStart, zFin - zStart);
 	dim3 threads(1, 1, 1);

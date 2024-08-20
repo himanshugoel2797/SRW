@@ -79,9 +79,14 @@ void srTSRWRadStructAccessData::MultiplyElFieldByPhaseLin_GPU(double xMult, doub
 		//CAuxGPU::EnsureDeviceMemoryReady(pGpuUsage_, pBaseRadZ);
 	}
 
-    const int bs = 256;
-    dim3 blocks(nx / bs + ((nx & (bs - 1)) != 0), nz);
+    int minGridSize = 0; //HG05002024
+    int bs = 256;
+    dim3 blocks(nx, nz);
     dim3 threads(bs, 1);
+	cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, MultiplyElFieldByPhaseLin_Kernel, 0, nx); //HG05002024
+    threads.x = bs;
+	blocks.x = (nx + bs - 1) / bs;
+
     MultiplyElFieldByPhaseLin_Kernel<<<blocks, threads>>> (xMult, zMult, pBaseRadX, pBaseRadZ, nx, nz, ne, (float)xStart, (float)zStart, (float)xStep, (float)zStep);
     //MultiplyElFieldByPhaseLin_Kernel<<<blocks, threads>>> (xMult, zMult, pBaseRadX, pBaseRadZ, nz, nx, ne, zStart, zStep, xStart, xStep);
 
@@ -309,9 +314,16 @@ void srTSRWRadStructAccessData::MirrorFieldData_GPU(int sx, int sz, TGPUUsageArg
 		//CAuxGPU::EnsureDeviceMemoryReady(pGpuUsage_, pEZ0);
 	}
 
-	const int bs = 256;
-	dim3 blocks(nx / bs + ((nx & (bs - 1)) != 0), nz);
-	dim3 threads(bs, 1);
+	
+    int minGridSize = 0; //HG05002024
+    int bs = 256;
+    dim3 blocks(nx, nz);
+    dim3 threads(bs, 1);
+	if ((sx < 0) && (sz > 0)) cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, MirrorFieldData_Kernel<0>, 0, nx); //HG05002024
+	else if ((sx > 0) && (sz < 0)) cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, MirrorFieldData_Kernel<1>, 0, nx);
+	else cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, MirrorFieldData_Kernel<2>, 0, nx);
+    threads.x = bs;
+	blocks.x = (nx + bs - 1) / bs;
 
 	//if ((sx > 0) && (sz > 0))
 	//	return;

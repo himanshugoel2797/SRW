@@ -59,12 +59,15 @@ public:
 	/**
 	* Initialize GPU/device functionality
 	*/
-	static void Init();
+	//static void Init();
+	static void Init(TGPUUsageArg *arg); //HG02082024
 
 	/**
 	* Call when returning to the client layer to ensure all memory is accessible on CPU/host again
 	*/
-	static void Fini();
+	//static void Fini();
+	static void Fini(TGPUUsageArg *arg); //HG02082024
+
 	static bool GPUAvailable(); //CheckGPUAvailable etc
 	static bool GPUEnabled(TGPUUsageArg *arg);
 	static void SetGPUStatus(bool enabled);
@@ -134,6 +137,57 @@ public:
 	* @param [in] hostToDev true if host memory has the latest version of the data. Cannot be true if devToHost is true
 	*/
 	static void MarkUpdated(TGPUUsageArg* arg, void* ptr, bool devToHost, bool hostToDev);
+
+	static long long GetComputeStream(TGPUUsageArg* arg, int idx); //HG26072024
+
+	static void CalcBlockSizeAndGridSize(int bs, dim3& blocks, dim3& threads) //HG26072024
+	{
+		if (blocks.x > 1)
+		{
+			if (blocks.x >= bs)
+			{
+				threads.x = bs;
+				bs = 1;
+				blocks.x = (blocks.x + threads.x - 1) / threads.x;
+			}
+			else
+			{
+				threads.x = blocks.x;
+				blocks.x = 1;
+				bs /= threads.x;
+			}
+		}
+		if (blocks.y > 1)
+		{
+			if (blocks.y >= bs)
+			{
+				threads.y = bs;
+				bs = 1;
+				blocks.y = (blocks.y + threads.y - 1) / threads.y;
+			}
+			else
+			{
+				threads.y = blocks.y;
+				blocks.y = 1;
+				bs /= threads.y;
+			}
+		}
+		if (blocks.z > 1)
+		{
+			if (blocks.z >= bs)
+			{
+				threads.z = bs;
+				bs = 1;
+				blocks.z = (blocks.z + threads.z - 1) / threads.z;
+			}
+			else
+			{
+				threads.z = blocks.z;
+				blocks.z = 1;
+				bs /= threads.z;
+			}
+		}
+	}
 
 	static void Memset_GPU(float* p, float val, long long n, long long streamIdx); //HG27072024
 	static void Memset_GPU(double* p, double val, long long n, long long streamIdx); //HG27072024

@@ -17,26 +17,34 @@
 #include "math_constants.h"
 #include "auxgpu.h"
 
-template<typename T> __global__ void Memset_kernel(T* p, T val, long long n)
+const int PerThread = 16;
+template<typename T> __global__ void Memset_Kernel(T* p, T val, long long n)
 {
     long long offset = blockIdx.x * blockDim.x + threadIdx.x;
-    if (offset < n) p[offset] = val;
+    offset *= PerThread;
+    long long dst = min(offset + PerThread, n);
+    for (; offset < dst; offset++)
+        p[offset] = val;
 }
 
 void CAuxGPU::Memset_GPU(float* p, float val, long long n, long long streamIdx)
 {
-    const int bs = 256;
-    dim3 blocks(n / bs + ((n & (bs - 1)) != 0));
-    dim3 threads(bs);
-    Memset_kernel<float> <<<blocks, threads, 0, (cudaStream_t)streamIdx >>> (p, val, n);
+    int minGridSize = 0;
+    int bs = 256;
+    long long n_orig = n;
+	cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, Memset_Kernel<float>, 0, (n + PerThread - 1) / PerThread);
+    n = ((n + PerThread - 1) / PerThread + bs - 1) / bs;
+    Memset_Kernel<float> <<<n, bs, 0, (cudaStream_t)streamIdx >>> (p, val, n_orig);
 }
 
 void CAuxGPU::Memset_GPU(double* p, double val, long long n, long long streamIdx)
 {
-    const int bs = 256;
-    dim3 blocks(n / bs + ((n & (bs - 1)) != 0));
-    dim3 threads(bs);
-    Memset_kernel<double> <<<blocks, threads, 0, (cudaStream_t)streamIdx >>> (p, val, n);
+    int minGridSize = 0;
+    int bs = 256;
+    long long n_orig = n;
+	cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, Memset_Kernel<double>, 0, (n + PerThread - 1) / PerThread);
+    n = ((n + PerThread - 1) / PerThread + bs - 1) / bs;
+    Memset_Kernel<double> <<<n, bs, 0, (cudaStream_t)streamIdx >>> (p, val, n_orig);
 }
 
 #endif

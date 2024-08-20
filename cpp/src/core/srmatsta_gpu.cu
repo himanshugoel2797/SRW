@@ -99,16 +99,14 @@ __global__ void IntegrateOverY_Kernel(T* data, int iyStart, int iyEnd, double yS
 template<class T>
 int IntegrateOverX_GPU_base(T* p0, long long ixStart, long long ixEnd, double xStep, long long Nx, long long Ny, double* AuxArrIntOverX, TGPUUsageArg* pGPU)
 {
-    const int bs = 128;
+    int minGridSize;
+    int bs = 128;
     dim3 threads(1, bs);
     dim3 nblocks(Ny, 1);
-
     long long LenArr = ixEnd - ixStart + 1;
-    if (LenArr > bs * PerThreadSum)
-    {
-        nblocks.y = (LenArr / (bs * PerThreadSum));
-        if (LenArr % (bs * PerThreadSum) > 0) nblocks.y++;
-    }
+    cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, IntegrateOverX_Kernel<T>, 0, (LenArr + PerThreadSum - 1) / PerThreadSum);
+    nblocks.y = ((LenArr + PerThreadSum - 1)/PerThreadSum + bs - 1) / bs;
+    threads.y = bs;
 
     p0 = (T*)CAuxGPU::ToDevice(pGPU, p0, Nx * Ny * sizeof(T));
     AuxArrIntOverX = (double*)CAuxGPU::ToDevice(pGPU, AuxArrIntOverX, Ny * sizeof(double), true, false, 2);
@@ -136,23 +134,15 @@ int srTAuxMatStat::IntegrateOverX_GPU(double* p0, long long ixStart, long long i
 template <class T>
 int IntegrateOverY_GPU_base(T* p0, long long iyStart, long long iyEnd, double yStep, long long Nx, double* AuxArrIntOverY, TGPUUsageArg* pGPU)
 {
-    const int bs = 128;
+    int minGridSize;
+    int bs = 128;
     dim3 threads(bs, 1);
     dim3 nblocks(Nx, iyEnd - iyStart + 1);
-
-    if (Nx < bs)
-    {
-        threads.x = Nx;
-        nblocks.x = 1;
-
-        if (threads.x % 32 != 0) //Ensure that number of threads is always a multiple of the warp size (32)
-            threads.x += 32 - (threads.x % 32);
-    }
-    else
-    {
-        nblocks.x = (Nx / bs);
-        if (Nx % bs > 0) nblocks.x++;
-    }
+    
+    cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, IntegrateOverY_Kernel<T>, 0, Nx);
+    nblocks.x = (Nx + bs - 1) / bs;
+    nblocks.y = ((iyEnd - iyStart + 1) + PerThreadSum - 1) / PerThreadSum;
+    threads.x = bs;
 
     p0 = (T*)CAuxGPU::ToDevice(pGPU, p0, Nx * (iyEnd+1) * sizeof(T));
     AuxArrIntOverY = (double*)CAuxGPU::ToDevice(pGPU, AuxArrIntOverY, Nx * sizeof(double), true, false, 2);
@@ -180,22 +170,12 @@ int srTAuxMatStat::IntegrateOverY_GPU(double* p0, long long iyStart, long long i
 template <class T>
 int IntegrateSimple_GPU_base(T* p0, long long LenArr, double Multiplier, double* OutVal, TGPUUsageArg* pGPU)
 {
-    int bs = 256;
+    int minGridSize;
+    int bs = 1024;
     int nblocks = 1;
-    if (LenArr > bs * PerThreadSum)
-    {
-        nblocks = (LenArr / (bs * PerThreadSum));
-        if (LenArr % (bs * PerThreadSum) > 0) nblocks++;
-    }
-    else
-    {
-        bs = LenArr / PerThreadSum;
-        if (LenArr % PerThreadSum > 0) bs++;
-        if (bs % 32 != 0) //Ensure that number of threads is always a multiple of the warp size (32)
-            bs += 32 - (bs % 32);
 
-        nblocks = 1;
-    }
+    cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, SumVector_FixedStride_Kernel<T>, 0, (LenArr + PerThreadSum - 1) / PerThreadSum);
+    nblocks = ((LenArr + PerThreadSum - 1)/PerThreadSum + bs - 1) / bs;
 
     p0 = (T*)CAuxGPU::ToDevice(pGPU, p0, LenArr * sizeof(T));
     OutVal = (double*)CAuxGPU::ToDevice(pGPU, OutVal, sizeof(double));

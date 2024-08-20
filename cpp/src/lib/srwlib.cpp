@@ -1608,11 +1608,14 @@ EXP int CALL srwlUtiGPUProc(int op, double* arParGPU) //OC20022024
 //EXP int CALL srwlUtiGPUProc(int op, void* pvGPU) //HG04122023
 {
 #ifdef _OFFLOAD_GPU //HG07022024
-	if(op == 0) CAuxGPU::Fini();
+	TGPUUsageArg parGPU(arParGPU);
+	//if(op == 0) CAuxGPU::Fini();
+	if(op == 0) CAuxGPU::Fini(&parGPU); //HG02082024
 	//if(op == 1) CAuxGPU::Init();
 	if(op == 1) //HG22032024
 	{
-		CAuxGPU::Init();
+		//CAuxGPU::Init();
+		CAuxGPU::Init(&parGPU); //HG02082024
 		if(arParGPU != 0 && arParGPU[0] > 0 && arParGPU[1] > 0) //HG07022024
 		{
 			//Check if any GPU is available
