@@ -63,7 +63,7 @@ jobs:
         if: runner.os != 'Linux'
         run: |
           set -vxeuo pipefail
-          conda install -y cmake packaging
+          conda install -y cmake
 
       - name: Install OpenMP for macOS with conda
         if: runner.os == 'macOS' && matrix.openmp == 'on'
@@ -104,6 +104,7 @@ jobs:
           set -vxeuo pipefail
           cd env/python
           python -VV
+          python -m pip install packaging
           python setup.py bdist_wheel
           ls -la dist/*
           mkdir -p ../../dist
