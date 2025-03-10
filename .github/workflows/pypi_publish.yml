@@ -111,7 +111,7 @@ jobs:
       - name: Publish wheels to GitHub artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ matrix.python-version }}-${{ runner.os }}-${{ matrix.openmp }}
+          name: srwpy-${{ matrix.host-os }}-Py_${{ matrix.python-version }}-OpenMP_${{ matrix.openmp }}
           path: dist/*
 
       - name: Install the package and test requirements
