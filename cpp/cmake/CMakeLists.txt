@@ -74,7 +74,7 @@ set(genesis_source_files
 add_library(genesis OBJECT ${genesis_source_files})
 target_link_libraries(genesis genmath)
 target_include_directories(genesis PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../src/ext/genesis/genesis_july08/)
-target_compile_definitions(genesis PRIVATE ${SRW_DEFINITIONS})
+target_compile_definitions(genesis PRIVATE ${SRW_DEFINITIONS} -Wno-error=implicit-int)
 
 #genmath
 set(genmath_source_files
