@@ -63,7 +63,7 @@ jobs:
         if: runner.os != 'Linux'
         run: |
           set -vxeuo pipefail
-          conda install -y cmake
+          conda install -y cmake packaging
 
       - name: Install OpenMP for macOS with conda
         if: runner.os == 'macOS' && matrix.openmp == 'on'
@@ -84,6 +84,7 @@ jobs:
           set -vxeuo pipefail
           python -m pip install --upgrade pip
           python -m pip install cibuildwheel
+          python -m pip install packaging
           echo "CIBW_BEFORE_ALL=pip install cmake" >> $GITHUB_ENV
           PYTH_VER=${{ matrix.python-version }}
           PYTH_VER=${PYTH_VER//.}
