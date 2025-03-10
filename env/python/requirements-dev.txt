@@ -19,3 +19,4 @@ breathe
 setuptools
 twine
 wheel
+packaging
