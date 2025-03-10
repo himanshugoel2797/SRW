@@ -26,7 +26,7 @@ jobs:
         shell: bash -l {0}
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Set OpenMP mode
         if: matrix.openmp == 'on'
@@ -40,7 +40,7 @@ jobs:
           export MACOSX_DEPLOYMENT_TARGET="10.15"
           echo "MACOSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET}" >> $GITHUB_ENV
 
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: testenv
           allow-softlinks: true
@@ -109,7 +109,7 @@ jobs:
           cp dist/*.whl ../../dist/
 
       - name: Publish wheels to GitHub artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: wheels
           path: dist/*
@@ -146,10 +146,10 @@ jobs:
       id-token: write
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Download wheels from GitHub artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: wheels
           path: dist/
