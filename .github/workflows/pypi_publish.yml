@@ -111,7 +111,7 @@ jobs:
       - name: Publish wheels to GitHub artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: wheels
+          name: wheels-${{ matrix.python-version }}-${{ runner.os }}-${{ matrix.openmp }}
           path: dist/*
 
       - name: Install the package and test requirements
@@ -151,7 +151,6 @@ jobs:
       - name: Download wheels from GitHub artifacts
         uses: actions/download-artifact@v4
         with:
-          name: wheels
           path: dist/
 
       - name: Publish wheels to PyPI
