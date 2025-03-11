@@ -3519,7 +3519,7 @@ void ParseDeviceParam(PyObject* oDev, double* &parGPUParam) //HG10202021 Convert
 #if PY_MAJOR_VERSION <= 3 && PY_MINOR_VERSION < 13
 			parGPUParam[1] = (double)_PyLong_AsInt(oDev); //HG11032025 Update function call for breaking changes from Python 3.13
 #else
-			parGPUParam[1] = (double)PyLong_ASInt(oDev);
+			parGPUParam[1] = (double)PyLong_AsInt(oDev);
 #endif
 
 			return;
