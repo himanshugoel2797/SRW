@@ -105,6 +105,7 @@ jobs:
           cd env/python
           python -VV
           python -m pip install packaging
+          python -m pip install setuptools
           python setup.py bdist_wheel
           ls -la dist/*
           mkdir -p ../../dist
