@@ -56,18 +56,153 @@ class CAuxGPU
 {
 private:
 public:
-	static void Init();
-	static void Fini();
+/**
+	* Initialize GPU/device functionality
+	*/
+	//static void Init();
+	static void Init(TGPUUsageArg *arg); //HG02082024
+
+	/**
+	* Call when returning to the client layer to ensure all memory is accessible on CPU/host again
+	*/
+	//static void Fini();
+	static void Fini(TGPUUsageArg *arg); //HG02082024
+
 	static bool GPUAvailable(); //CheckGPUAvailable etc
 	static bool GPUEnabled(TGPUUsageArg *arg);
 	static void SetGPUStatus(bool enabled);
+
+	/**
+	*  Get the GPU/device number associated with arg
+	*  @param [in] arg pointer to a GPU usage argument structure
+	*  @return integer number of the GPU/device, -1 if CPU/host
+	*/
 	static int GetDevice(TGPUUsageArg* arg);
-	static void* ToDevice(TGPUUsageArg* arg, void* hostPtr, size_t size, bool dontCopy = false);
+
+	/**
+	*  Associate the specified region of host memory with memory on the device, copies the memory to device by default
+	* @param [in] arg pointer to a GPU usage argument structure
+	* @param [in] hostPtr pointer to the region of host memory
+	* @param [in] size size in bytes of the memory region
+	* @param [in] dontCopy do not copy the host memory to device if true
+	* @param [in] pinOnHost attempt to allocate this memory by pinning/page locking the hostPtr
+	* @param [in] zeroMode Initialization to use for device memory: =-1 -none, =0 set all bytes to 0, =1 set all floats to 0.0, =2 set all doubles to 0.0
+	* @return pointer to device memory, NULL on error
+	*/
+	static void* ToDevice(TGPUUsageArg* arg, void* hostPtr, size_t size, bool dontCopy = false, bool pinOnHost = false, int zeroMode = -1);
+	//static void* ToDevice(TGPUUsageArg* arg, void* hostPtr, size_t size, bool dontCopy = false); //HG26072024
+
+	/**
+	* Retrieve the host memory address for a given device or host pointer
+	* @param [in] arg pointer to a GPU usage argument structure
+	* @param [in] devicePtr pointer for which the host pointer is desired
+	* @return the corresponding host pointer, NULL on errror
+	*/
 	static void* GetHostPtr(TGPUUsageArg* arg, void* devicePtr);
+
+	/**
+	* Transfer memory back to the host if necessary and free the associated device memory. Ensures that the latest copy of the data is on the host by the end.
+	* @param [in] arg pointer to a GPU usage argument structure
+	* @param [in] devicePtr device pointer to the memory to be freed, if a host pointer is provided, the corresponding device pointer is freed
+	* @param [in] size size of the block to be freed
+	* @param [in] dontCopy do not copy the device memory to host if true
+	* @return The corresponding host pointer, NULL on error
+	*/
 	static void* ToHostAndFree(TGPUUsageArg* arg, void* devicePtr, size_t size, bool dontCopy = false);
+
+	/**
+	* Ensure that the device memory has the latest data, used prior to kernel launches
+	* @param [in] arg pointer to a GPU usage argument structure
+	* @param [in] devicePtr device pointer to the memory block to be operated on
+	*/
 	static void EnsureDeviceMemoryReady(TGPUUsageArg* arg, void* devicePtr);
-	static void FreeHost(void* ptr);
+
+	//static void FreeHost(void* ptr); //HG26072024 (Commented out) Unused and potentially breaks this memory management model
+
+	/**
+	* If origPtr is a host pointer that has a corresponding device memory block, reassign that block to correspond to newPtr instead, otherwise copy the data from origPtr to newPtr on host
+	* @param [in] arg pointer to a GPU usage argument structure
+	* @param [in] origPtr original host pointer
+	* @param [in] newPtr host pointer to replace it with
+	* @param [in] size size of this memory region
+	* @return 0 on success, -1 on error
+	*/
+	static int SetHostPtr(TGPUUsageArg* arg, void* origPtr, void* newPtr, size_t size); //HG26072024
+
+	/**
+	* Mark the region as having been updated.
+	* @param [in] arg pointer to a GPU usage argument structure
+	* @param [in] ptr pointer to the memory region, can be a host or device pointer
+	* @param [in] devToHost true if device memory has the latest version of the data. Cannot be true if hostToDev is true
+	* @param [in] hostToDev true if host memory has the latest version of the data. Cannot be true if devToHost is true
+	*/
 	static void MarkUpdated(TGPUUsageArg* arg, void* ptr, bool devToHost, bool hostToDev);
+
+	/**
+	* Retrieve a compute stream index to run kernels simultaneously on one GPU.
+	* @param [in] arg pointer to a GPU usage argument structure
+	* @param [in] idx the 0-based index of the desired compute stream
+	* @return The cudaStream ID associated with the requested compute stream index
+	*/
+	static long long GetComputeStream(TGPUUsageArg* arg, int idx); //HG26072024
+
+	/**
+	* Determine a good distribution of threads within a block given the maximum block size and the block dimensions
+	* @param [in] bs The maximum block size (i.e. the maximum number of threads in a block)
+	* @param [inout] blocks The number of blocks needed in each dimension, assuming each block has only 1 thread. This is updated to keep the size of the calculation the same as the number of threads per block is increased.
+	* @param [out] threads The number of threads in each dimension per block.
+	*/
+	static void CalcBlockSizeAndGridSize(int bs, dim3& blocks, dim3& threads) //HG26072024
+	{
+		if (blocks.x > 1)
+		{
+			if (blocks.x >= bs)
+			{
+				threads.x = bs;
+				bs = 1;
+				blocks.x = (blocks.x + threads.x - 1) / threads.x;
+			}
+			else
+			{
+				threads.x = blocks.x;
+				blocks.x = 1;
+				bs /= threads.x;
+			}
+		}
+		if (blocks.y > 1)
+		{
+			if (blocks.y >= bs)
+			{
+				threads.y = bs;
+				bs = 1;
+				blocks.y = (blocks.y + threads.y - 1) / threads.y;
+			}
+			else
+			{
+				threads.y = blocks.y;
+				blocks.y = 1;
+				bs /= threads.y;
+			}
+		}
+		if (blocks.z > 1)
+		{
+			if (blocks.z >= bs)
+			{
+				threads.z = bs;
+				bs = 1;
+				blocks.z = (blocks.z + threads.z - 1) / threads.z;
+			}
+			else
+			{
+				threads.z = blocks.z;
+				blocks.z = 1;
+				bs /= threads.z;
+			}
+		}
+	}
+
+	static void Memset_GPU(float* p, float val, long long n, long long streamIdx); //HG27072024
+	static void Memset_GPU(double* p, double val, long long n, long long streamIdx); //HG27072024
 };
 
 //*************************************************************************

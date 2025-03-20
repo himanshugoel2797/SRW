@@ -54,7 +54,7 @@ SRW_INCLUDES += $(CUDA_INCLUDES) -I$(SH_SRC_AUXGPU_DIR)
 #SRW_CFLAGS += -std=c++17 #HG01012023
 LDFLAGS += $(CUDA_LIBS) -lcudart_static -lcudadevrt -lcufft -lrt
 NVCFLAGS = -O3 -arch=sm_80 -dlto -rdc=true
-CUDA_OBJ=gmfft_gpu.o srradstr_gpu.o sroptelm_gpu.o sroptdrf_gpu.o sroptgtr_gpu.o srradmnp_gpu.o
+CUDA_OBJ=gmfft_gpu.o srradstr_gpu.o sroptelm_gpu.o sroptdrf_gpu.o sroptgtr_gpu.o srradmnp_gpu.o auxgpu_gpu.o
 else
 ifeq ($(MODE), 0)
 SRW_CFLAGS+= -D_FFTW3 
@@ -129,6 +129,10 @@ lib: $(CUDA_OBJ) $(OBJ)
 	$(NVCC) -dc $(NVCFLAGS) $(SRW_INCLUDES) $(SRW_SRC_DEF) -Xcompiler="$(CFLAGS)" -c $<
 
 %.o: $(SRW_SRC_GEN_DIR)/%.cu
+	$(NVCC) -dc $(NVCFLAGS) $(SRW_INCLUDES) $(SRW_SRC_DEF) -Xcompiler="$(CFLAGS)" -c $<
+
+#HG27072024
+%.o: $(SH_SRC_AUXGPU_DIR)/%.cu
 	$(NVCC) -dc $(NVCFLAGS) $(SRW_INCLUDES) $(SRW_SRC_DEF) -Xcompiler="$(CFLAGS)" -c $<
 
 #HG20032024
