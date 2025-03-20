@@ -43,7 +43,7 @@ typedef struct
 static std::map<void*, memAllocInfo_t> gpuMap;
 static cudaStream_t memcpy_stream;
 //static bool memcpy_stream_initialized = false; //HG02082024 (commented-out)
-static std::map<int, cuda_stream_t*> streams; //HG02082024
+static std::map<int, cudaStream_t*> streams; //HG02082024
 static int current_device = -1;
 #endif
 
@@ -470,6 +470,7 @@ long long CAuxGPU::GetComputeStream(TGPUUsageArg* arg, int idx) //HG02082024 Add
 
 //void CAuxGPU::Init() 
 void CAuxGPU::Init(TGPUUsageArg* arg) //HG02082024
+{
 	deviceOffloadInitialized = true;
 #ifdef _OFFLOAD_GPU
 	if (arg == NULL) //HG02082024
