@@ -11,7 +11,8 @@ import sys
 import random #OC01082020
 import numpy as np
 
-from skimage.draw import polygon, circle, ellipse
+#from skimage.draw import polygon, circle, ellipse
+from skimage.draw import polygon, ellipse #HG08052025 Removed unused circle import (it also doesn't exist in newer skimage versions)
 
 # ********************** Get the distance between point jj and the other points
 def get_r1j( px, py, jj):
