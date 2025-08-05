@@ -23,10 +23,10 @@
 
 int srTGenTransmission::RadPointModifierParallel(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars, long pBufVarsSz, TGPUUsageArg* pGPU)
 {
-    GenTransNumData.pData = (char*)CAuxGPU::ToDevice(pGPU, GenTransNumData.pData, GenTransNumData.DimSizes[0] * (int)GenTransNumData.DimSizes[1] * (int)GenTransNumData.DimSizes[2] * sizeof(double) * 2);
+    GenTransNumData.pData = CAuxGPU::ToDevice(pGPU, GenTransNumData.pData, GenTransNumData.DimSizes[0] * (int)GenTransNumData.DimSizes[1] * (int)GenTransNumData.DimSizes[2] * 2);
 	CAuxGPU::EnsureDeviceMemoryReady(pGPU, GenTransNumData.pData);
     int retCode = RadPointModifierParallelImpl<srTGenTransmission>(pRadAccessData, pBufVars, pBufVarsSz, this, pGPU); 
-	GenTransNumData.pData = (char*)CAuxGPU::ToHostAndFree(pGPU, GenTransNumData.pData, GenTransNumData.DimSizes[0] * (int)GenTransNumData.DimSizes[1] * (int)GenTransNumData.DimSizes[2] * sizeof(double) * 2, true);
+	GenTransNumData.pData = CAuxGPU::ToHostAndFree(pGPU, GenTransNumData.pData);
     return retCode;
 } //HG03092022
 #endif

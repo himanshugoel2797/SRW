@@ -66,31 +66,47 @@ void srTSRWRadStructAccessData::MultiplyElFieldByPhaseLin_GPU(double xMult, doub
 	//TGPUUsageArg *pGpuUsage_ = (TGPUUsageArg*)pGpuUsage; //OC03082023 (commented-out)
 	if (pBaseRadX != NULL)
 	{
-		pBaseRadX = (float*)CAuxGPU::ToDevice(pGPU, pBaseRadX, nz * nx * ne * 2 * sizeof(float)); //OC03082023
+		pBaseRadX = CAuxGPU::ToDevice(pGPU, pBaseRadX, nz * nx * ne * 2); //OC03082023
 		//pBaseRadX = (float*)CAuxGPU::ToDevice(pGpuUsage_, pBaseRadX, nz * nx * ne * 2 * sizeof(float));
 		CAuxGPU::EnsureDeviceMemoryReady(pGPU, pBaseRadX); //OC03082023
 		//CAuxGPU::EnsureDeviceMemoryReady(pGpuUsage_, pBaseRadX);
 	}
 	if (pBaseRadZ != NULL)
 	{
-		pBaseRadZ = (float*)CAuxGPU::ToDevice(pGPU, pBaseRadZ, nz * nx * ne * 2 * sizeof(float)); //OC03082023
+		pBaseRadZ = CAuxGPU::ToDevice(pGPU, pBaseRadZ, nz * nx * ne * 2); //OC03082023
 		//pBaseRadZ = (float*)CAuxGPU::ToDevice(pGpuUsage_, pBaseRadZ, nz * nx * ne * 2 * sizeof(float));
 		CAuxGPU::EnsureDeviceMemoryReady(pGPU, pBaseRadZ); //OC03082023
 		//CAuxGPU::EnsureDeviceMemoryReady(pGpuUsage_, pBaseRadZ);
 	}
 
-    const int bs = 256;
-    dim3 blocks(nx / bs + ((nx & (bs - 1)) != 0), nz);
+    int minGridSize = 0; //HG05002024
+    int bs = 256;
+    dim3 blocks(nx, nz);
     dim3 threads(bs, 1);
+	cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, MultiplyElFieldByPhaseLin_Kernel, 0, nx); //HG05002024
+    threads.x = bs;
+	blocks.x = (nx + bs - 1) / bs;
+
     MultiplyElFieldByPhaseLin_Kernel<<<blocks, threads>>> (xMult, zMult, pBaseRadX, pBaseRadZ, nx, nz, ne, (float)xStart, (float)zStart, (float)xStep, (float)zStep);
     //MultiplyElFieldByPhaseLin_Kernel<<<blocks, threads>>> (xMult, zMult, pBaseRadX, pBaseRadZ, nz, nx, ne, zStart, zStep, xStart, xStep);
 
-	if (pBaseRadX != NULL)
-		CAuxGPU::MarkUpdated(pGPU, pBaseRadX, true, false); //OC03082023
-		//CAuxGPU::MarkUpdated(pGpuUsage_, pBaseRadX, true, false);
+	//if (pBaseRadX != NULL)
+	//	CAuxGPU::MarkUpdated(pGPU, pBaseRadX, true, false); //OC03082023
+	//	//CAuxGPU::MarkUpdated(pGpuUsage_, pBaseRadX, true, false);
+	//if (pBaseRadZ != NULL)
+	//	CAuxGPU::MarkUpdated(pGPU, pBaseRadZ, true, false); //OC03082023
+	//	//CAuxGPU::MarkUpdated(pGpuUsage_, pBaseRadZ, true, false);
+	
+	if (pBaseRadX != NULL) //HG27072024
+	{
+		CAuxGPU::MarkUpdated(pGPU, pBaseRadX, CAuxGPU::DEVICE);
+		pBaseRadX = (float*)CAuxGPU::GetHostPtr(pGPU, pBaseRadX);
+	}
 	if (pBaseRadZ != NULL)
-		CAuxGPU::MarkUpdated(pGPU, pBaseRadZ, true, false); //OC03082023
-		//CAuxGPU::MarkUpdated(pGpuUsage_, pBaseRadZ, true, false);
+	{
+		CAuxGPU::MarkUpdated(pGPU, pBaseRadZ, CAuxGPU::DEVICE);
+		pBaseRadZ = (float*)CAuxGPU::GetHostPtr(pGPU, pBaseRadZ);
+	}
 
 //HG26022024 (commented out)
 //#ifdef _DEBUG
@@ -276,32 +292,42 @@ template<int mode> __global__ void MirrorFieldData_Kernel(long nx, long nz, long
 void srTSRWRadStructAccessData::MirrorFieldData_GPU(int sx, int sz, TGPUUsageArg* pGPU) //OC03082023
 //void srTSRWRadStructAccessData::MirrorFieldData_GPU(int sx, int sz, void* pGpuUsage)
 {
+	if ((sx > 0) && (sz > 0)) //HG26072024 Bug fix, don't touch the memory if no operation is being done
+		return;
+
 	//TGPUUsageArg *pGpuUsage_ = (TGPUUsageArg*)pGpuUsage; //OC03082023 (commented-out)
 	float *pEX0 = pBaseRadX;
 	float *pEZ0 = pBaseRadZ;
 
 	if (pEX0 != NULL)
 	{
-		pEX0 = (float*)CAuxGPU::ToDevice(pGPU, pEX0, nz * nx * ne * 2 * sizeof(float)); //OC03082023
+		pEX0 = CAuxGPU::ToDevice(pGPU, pEX0, nz * nx * ne * 2); //OC03082023
 		//pEX0 = (float*)CAuxGPU::ToDevice(pGpuUsage_, pEX0, nz * nx * ne * 2 * sizeof(float));
 		CAuxGPU::EnsureDeviceMemoryReady(pGPU, pEX0); //OC03082023
 		//CAuxGPU::EnsureDeviceMemoryReady(pGpuUsage_, pEX0);
 	}
 	if (pEZ0 != NULL)
 	{
-		pEZ0 = (float*)CAuxGPU::ToDevice(pGPU, pEZ0, nz * nx * ne * 2 * sizeof(float)); //OC03082023
+		pEZ0 = CAuxGPU::ToDevice(pGPU, pEZ0, nz * nx * ne * 2); //OC03082023
 		//pEZ0 = (float*)CAuxGPU::ToDevice(pGpuUsage_, pEZ0, nz * nx * ne * 2 * sizeof(float));
 		CAuxGPU::EnsureDeviceMemoryReady(pGPU, pEZ0); //OC03082023
 		//CAuxGPU::EnsureDeviceMemoryReady(pGpuUsage_, pEZ0);
 	}
 
-	const int bs = 256;
-	dim3 blocks(nx / bs + ((nx & (bs - 1)) != 0), nz);
-	dim3 threads(bs, 1);
+    int minGridSize = 0; //HG05002024
+    int bs = 256;
+    dim3 blocks(nx, nz);
+    dim3 threads(bs, 1);
+	if ((sx < 0) && (sz > 0)) cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, MirrorFieldData_Kernel<0>, 0, nx); //HG05002024
+	else if ((sx > 0) && (sz < 0)) cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, MirrorFieldData_Kernel<1>, 0, nx);
+	else cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, MirrorFieldData_Kernel<2>, 0, nx);
+    threads.x = bs;
+	blocks.x = (nx + bs - 1) / bs;
 
-	if ((sx > 0) && (sz > 0))
-		return;
-	else if ((sx < 0) && (sz > 0))
+	//if ((sx > 0) && (sz > 0))
+	//	return;
+	//else if ((sx < 0) && (sz > 0))
+	if ((sx < 0) && (sz > 0)) //HG26072024 Bug fix
 		MirrorFieldData_Kernel<0> <<<blocks, threads>>>(nx, nz, ne, pEX0, pEZ0);
 	else if ((sx > 0) && (sz < 0))
 		MirrorFieldData_Kernel<1> <<<blocks, threads >>> (nx, nz, ne, pEX0, pEZ0);
@@ -309,10 +335,10 @@ void srTSRWRadStructAccessData::MirrorFieldData_GPU(int sx, int sz, TGPUUsageArg
 		MirrorFieldData_Kernel<2> <<<blocks, threads >>> (nx, nz, ne, pEX0, pEZ0);
 
 	if (pEX0 != NULL)
-		CAuxGPU::MarkUpdated(pGPU, pEX0, true, false); //OC03082023
+		CAuxGPU::MarkUpdated(pGPU, pEX0, CAuxGPU::DEVICE); //OC03082023
 		//CAuxGPU::MarkUpdated(pGpuUsage_, pEX0, true, false);
 	if (pEZ0 != NULL)
-		CAuxGPU::MarkUpdated(pGPU, pEZ0, true, false); //OC03082023
+		CAuxGPU::MarkUpdated(pGPU, pEZ0, CAuxGPU::DEVICE); //OC03082023
 		//CAuxGPU::MarkUpdated(pGpuUsage_, pEZ0, true, false);
 
 //HG26022024 (commented out)

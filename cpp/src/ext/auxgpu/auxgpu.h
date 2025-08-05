@@ -14,11 +14,13 @@
 #ifndef __UTIGPU_H
 #define __UTIGPU_H
 
+#include <cstdarg>
 #include <cstdlib>
 #include <stdio.h>
 
 #ifdef _OFFLOAD_GPU
 #include <cuda_runtime.h>
+#include <device_launch_parameters.h>
 #include <map>
 //#if CUDART_VERSION < 11020
 //#error CUDA version too low, need at least 11.2
@@ -55,8 +57,23 @@ struct TGPUUsageArg //OC18022024
 class CAuxGPU
 {
 private:
+	static cudaStream_t memcpy_stream;
+	
+	//static void* ToDevice(TGPUUsageArg* arg, void* hostPtr, size_t size, bool dontCopy = false); //HG26072024
+	static void* _ToDevice(TGPUUsageArg* arg, void* hostPtr, size_t size, int flags=0); //HG26072024 Make private
+
+	static void* _ToHostAndFree(TGPUUsageArg* arg, void* devicePtr, int flags=0, size_t size=0); //HG26072024
+	//static void* ToHostAndFree(TGPUUsageArg* arg, void* devicePtr, size_t size, bool dontCopy = false);
 public:
-/**
+	/**
+	 * Flags used by this class
+	 */
+	static constexpr int DONT_COPY = (1 << 0);
+	static constexpr int PIN_ON_HOST = (1 << 1);
+	static constexpr int HOST = (1 << 2);
+	static constexpr int DEVICE = (1 << 3);
+
+	/**
 	* Initialize GPU/device functionality
 	*/
 	//static void Init();
@@ -84,13 +101,62 @@ public:
 	* @param [in] arg pointer to a GPU usage argument structure
 	* @param [in] hostPtr pointer to the region of host memory
 	* @param [in] size size in bytes of the memory region
-	* @param [in] dontCopy do not copy the host memory to device if true
-	* @param [in] pinOnHost attempt to allocate this memory by pinning/page locking the hostPtr
-	* @param [in] zeroMode Initialization to use for device memory: =-1 -none, =0 set all bytes to 0, =1 set all floats to 0.0, =2 set all doubles to 0.0
+	* @param [in] flags flags to control the memory transfer (DONT_COPY, PIN_ON_HOST)
 	* @return pointer to device memory, NULL on error
 	*/
-	static void* ToDevice(TGPUUsageArg* arg, void* hostPtr, size_t size, bool dontCopy = false, bool pinOnHost = false, int zeroMode = -1);
-	//static void* ToDevice(TGPUUsageArg* arg, void* hostPtr, size_t size, bool dontCopy = false); //HG26072024
+	template <typename T>
+	static T* ToDevice(TGPUUsageArg* arg, T* hostPtr, size_t elemCount, int flags=0) //HG30042025
+	{
+#ifdef _OFFLOAD_GPU
+		const int typeSize = (typeid(T) == typeid(void)) ? 1 : sizeof(T);
+		return (T*)_ToDevice(arg, (void*)hostPtr, elemCount * typeSize, flags);
+#endif
+		return hostPtr;
+	}
+
+#ifdef __CUDACC__
+	const int PerThread = 16;
+	template<typename T> __global__ void Memset_Kernel(T* p, T val, long long n)
+	{
+		long long offset = blockIdx.x * blockDim.x + threadIdx.x;
+		offset *= PerThread;
+		long long dst = min(offset + PerThread, n);
+		for (; offset < dst; offset++)
+			p[offset] = val;
+	}
+#endif
+
+	template <typename T>
+	static void Memset(TGPUUsageArg* arg, T* devicePtr, T value, size_t elemCount) //HG30042025
+	{
+#ifdef _OFFLOAD_GPU && __CUDACC__
+		if (arg == NULL)
+			return;
+		if (arg->deviceIndex == 0)
+			return;
+		if (!GPUEnabled(arg))
+			return;
+		if (devicePtr == NULL)
+			return;
+		if (elemCount == 0)
+			return;
+		if (gpuMap.find(devicePtr) != gpuMap.end()){
+			void* devPtr = gpuMap[hostPtr].devicePtr;
+			if (gpuMap[devPtr].DevToHostUpdated){
+				cudaStreamWaitEvent(memcpy_stream, gpuMap[devPtr].d2h_event);
+				gpuMap[devPtr].DevToHostUpdated = false;
+				if (gpuMap[devPtr].hostPtr != NULL) gpuMap[gpuMap[devPtr].hostPtr].DevToHostUpdated = false;
+			}
+
+			int minGridSize = 0;
+			int bs = 256;
+			size_t elemCount_orig = elemCount;
+			cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, Memset_Kernel<T>, 0, (elemCount + PerThread - 1) / PerThread);
+			elemCount = ((elemCount + PerThread - 1) / PerThread + bs - 1) / bs;
+			Memset_Kernel<T> <<<elemCount, bs, 0, memcpy_stream>>> (devPtr, value, elemCount_orig);
+		}
+#endif
+	}
 
 	/**
 	* Retrieve the host memory address for a given device or host pointer
@@ -104,11 +170,19 @@ public:
 	* Transfer memory back to the host if necessary and free the associated device memory. Ensures that the latest copy of the data is on the host by the end.
 	* @param [in] arg pointer to a GPU usage argument structure
 	* @param [in] devicePtr device pointer to the memory to be freed, if a host pointer is provided, the corresponding device pointer is freed
+	* @param [in] flags flags to control the memory transfer (DONT_COPY)
 	* @param [in] size size of the block to be freed
-	* @param [in] dontCopy do not copy the device memory to host if true
 	* @return The corresponding host pointer, NULL on error
 	*/
-	static void* ToHostAndFree(TGPUUsageArg* arg, void* devicePtr, size_t size, bool dontCopy = false);
+	template <typename T>
+	static T* ToHostAndFree(TGPUUsageArg* arg, T* devicePtr, int flags=0, size_t elemCount=0) //HG30042025
+	{
+#ifdef _OFFLOAD_GPU
+		const int typeSize = (typeid(T) == typeid(void)) ? 1 : sizeof(T);
+		return (T*)_ToHostAndFree(arg, (void*)devicePtr, flags, elemCount * typeSize);
+#endif
+		return devicePtr;
+	}
 
 	/**
 	* Ensure that the device memory has the latest data, used prior to kernel launches
@@ -116,6 +190,22 @@ public:
 	* @param [in] devicePtr device pointer to the memory block to be operated on
 	*/
 	static void EnsureDeviceMemoryReady(TGPUUsageArg* arg, void* devicePtr);
+
+	// Makes it possible to pass multiple pointers to EnsureDeviceMemoryReady in a single call
+	template <typename First, typename... T> 
+	static void EnsureDeviceMemoryReady(TGPUUsageArg* arg, First* devicePtr, T*... ptrs) //HG30042025	
+	{
+#ifdef _OFFLOAD_GPU
+		if (arg == NULL)
+			return;
+		if (arg->deviceIndex == 0)
+			return;
+		if (!GPUEnabled(arg))
+			return;
+		EnsureDeviceMemoryReady(arg, (void*)devicePtr);
+		EnsureDeviceMemoryReady(arg, ptrs...);
+#endif
+	}
 
 	//static void FreeHost(void* ptr); //HG26072024 (Commented out) Unused and potentially breaks this memory management model
 
@@ -133,10 +223,10 @@ public:
 	* Mark the region as having been updated.
 	* @param [in] arg pointer to a GPU usage argument structure
 	* @param [in] ptr pointer to the memory region, can be a host or device pointer
-	* @param [in] devToHost true if device memory has the latest version of the data. Cannot be true if hostToDev is true
-	* @param [in] hostToDev true if host memory has the latest version of the data. Cannot be true if devToHost is true
+	* @param [in] flags flags to control the memory transfer (HOST_TO_DEV, DEV_TO_HOST)
 	*/
-	static void MarkUpdated(TGPUUsageArg* arg, void* ptr, bool devToHost, bool hostToDev);
+	static void MarkUpdated(TGPUUsageArg* arg, void* ptr, int flags=0); //HG26072024
+	//static void MarkUpdated(TGPUUsageArg* arg, void* ptr, bool devToHost, bool hostToDev);
 
 	/**
 	* Retrieve a compute stream index to run kernels simultaneously on one GPU.
@@ -145,6 +235,15 @@ public:
 	* @return The cudaStream ID associated with the requested compute stream index
 	*/
 	static long long GetComputeStream(TGPUUsageArg* arg, int idx); //HG26072024
+
+	/**
+	* Ensure that the specified compute stream is synchronized with the target compute stream
+	* @param [in] arg pointer to a GPU usage argument structure
+	* @param [in] targetStreamIdx the 0-based index of the target compute stream
+	* @param [in] streamIdx the 0-based index of the compute stream to be synchronized
+	*/
+	static void SyncComputeStream(TGPUUsageArg* arg, long long targetStreamIdx, long long streamIdx); //HG24042025
+	
 
 	/**
 	* Determine a good distribution of threads within a block given the maximum block size and the block dimensions
@@ -200,9 +299,6 @@ public:
 			}
 		}
 	}
-
-	static void Memset_GPU(float* p, float val, long long n, long long streamIdx); //HG27072024
-	static void Memset_GPU(double* p, double val, long long n, long long streamIdx); //HG27072024
 };
 
 //*************************************************************************

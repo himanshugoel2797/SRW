@@ -70,33 +70,34 @@ template<class T> int RadPointModifierParallelImpl(srTSRWRadStructAccessData* pR
 	
 	if (pRadAccessData->pBaseRadX != NULL)
 	{
-		pRadAccessData->pBaseRadX = (float*)CAuxGPU::ToDevice(pGPU, pRadAccessData->pBaseRadX, 2*pRadAccessData->ne*pRadAccessData->nx*pRadAccessData->nz*sizeof(float));
+		pRadAccessData->pBaseRadX = CAuxGPU::ToDevice(pGPU, pRadAccessData->pBaseRadX, 2*pRadAccessData->ne*pRadAccessData->nx*pRadAccessData->nz);
 		CAuxGPU::EnsureDeviceMemoryReady(pGPU, pRadAccessData->pBaseRadX);
 	}
 	if (pRadAccessData->pBaseRadZ != NULL)
 	{
-		pRadAccessData->pBaseRadZ = (float*)CAuxGPU::ToDevice(pGPU, pRadAccessData->pBaseRadZ, 2*pRadAccessData->ne*pRadAccessData->nx*pRadAccessData->nz*sizeof(float));
+		pRadAccessData->pBaseRadZ = CAuxGPU::ToDevice(pGPU, pRadAccessData->pBaseRadZ, 2*pRadAccessData->ne*pRadAccessData->nx*pRadAccessData->nz);
 		CAuxGPU::EnsureDeviceMemoryReady(pGPU, pRadAccessData->pBaseRadZ);
 	}
 
-    T* local_copy = (T*)CAuxGPU::ToDevice(pGPU, tgt_obj, sizeof(T));
+    T* local_copy = CAuxGPU::ToDevice(pGPU, tgt_obj, 1);
 	CAuxGPU::EnsureDeviceMemoryReady(pGPU, local_copy);
     //cudaMalloc(&local_copy, sizeof(T));
     //cudaMemcpy(local_copy, tgt_obj, sizeof(T), cudaMemcpyHostToDevice);
 	
 	void* pBufVars_dev = NULL;
-	if (pBufVarsSz > 0){
+	if (pBufVarsSz > 0)
+	{
 		pBufVars_dev = CAuxGPU::ToDevice(pGPU, pBufVars, pBufVarsSz);
 		CAuxGPU::EnsureDeviceMemoryReady(pGPU, pBufVars_dev);
 	}
-	RadPointModifierParallel_Kernel<T> << <blocks, threads >> > (*pRadAccessData, pBufVars_dev, local_copy);
+	RadPointModifierParallel_Kernel<T> <<<blocks, threads >>> (*pRadAccessData, pBufVars_dev, local_copy);
     //cudaDeviceSynchronize();
     //cudaFreeAsync(local_copy, 0);
-	if (pBufVarsSz > 0) CAuxGPU::ToHostAndFree(pGPU, pBufVars_dev, pBufVarsSz, true);
-	CAuxGPU::ToHostAndFree(pGPU, local_copy, sizeof(T), true);
+	if (pBufVarsSz > 0) CAuxGPU::ToHostAndFree(pGPU, pBufVars_dev);
+	CAuxGPU::ToHostAndFree(pGPU, local_copy);
 
-	CAuxGPU::MarkUpdated(pGPU, pRadAccessData->pBaseRadX, true, false);
-	CAuxGPU::MarkUpdated(pGPU, pRadAccessData->pBaseRadZ, true, false);
+	CAuxGPU::MarkUpdated(pGPU, pRadAccessData->pBaseRadX, CAuxGPU::DEVICE);
+	CAuxGPU::MarkUpdated(pGPU, pRadAccessData->pBaseRadZ, CAuxGPU::DEVICE);
 
 //#ifndef _DEBUG //HG26022024 (commented-out)
 	if (pRadAccessData->pBaseRadX != NULL)

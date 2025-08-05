@@ -2545,16 +2545,27 @@ int srTGenOptElem::RadResizeGen(srTSRWRadStructAccessData& SRWRadStructAccessDat
 			OldRadZCopy = new float[TotAmOfOldData];
 			if(OldRadZCopy == 0) return MEMORY_ALLOCATION_FAILURE;
 			
-			float *tOldRadXCopy = OldRadXCopy, *tOldRadZCopy = OldRadZCopy;
-			float *tBaseRadX = SRWRadStructAccessData.pBaseRadX, *tBaseRadZ = SRWRadStructAccessData.pBaseRadZ;
-			//for(long i=0; i<TotAmOfOldData; i++) 
-			for(long long i=0; i<TotAmOfOldData; i++) 
+#ifdef _OFFLOAD_GPU //HG26072024
+			TGPUUsageArg parGPU(pvGPU);
+			if (CAuxGPU::GPUEnabled(&parGPU))
 			{
-				*(tOldRadXCopy++) = *(tBaseRadX++);
-				*(tOldRadZCopy++) = *(tBaseRadZ++);
+				CAuxGPU::SetHostPtr(&parGPU, SRWRadStructAccessData.pBaseRadX, OldRadXCopy, TotAmOfOldData*sizeof(float));
+				CAuxGPU::SetHostPtr(&parGPU, SRWRadStructAccessData.pBaseRadZ, OldRadZCopy, TotAmOfOldData*sizeof(float));
 			}
-			//Added by SY (for profiling?) at parallelizing SRW via OpenMP:
-			//srwlPrintTime(":RadResizeGen: memalloc",&start);
+			else
+#endif
+			{
+				float *tOldRadXCopy = OldRadXCopy, *tOldRadZCopy = OldRadZCopy;
+				float *tBaseRadX = SRWRadStructAccessData.pBaseRadX, *tBaseRadZ = SRWRadStructAccessData.pBaseRadZ;
+				//for(long i=0; i<TotAmOfOldData; i++) 
+				for(long long i=0; i<TotAmOfOldData; i++)
+				{
+					*(tOldRadXCopy++) = *(tBaseRadX++);
+					*(tOldRadZCopy++) = *(tBaseRadZ++);
+				}
+				//Added by SY (for profiling?) at parallelizing SRW via OpenMP:
+				//srwlPrintTime(":RadResizeGen: memalloc",&start);
+			} //HG26072024
 			
 			if(RadShouldBeChanged)
 			{
@@ -2574,8 +2585,10 @@ int srTGenOptElem::RadResizeGen(srTSRWRadStructAccessData& SRWRadStructAccessDat
 			//Added by SY (for profiling?) at parallelizing SRW via OpenMP:
 			//srwlPrintTime(":RadResizeGen: RadShouldBeChanged",&start);
 			
-			tBaseRadX = NewSRWRadStructAccessData.pBaseRadX;
-			tBaseRadZ = NewSRWRadStructAccessData.pBaseRadZ;
+			//tBaseRadX = NewSRWRadStructAccessData.pBaseRadX;
+			//tBaseRadZ = NewSRWRadStructAccessData.pBaseRadZ;
+			float *tBaseRadX = NewSRWRadStructAccessData.pBaseRadX; //HG26072024
+			float *tBaseRadZ = NewSRWRadStructAccessData.pBaseRadZ; //HG26072024
 
 #ifdef _WITH_OMP //OC28102018: modification by SY
 			#pragma omp parallel for if (omp_get_num_threads()==1) // to avoid nested multi-threading
@@ -2628,7 +2641,8 @@ int srTGenOptElem::RadResizeGen(srTSRWRadStructAccessData& SRWRadStructAccessDat
 			NewSRWRadStructAccessData.pBaseRadZ = NewRadZCopy;
 
 			//OC13122023 (attempt to avoid "mem. leak" in Python)
-			if(result = RadResizeCore(SRWRadStructAccessData, NewSRWRadStructAccessData, RadResizeStruct)) return result;
+			//if(result = RadResizeCore(SRWRadStructAccessData, NewSRWRadStructAccessData, RadResizeStruct)) return result;
+			if(result = RadResizeCore(SRWRadStructAccessData, NewSRWRadStructAccessData, RadResizeStruct, 0, pvGPU)) return result; //HG26072024
 
 			//OC13122023 (attempt to avoid "mem. leak" in Python)
 			NewSRWRadStructAccessData.pBaseRadX = SRWRadStructAccessData.pBaseRadX;
@@ -2676,26 +2690,38 @@ int srTGenOptElem::RadResizeGen(srTSRWRadStructAccessData& SRWRadStructAccessDat
 //				//SRWRadStructAccessData.pBaseRadZ = NewSRWRadStructAccessData.pBaseRadZaux;
 //#endif
 			}
-			
-			float *tRadX = NewSRWRadStructAccessData.pBaseRadX, *tRadZ = NewSRWRadStructAccessData.pBaseRadZ;
-			tNewRadXCopy = NewRadXCopy; tNewRadZCopy = NewRadZCopy; //OC13122023
+
+#ifdef _OFFLOAD_GPU //HG26072024
+			TGPUUsageArg parGPU(pvGPU);
+			if (CAuxGPU::GPUEnabled(&parGPU))
+			{
+				CAuxGPU::SetHostPtr(&parGPU, NewRadXCopy, NewSRWRadStructAccessData.pBaseRadX, TotAmOfNewData*sizeof(float));
+				CAuxGPU::SetHostPtr(&parGPU, NewRadZCopy, NewSRWRadStructAccessData.pBaseRadZ, TotAmOfNewData*sizeof(float));
+			}
+			else
+#endif
+			{
+				float *tRadX = NewSRWRadStructAccessData.pBaseRadX, *tRadZ = NewSRWRadStructAccessData.pBaseRadZ;
+				//tNewRadXCopy = NewRadXCopy; tNewRadZCopy = NewRadZCopy; //OC13122023
+				float *tNewRadXCopy = NewRadXCopy, *tNewRadZCopy = NewRadZCopy; //HG26072024
 
 #ifdef _WITH_OMP //OC28102018: modified by SY
-			#pragma omp parallel for if (omp_get_num_threads()==1) // to avoid nested multi-threading
-			//OC13122023-----------------TO UPDATE
+#pragma omp parallel for if (omp_get_num_threads()==1) // to avoid nested multi-threading
+				//OC13122023-----------------TO UPDATE
 
-			for(long long j=0; j<TotAmOfNewData; j++)
-			{
-				tRadX[j] = tNewRadXCopy[j]; tRadZ[j] = tNewRadZCopy[j];
-				//tRadX[j] = 0.; tRadZ[j] = 0.;
-			}
+				for(long long j=0; j<TotAmOfNewData; j++)
+				{
+					tRadX[j] = tNewRadXCopy[j]; tRadZ[j] = tNewRadZCopy[j];
+					//tRadX[j] = 0.; tRadZ[j] = 0.;
+				}
 #else
-			for(long long j=0; j<TotAmOfNewData; j++)
-			{
-				*(tRadX++) = *(tNewRadXCopy++); *(tRadZ++) = *(tNewRadZCopy++); //OC13122023
-				//*(tRadX++) = 0.; *(tRadZ++) = 0.; 
-			}
+				for(long long j=0; j<TotAmOfNewData; j++)
+				{
+					*(tRadX++) = *(tNewRadXCopy++); *(tRadZ++) = *(tNewRadZCopy++); //OC13122023
+					//*(tRadX++) = 0.; *(tRadZ++) = 0.; 
+				}
 #endif
+			} //HG26072024
 			//Added by SY (for profiling?) at parallelizing SRW via OpenMP:
 			//srwlPrintTime(":RadResizeGen: TreatPolarizSepar-PrepareStructs",&start);
 
@@ -2742,13 +2768,23 @@ int srTGenOptElem::RadResizeGen(srTSRWRadStructAccessData& SRWRadStructAccessDat
 				OldRadXCopy = new float[TotAmOfOldData];
 				if(OldRadXCopy == 0) return MEMORY_ALLOCATION_FAILURE;
 
-				float *tOldRadXCopy = OldRadXCopy;
-				float *tBaseRadX = SRWRadStructAccessData.pBaseRadX;
-				//for(long i=0; i<TotAmOfOldData; i++) 
-				for(long long i=0; i<TotAmOfOldData; i++) 
+#ifdef _OFFLOAD_GPU //HG26072024
+				TGPUUsageArg parGPU(pvGPU);
+				if(CAuxGPU::GPUEnabled(&parGPU))
 				{
-					*(tOldRadXCopy++) = *(tBaseRadX++);
+					CAuxGPU::SetHostPtr(&parGPU, SRWRadStructAccessData.pBaseRadX, OldRadXCopy, TotAmOfOldData * sizeof(float));
 				}
+				else
+#endif
+				{
+					float *tOldRadXCopy = OldRadXCopy;
+					float *tBaseRadX = SRWRadStructAccessData.pBaseRadX;
+					//for(long i=0; i<TotAmOfOldData; i++) 
+					for(long long i=0; i<TotAmOfOldData; i++)
+					{
+						*(tOldRadXCopy++) = *(tBaseRadX++);
+					}
+				} //HG26072024
 				if(RadShouldBeChanged)
 				{
 					if(NewSRWRadStructAccessData.BaseRadWasEmulated) 
@@ -2758,7 +2794,8 @@ int srTGenOptElem::RadResizeGen(srTSRWRadStructAccessData& SRWRadStructAccessDat
 					//else if(result = Send.ModifyRadNeNxNz(NewSRWRadStructAccessData, 'x')) return result;
 					else if(result = NewSRWRadStructAccessData.ModifyWfrNeNxNz('x')) return result;
 				}
-				tBaseRadX = NewSRWRadStructAccessData.pBaseRadX;
+				//tBaseRadX = NewSRWRadStructAccessData.pBaseRadX;
+				float *tBaseRadX = NewSRWRadStructAccessData.pBaseRadX; //HG26072024
 				//for(long j=0; j<TotAmOfNewData; j++) 
 				for(long long j=0; j<TotAmOfNewData; j++) 
 				{
@@ -2777,15 +2814,25 @@ int srTGenOptElem::RadResizeGen(srTSRWRadStructAccessData& SRWRadStructAccessDat
 				OldRadZCopy = new float[TotAmOfOldData];
 				if(OldRadZCopy == 0) return MEMORY_ALLOCATION_FAILURE;
 
-				float *tOldRadZCopy = OldRadZCopy;
-				float *tBaseRadZ = SRWRadStructAccessData.pBaseRadZ;
-				//for(long i=0; i<TotAmOfOldData; i++) 
-				for(long long i=0; i<TotAmOfOldData; i++) 
+				#ifdef _OFFLOAD_GPU //HG26072024
+				TGPUUsageArg parGPU(pvGPU);
+				if (CAuxGPU::GPUEnabled(&parGPU))
 				{
-					float testVal = *(tBaseRadZ++);
-					*(tOldRadZCopy++) = testVal;
-					//*(tOldRadZCopy++) = *(tBaseRadZ++);
+					CAuxGPU::SetHostPtr(&parGPU, SRWRadStructAccessData.pBaseRadZ, OldRadZCopy, TotAmOfOldData * sizeof(float));
 				}
+				else
+#endif
+				{
+					float *tOldRadZCopy = OldRadZCopy;
+					float *tBaseRadZ = SRWRadStructAccessData.pBaseRadZ;
+					//for(long i=0; i<TotAmOfOldData; i++) 
+					for(long long i=0; i<TotAmOfOldData; i++)
+					{
+						float testVal = *(tBaseRadZ++);
+						*(tOldRadZCopy++) = testVal;
+						//*(tOldRadZCopy++) = *(tBaseRadZ++);
+					}
+				} //HG26072024
 				if(RadShouldBeChanged)
 				{
 					if(NewSRWRadStructAccessData.BaseRadWasEmulated) 
@@ -2795,7 +2842,8 @@ int srTGenOptElem::RadResizeGen(srTSRWRadStructAccessData& SRWRadStructAccessDat
 					//else if(result = Send.ModifyRadNeNxNz(NewSRWRadStructAccessData, 'z')) return result;
 					else if(result = NewSRWRadStructAccessData.ModifyWfrNeNxNz('z')) return result;
 				}
-				tBaseRadZ = NewSRWRadStructAccessData.pBaseRadZ;
+				//tBaseRadZ = NewSRWRadStructAccessData.pBaseRadZ;
+				float *tBaseRadZ = NewSRWRadStructAccessData.pBaseRadZ; //HG26072024
 				//for(long j=0; j<TotAmOfNewData; j++) 
 				for(long long j=0; j<TotAmOfNewData; j++) 
 				{
@@ -2871,29 +2919,40 @@ int srTGenOptElem::RadResizeGen(srTSRWRadStructAccessData& SRWRadStructAccessDat
 #endif
 				}
 
-				//OC21022024
-				float *tRadX = NewSRWRadStructAccessData.pBaseRadX; // , *tRadZ = NewSRWRadStructAccessData.pBaseRadZ;
-				tNewRadXCopy = NewRadXCopy; //tNewRadZCopy = NewRadZCopy; //OC21022024
-
-#ifdef _WITH_OMP //OC21022024
-#pragma omp parallel for if (omp_get_num_threads()==1) // to avoid nested multi-threading
-				//OC21022024-----------------TO UPDATE
-
-				for(long long j=0; j<TotAmOfNewData; j++)
+#ifdef _OFFLOAD_GPU //HG26072024
+				TGPUUsageArg parGPU(pvGPU);
+				if (CAuxGPU::GPUEnabled(&parGPU))
 				{
-					tRadX[j] = tNewRadXCopy[j]; //tRadZ[j] = tNewRadZCopy[j]; //OC21022024
-					//tRadX[j] = 0.; tRadZ[j] = 0.;
+					CAuxGPU::SetHostPtr(&parGPU, NewRadXCopy, NewSRWRadStructAccessData.pBaseRadX, TotAmOfNewData*sizeof(float));
 				}
-#else
-				for(long long j=0; j<TotAmOfNewData; j++)
-				{
-					*(tRadX++) = *(tNewRadXCopy++); //*(tRadZ++) = *(tNewRadZCopy++); //OC21022024
-					//*(tRadX++) = 0.; *(tRadZ++) = 0.; 
-				}
+				else
 #endif
-				//OC21022024 (attempt to avoid "mem. leak" in Python) - commented-out
-				////if(result = RadResizeCore(SRWRadStructAccessData, NewSRWRadStructAccessData, RadResizeStruct, 'x')) return result;
-				//if(result = RadResizeCore(SRWRadStructAccessData, NewSRWRadStructAccessData, RadResizeStruct, 'x', pvGPU)) return result; //HG01122023
+				{
+					//OC21022024
+					float *tRadX = NewSRWRadStructAccessData.pBaseRadX; // , *tRadZ = NewSRWRadStructAccessData.pBaseRadZ;
+					//tNewRadXCopy = NewRadXCopy; //tNewRadZCopy = NewRadZCopy; //OC21022024
+					float *tNewRadXCopy = NewRadXCopy; //tNewRadZCopy = NewRadZCopy; //OC21022024 //HG26072024
+
+	#ifdef _WITH_OMP //OC21022024
+	#pragma omp parallel for if (omp_get_num_threads()==1) // to avoid nested multi-threading
+					//OC21022024-----------------TO UPDATE
+
+					for(long long j=0; j<TotAmOfNewData; j++)
+					{
+						tRadX[j] = tNewRadXCopy[j]; //tRadZ[j] = tNewRadZCopy[j]; //OC21022024
+						//tRadX[j] = 0.; tRadZ[j] = 0.;
+					}
+	#else
+					for(long long j=0; j<TotAmOfNewData; j++)
+					{
+						*(tRadX++) = *(tNewRadXCopy++); //*(tRadZ++) = *(tNewRadZCopy++); //OC21022024
+						//*(tRadX++) = 0.; *(tRadZ++) = 0.; 
+					}
+	#endif
+					//OC21022024 (attempt to avoid "mem. leak" in Python) - commented-out
+					////if(result = RadResizeCore(SRWRadStructAccessData, NewSRWRadStructAccessData, RadResizeStruct, 'x')) return result;
+					//if(result = RadResizeCore(SRWRadStructAccessData, NewSRWRadStructAccessData, RadResizeStruct, 'x', pvGPU)) return result; //HG01122023
+				} //HG26072024
 
 //#ifdef __IGOR_PRO__
 //				srTSRWRadStructWaveKeys Keys;
@@ -2953,29 +3012,41 @@ int srTGenOptElem::RadResizeGen(srTSRWRadStructAccessData& SRWRadStructAccessDat
 #endif
 				}
 
-				//OC21022024
-				float *tRadZ = NewSRWRadStructAccessData.pBaseRadZ;
-				tNewRadZCopy = NewRadZCopy; //OC21022024
+#ifdef _OFFLOAD_GPU  //HG26072024
+				TGPUUsageArg parGPU(pvGPU);
+				if (CAuxGPU::GPUEnabled(&parGPU))
+				{
+					CAuxGPU::SetHostPtr(&parGPU, NewRadXCopy, NewSRWRadStructAccessData.pBaseRadX, TotAmOfNewData*sizeof(float));
+					CAuxGPU::SetHostPtr(&parGPU, NewRadZCopy, NewSRWRadStructAccessData.pBaseRadZ, TotAmOfNewData*sizeof(float));
+				}
+				else
+#endif
+				{
+					//OC21022024
+					float *tRadZ = NewSRWRadStructAccessData.pBaseRadZ;
+					//tNewRadZCopy = NewRadZCopy; //OC21022024
+					float* tNewRadZCopy = NewRadZCopy; //HG26072024
 
 #ifdef _WITH_OMP //OC21022024
 #pragma omp parallel for if (omp_get_num_threads()==1) // to avoid nested multi-threading
-				//OC21022024-----------------TO UPDATE
+					//OC21022024-----------------TO UPDATE
 
-				for(long long j=0; j<TotAmOfNewData; j++)
-				{
-					tRadZ[j] = tNewRadZCopy[j]; //OC21022024
-					//tRadX[j] = 0.; tRadZ[j] = 0.;
-				}
+					for(long long j=0; j<TotAmOfNewData; j++)
+					{
+						tRadZ[j] = tNewRadZCopy[j]; //OC21022024
+						//tRadX[j] = 0.; tRadZ[j] = 0.;
+					}
 #else
-				for(long long j=0; j<TotAmOfNewData; j++)
-				{
-					*(tRadZ++) = *(tNewRadZCopy++); //OC21022024
-					//*(tRadX++) = 0.; *(tRadZ++) = 0.; 
-				}
+					for(long long j=0; j<TotAmOfNewData; j++)
+					{
+						*(tRadZ++) = *(tNewRadZCopy++); //OC21022024
+						//*(tRadX++) = 0.; *(tRadZ++) = 0.; 
+					}
 #endif
-				//OC21022024 (attempt to avoid "mem. leak" in Python) - commented-out
-				////if(result = RadResizeCore(SRWRadStructAccessData, NewSRWRadStructAccessData, RadResizeStruct, 'z')) return result;
-				//if(result = RadResizeCore(SRWRadStructAccessData, NewSRWRadStructAccessData, RadResizeStruct, 'z', pvGPU)) return result; //HG01122023
+					//OC21022024 (attempt to avoid "mem. leak" in Python) - commented-out
+					////if(result = RadResizeCore(SRWRadStructAccessData, NewSRWRadStructAccessData, RadResizeStruct, 'z')) return result;
+					//if(result = RadResizeCore(SRWRadStructAccessData, NewSRWRadStructAccessData, RadResizeStruct, 'z', pvGPU)) return result; //HG01122023
+				} //HG26072024
 
 //#ifdef __IGOR_PRO__
 //				srTSRWRadStructWaveKeys Keys;
@@ -3045,7 +3116,8 @@ int srTGenOptElem::RadResizeCore(srTSRWRadStructAccessData& OldRadAccessData, sr
 	char OnlyMakeLargerRange = ((RadResizeStruct.pxd == 1.) && (RadResizeStruct.pzd == 1.) && (RadResizeStruct.pxm >= 1.) && (RadResizeStruct.pzm >= 1.)) 
 							&& ((::fabs(OldRadAccessData.xStep - NewRadAccessData.xStep) < RelStepTol) && (::fabs(OldRadAccessData.zStep - NewRadAccessData.zStep) < RelStepTol));
 
-	if(OnlyMakeLargerRange) return RadResizeCore_OnlyLargerRange(OldRadAccessData, NewRadAccessData, RadResizeStruct, PolComp);
+	//if(OnlyMakeLargerRange) return RadResizeCore_OnlyLargerRange(OldRadAccessData, NewRadAccessData, RadResizeStruct, PolComp);
+	if(OnlyMakeLargerRange) return RadResizeCore_OnlyLargerRange(OldRadAccessData, NewRadAccessData, RadResizeStruct, PolComp, pvGPU); //HG26072024
 
 	//Added by SY (for profiling?) at parallelizing SRW via OpenMP:
 	//srwlPrintTime(":RadResizeCore: RadResizeCore_OnlyLargerRange",&start);
@@ -4228,8 +4300,17 @@ int srTGenOptElem::ReInterpolateWfrSliceSingleE(srTSRWRadStructAccessData& oldRa
 
 //*************************************************************************
 
-int srTGenOptElem::RadResizeCore_OnlyLargerRange(srTSRWRadStructAccessData& OldRadAccessData, srTSRWRadStructAccessData& NewRadAccessData, srTRadResize& RadResizeStruct, char PolComp)
+//int srTGenOptElem::RadResizeCore_OnlyLargerRange(srTSRWRadStructAccessData& OldRadAccessData, srTSRWRadStructAccessData& NewRadAccessData, srTRadResize& RadResizeStruct, char PolComp)
+int srTGenOptElem::RadResizeCore_OnlyLargerRange(srTSRWRadStructAccessData& OldRadAccessData, srTSRWRadStructAccessData& NewRadAccessData, srTRadResize& RadResizeStruct, char PolComp, void* pvGPU) //HG26072024
 {
+#ifdef _OFFLOAD_GPU //HG25072024
+	TGPUUsageArg parGPU(pvGPU);
+	if(CAuxGPU::GPUEnabled(&parGPU))
+	{
+		return RadResizeCore_OnlyLargerRange_GPU(OldRadAccessData, NewRadAccessData, PolComp, &parGPU);
+	}
+#endif
+
 	char TreatPolCompX = ((PolComp == 0) || (PolComp == 'x'));
 	char TreatPolCompZ = ((PolComp == 0) || (PolComp == 'z'));
 
@@ -4305,8 +4386,17 @@ int srTGenOptElem::RadResizeCore_OnlyLargerRange(srTSRWRadStructAccessData& OldR
 
 //*************************************************************************
 
-int srTGenOptElem::RadResizeCore_OnlyLargerRangeE(srTSRWRadStructAccessData& OldRadAccessData, srTSRWRadStructAccessData& NewRadAccessData, srTRadResize& RadResizeStruct, char PolComp)
+//int srTGenOptElem::RadResizeCore_OnlyLargerRangeE(srTSRWRadStructAccessData& OldRadAccessData, srTSRWRadStructAccessData& NewRadAccessData, srTRadResize& RadResizeStruct, char PolComp)
+int srTGenOptElem::RadResizeCore_OnlyLargerRangeE(srTSRWRadStructAccessData& OldRadAccessData, srTSRWRadStructAccessData& NewRadAccessData, srTRadResize& RadResizeStruct, char PolComp, void* pvGPU) //HG26072024
 {
+#ifdef _OFFLOAD_GPU //HG25072024
+	TGPUUsageArg parGPU(pvGPU);
+	if (CAuxGPU::GPUEnabled(&parGPU))
+	{
+		return RadResizeCore_OnlyLargerRangeE_GPU(OldRadAccessData, NewRadAccessData, PolComp, &parGPU);
+	}
+#endif
+
 	char TreatPolCompX = ((PolComp == 0) || (PolComp == 'x')) && (OldRadAccessData.pBaseRadX != 0);
 	char TreatPolCompZ = ((PolComp == 0) || (PolComp == 'z')) && (OldRadAccessData.pBaseRadZ != 0);
 

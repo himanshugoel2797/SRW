@@ -351,9 +351,9 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 				//				printf("Element does not support GPU, transferring to CPU.\r\n");
 				//#endif
 				if(wfr.pBaseRadX != NULL)
-					wfr.pBaseRadX = (float*)CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadX, 2 * wfr.ne * wfr.nx * wfr.nz * sizeof(float));
+					wfr.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadX, 2 * wfr.ne * wfr.nx * wfr.nz);
 				if(wfr.pBaseRadZ != NULL)
-					wfr.pBaseRadZ = (float*)CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadZ, 2 * wfr.ne * wfr.nx * wfr.nz * sizeof(float));
+					wfr.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadZ, 2 * wfr.ne * wfr.nx * wfr.nz);
 				dataOnDevice = false;
 			}
 			//else if(!dataOnDevice && (((srTGenOptElem*)it->rep)->SupportedFeatures() & 1) == 1)
@@ -388,9 +388,9 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 				if(dataOnDevice)
 				{
 					if(wfr.pBaseRadX != NULL)
-						wfr.pBaseRadX = (float*)CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadX, 2 * wfr.ne * wfr.nx * wfr.nz * sizeof(float));
+						wfr.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadX, 2 * wfr.ne * wfr.nx * wfr.nz);
 					if(wfr.pBaseRadZ != NULL)
-						wfr.pBaseRadZ = (float*)CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadZ, 2 * wfr.ne * wfr.nx * wfr.nz * sizeof(float));
+						wfr.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadZ, 2 * wfr.ne * wfr.nx * wfr.nz);
 					dataOnDevice = false;
 				}
 			}
