@@ -569,8 +569,14 @@ template <class T> int srTAuxMatStat::IntegrateOverY(T* p0, long long iyStart, l
 //*************************************************************************
 
 //int srTAuxMatStat::FindIntensityLimitsInds(srTSRWRadStructAccessData& Rad, int ie, double RelPow, int* IndLims)
-int srTAuxMatStat::FindIntensityLimitsInds(CHGenObj& hRad, int ie, double RelPow, int* IndLims)
+//int srTAuxMatStat::FindIntensityLimitsInds(CHGenObj& hRad, int ie, double RelPow, int* IndLims)
+int srTAuxMatStat::FindIntensityLimitsInds(CHGenObj& hRad, int ie, double RelPow, int* IndLims, void* pvGPU) //HG01052025
 {
+#ifdef _OFFLOAD_GPU //HG30072024
+	TGPUUsageArg parGPU(pvGPU);
+	if(CAuxGPU::GPUEnabled(&parGPU))
+		return FindIntensityLimitsInds_GPU(hRad, ie, RelPow, IndLims, &parGPU);
+#endif
 	srTSRWRadStructAccessData& Rad = *((srTSRWRadStructAccessData*)(hRad.ptr()));
 
 	IndLims[0] = 0;
