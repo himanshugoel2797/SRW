@@ -280,7 +280,7 @@ public:
 		int minGridSize = 0; //HG05082024
     	int bs = 256;
 		cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, (void*)kern, 0, max_bs_total);
-		if (max_x_bs == 0) max_x_bs = bs;
+		if ((max_x_bs == 0) || (grid.x < bs && grid.x < max_x_bs)) max_x_bs = grid.x;
 
 		threads.x = (max_x_bs < bs) ? max_x_bs : bs;
 		threads.y = 1;
@@ -296,6 +296,13 @@ public:
 			//Calculate y grid
 			threads.y = (y_v > grid.y) ? grid.y : y_v;
 			blocks.y = grid.y / threads.y + !!(grid.y & (threads.y - 1)); //round up the division result
+
+			int z_v = y_v / threads.y;
+			if (z_v > 1 && grid.z > 1)
+			{
+				threads.z = (z_v > grid.z) ? grid.z : z_v;
+				blocks.z = grid.z / threads.z + !!(grid.z & (threads.z - 1)); //round up the division result
+			}
 		}
 	}
 #endif

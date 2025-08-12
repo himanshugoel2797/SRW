@@ -498,8 +498,11 @@ void CAuxGPU::Init(TGPUUsageArg* arg) //HG02082024
 		return;
 	if (streams.find(arg->deviceIndex) == streams.end())
 	{
-		cudaInitDevice(arg->deviceIndex - 1, cudaDeviceMapHost, cudaInitDeviceFlagsAreValid);
+		//cudaInitDevice(arg->deviceIndex - 1, cudaDeviceMapHost, cudaInitDeviceFlagsAreValid);
 		cudaSetDevice(arg->deviceIndex - 1);
+		unsigned int flags = 0;
+		cudaGetDeviceFlags(&flags);
+		if (!(flags & cudaDeviceMapHost))cudaSetDeviceFlags(cudaDeviceMapHost);
 		cudaStream_t *cur_streams = new cudaStream_t[4];
 		for (int i = 0; i < 4; i++) cudaStreamCreateWithFlags(&cur_streams[i], cudaStreamNonBlocking);
 		streams[arg->deviceIndex] = cur_streams;
@@ -507,6 +510,9 @@ void CAuxGPU::Init(TGPUUsageArg* arg) //HG02082024
 	else
 	{
 		cudaSetDevice(arg->deviceIndex - 1);
+		unsigned int flags = 0;
+		cudaGetDeviceFlags(&flags);
+		if (!(flags & cudaDeviceMapHost))cudaSetDeviceFlags(cudaDeviceMapHost);
 		memcpy_stream = streams[arg->deviceIndex][0];
 	}
 	current_device = arg->deviceIndex;
