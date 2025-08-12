@@ -196,16 +196,19 @@ int srTDriftSpace::PropagateElecBeamMoments(srTEbmDat* pEbm)
 
 //*************************************************************************
 
-int srTDriftSpace::TuneRadForPropMeth_1(srTSRWRadStructAccessData* pRadAccessData, srTRadResize& PostResize)
+//int srTDriftSpace::TuneRadForPropMeth_1(srTSRWRadStructAccessData* pRadAccessData, srTRadResize& PostResize)
+int srTDriftSpace::TuneRadForPropMeth_1(srTSRWRadStructAccessData* pRadAccessData, srTRadResize& PostResize, void* pvGPU) //HG26072024
 {
 	srTMomentsRatios* MomRatArray = new srTMomentsRatios[pRadAccessData->ne];
 	if(MomRatArray == 0) return MEMORY_ALLOCATION_FAILURE;
 
 	int result;
 	if(pRadAccessData->Pres != 0) // Go to spatial...
-		if(result = SetRadRepres(pRadAccessData, 0)) return result;
+		//if (result = SetRadRepres(pRadAccessData, 0)) return result;
+		if(result = SetRadRepres(pRadAccessData, 0, 0, 0, pvGPU)) return result; //HG26072024
 
-	if(result = PropagateRadMoments(pRadAccessData, MomRatArray)) return result;
+	//if(result = PropagateRadMoments(pRadAccessData, MomRatArray)) return result;
+	if(result = PropagateRadMoments(pRadAccessData, MomRatArray, pvGPU)) return result; //HG27072024
 	
 	srTMomentsRatios* tMomRatArray = MomRatArray;
 
@@ -251,7 +254,8 @@ int srTDriftSpace::TuneRadForPropMeth_1(srTSRWRadStructAccessData* pRadAccessDat
 	char zResizeNeeded = (pzMax - 1. > ResizeTol);
 	if(xResizeNeeded) RadResize.pxm = DiffractionFactor*pxMax;
 	if(zResizeNeeded) RadResize.pzm = DiffractionFactor*pzMax;
-	if(xResizeNeeded || zResizeNeeded) if(result = RadResizeGen(*pRadAccessData, RadResize)) return result;
+	//if (xResizeNeeded || zResizeNeeded) if (result = RadResizeGen(*pRadAccessData, RadResize)) return result;
+	if(xResizeNeeded || zResizeNeeded) if(result = RadResizeGen(*pRadAccessData, RadResize, pvGPU)) return result; //HG26072024
 
 	PostResize.pxm = PostResize.pzm = PostResize.pxd = PostResize.pzd = 1.;
 
@@ -281,7 +285,8 @@ int srTDriftSpace::TuneRadForPropMeth_1(srTSRWRadStructAccessData* pRadAccessDat
 
 //*************************************************************************
 
-int srTDriftSpace::PropagateRadiationMeth_1(srTSRWRadStructAccessData* pRadAccessData)
+//int srTDriftSpace::PropagateRadiationMeth_1(srTSRWRadStructAccessData* pRadAccessData)
+int srTDriftSpace::PropagateRadiationMeth_1(srTSRWRadStructAccessData* pRadAccessData, void* pvGPU) //HG26072024
 {
 	int result;
 	srTRadResize PostResize;
@@ -299,22 +304,28 @@ int srTDriftSpace::PropagateRadiationMeth_1(srTSRWRadStructAccessData* pRadAcces
 	//float *NewMxxArr = 0, *NewMzzArr = 0;
 	double *NewMxxArr = 0, *NewMzzArr = 0;
 
-	if(result = TuneRadForPropMeth_1(pRadAccessData, PostResize)) return result;
+	//if (result = TuneRadForPropMeth_1(pRadAccessData, PostResize)) return result;
+	if(result = TuneRadForPropMeth_1(pRadAccessData, PostResize, pvGPU)) return result; //HG26072024
 	if(result = PropagateWaveFrontRadius(pRadAccessData)) return result;
 
-	if(pRadAccessData->Pres != 1) if(result = SetRadRepres(pRadAccessData, 1)) return result;
-	if(result = TraverseRadZXE(pRadAccessData)) return result;
-	if(result = SetRadRepres(pRadAccessData, 0)) return result;
+	//if(pRadAccessData->Pres != 1) if(result = SetRadRepres(pRadAccessData, 1)) return result;
+	//if(result = TraverseRadZXE(pRadAccessData)) return result;
+	//if(result = SetRadRepres(pRadAccessData, 0)) return result;
+	if(pRadAccessData->Pres != 1) if(result = SetRadRepres(pRadAccessData, 1, 0, 0, pvGPU)) return result; //HG26072024
+	if(result = TraverseRadZXE(pRadAccessData, 0, 0, pvGPU)) return result;
+	if(result = SetRadRepres(pRadAccessData, 0, 0, 0, pvGPU)) return result;
 
 	//const double ResizeTol = 0.15;
 	if((PostResize.pxm != -1) && (PostResize.pzm != -1))
 	{
 		char PostResizeNeeded = (::fabs(PostResize.pxm - 1.) || ::fabs(PostResize.pzm - 1.));
-		if(PostResizeNeeded) if(result = RadResizeGen(*pRadAccessData, PostResize)) return result;
+		//if(PostResizeNeeded) if(result = RadResizeGen(*pRadAccessData, PostResize)) return result;
+		if(PostResizeNeeded) if(result = RadResizeGen(*pRadAccessData, PostResize, pvGPU)) return result; //HG26072024
 	}
 	else
 	{
-		if(result = ComputeRadMoments(pRadAccessData)) return result;
+		//if(result = ComputeRadMoments(pRadAccessData)) return result;
+		if(result = ComputeRadMoments(pRadAccessData, pvGPU)) return result; //HG26072024
 
 		//NewMxxArr = new float[pRadAccessData->ne];
 		NewMxxArr = new double[pRadAccessData->ne]; //OC130311
@@ -334,7 +345,8 @@ int srTDriftSpace::PropagateRadiationMeth_1(srTSRWRadStructAccessData* pRadAcces
 		PostResize.pzm = sqrt(pzmMaxE2);
 		char PostResizeNeeded = (::fabs(PostResize.pxm - 1.) || ::fabs(PostResize.pzm - 1.));
 
-		if(PostResizeNeeded) if(result = RadResizeGen(*pRadAccessData, PostResize)) return result;
+		//if(PostResizeNeeded) if(result = RadResizeGen(*pRadAccessData, PostResize)) return result;
+		if(PostResizeNeeded) if(result = RadResizeGen(*pRadAccessData, PostResize, pvGPU)) return result; //HG26072024
 	}
 
 	if(result = Propagate4x4PropMatr(pRadAccessData)) return result;
@@ -469,7 +481,8 @@ int srTDriftSpace::PropagateRadiationSimple_PropToWaist(srTSRWRadStructAccessDat
 	//OC19032022
 	if(LambdaM_Length < 0)
 	{
-		pRadAccessData->MirrorFieldData(-1, -1); 
+		//pRadAccessData->MirrorFieldData(-1, -1); 
+		pRadAccessData->MirrorFieldData(-1, -1, pvGPU); //HG29072024 
 
 		double xEnd = pRadAccessData->xStart + (pRadAccessData->xStep)*(pRadAccessData->nx - 1);
 		pRadAccessData->xStart = xEnd;
@@ -735,7 +748,8 @@ int srTDriftSpace::PropagateRadiationSimple_AnalytTreatQuadPhaseTerm(srTSRWRadSt
 	//if(pBufVars == 0) pBufVars = &BufVars; //OC06092019
 
 	//OC01102019 (restored)
-	SetupPropBufVars_AnalytTreatQuadPhaseTerm(pRadAccessData, &BufVars);
+	//SetupPropBufVars_AnalytTreatQuadPhaseTerm(pRadAccessData, &BufVars);
+	SetupPropBufVars_AnalytTreatQuadPhaseTerm(pRadAccessData, &BufVars, pvGPU); //HG27072024
 	//SetupPropBufVars_AnalytTreatQuadPhaseTerm(pRadAccessData, pBufVars); //OC06092019
 	//SetupPropBufVars_AnalytTreatQuadPhaseTerm(pRadAccessData);
 
@@ -853,7 +867,8 @@ int srTDriftSpace::PropagateRadiationSimple_AnalytTreatQuadPhaseTerm(srTSRWRadSt
 	//pRadAccessData->MirrorFieldData(sign(kx), sign(kz));
 	//pRadAccessData->MirrorFieldData((int)sign(pBufVars->kx_AnalytTreatQuadPhaseTerm), (int)sign(pBufVars->kz_AnalytTreatQuadPhaseTerm)); //OC06092019
 	//OC01102019 (restored)
-	pRadAccessData->MirrorFieldData((int)sign(BufVars.kx_AnalytTreatQuadPhaseTerm), (int)sign(BufVars.kz_AnalytTreatQuadPhaseTerm)); //OC30082019
+	//pRadAccessData->MirrorFieldData((int)sign(BufVars.kx_AnalytTreatQuadPhaseTerm), (int)sign(BufVars.kz_AnalytTreatQuadPhaseTerm)); //OC30082019
+	pRadAccessData->MirrorFieldData((int)sign(BufVars.kx_AnalytTreatQuadPhaseTerm), (int)sign(BufVars.kz_AnalytTreatQuadPhaseTerm), pvGPU); //HG26072024
 	//pRadAccessData->MirrorFieldData((int)sign(PropBufVars.kx_AnalytTreatQuadPhaseTerm), (int)sign(PropBufVars.kz_AnalytTreatQuadPhaseTerm));
 
 	//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
@@ -886,7 +901,8 @@ int srTDriftSpace::PropagateRadiationSimple_AnalytTreatQuadPhaseTerm(srTSRWRadSt
 
 //*************************************************************************
 
-void srTDriftSpace::SetupPropBufVars_AnalytTreatQuadPhaseTerm(srTSRWRadStructAccessData* pRadAccessData, srTDriftPropBufVars* pBufVars) //OC30082019
+//void srTDriftSpace::SetupPropBufVars_AnalytTreatQuadPhaseTerm(srTSRWRadStructAccessData* pRadAccessData, srTDriftPropBufVars* pBufVars) //OC30082019
+void srTDriftSpace::SetupPropBufVars_AnalytTreatQuadPhaseTerm(srTSRWRadStructAccessData* pRadAccessData, srTDriftPropBufVars* pBufVars, void* pvGPU) //OC30082019 //HG27072024
 //void srTDriftSpace::SetupPropBufVars_AnalytTreatQuadPhaseTerm(srTSRWRadStructAccessData* pRadAccessData)
 {// Compute any necessary buf. vars
 
@@ -940,7 +956,8 @@ void srTDriftSpace::SetupPropBufVars_AnalytTreatQuadPhaseTerm(srTSRWRadStructAcc
 		if(AnalytTreatSubType == 1) //OC01102019
 		//if(PropBufVars.AnalytTreatSubType == 1) 
 		{
-			EstimateWfrRadToSub_AnalytTreatQuadPhaseTerm(pRadAccessData, trueRx, trueRz);
+			//EstimateWfrRadToSub_AnalytTreatQuadPhaseTerm(pRadAccessData, trueRx, trueRz);
+			EstimateWfrRadToSub_AnalytTreatQuadPhaseTerm(pRadAccessData, trueRx, trueRz, pvGPU); //HG27072024
 
 			//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
 			//srwlPrintTime(":SetupPropBufVars_AnalytTreatQuadPhaseTerm:EstimateWfrRadToSub_AnalytTreatQuadPhaseTerm",&start);
@@ -1120,7 +1137,8 @@ void srTDriftSpace::EstimateWfrRadToSub2_AnalytTreatQuadPhaseTerm(srTSRWRadStruc
 
 //*************************************************************************
 
-void srTDriftSpace::EstimateWfrRadToSub_AnalytTreatQuadPhaseTerm(srTSRWRadStructAccessData* pRadAccessData, double& effRx, double& effRz)
+//void srTDriftSpace::EstimateWfrRadToSub_AnalytTreatQuadPhaseTerm(srTSRWRadStructAccessData* pRadAccessData, double& effRx, double& effRz)
+void srTDriftSpace::EstimateWfrRadToSub_AnalytTreatQuadPhaseTerm(srTSRWRadStructAccessData* pRadAccessData, double& effRx, double& effRz, void* pvGPU) //HG27072024
 {
 	if(pRadAccessData == 0) return;
 
@@ -1166,7 +1184,8 @@ void srTDriftSpace::EstimateWfrRadToSub_AnalytTreatQuadPhaseTerm(srTSRWRadStruct
 	//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
 	//srwlPrintTime(":EstimateWfrRadToSub_AnalytTreatQuadPhaseTerm:setup",&start);
 
-	if((*(MomX.pTotPhot) == 0) && (*(MomZ.pTotPhot) == 0)) ComputeRadMoments(pRadAccessData); //OC14092011
+	//if((*(MomX.pTotPhot) == 0) && (*(MomZ.pTotPhot) == 0)) ComputeRadMoments(pRadAccessData); //OC14092011
+	if((*(MomX.pTotPhot) == 0) && (*(MomZ.pTotPhot) == 0)) ComputeRadMoments(pRadAccessData, pvGPU); //OC14092011 //HG27072024
 
 	//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
 	//srwlPrintTime(":EstimateWfrRadToSub_AnalytTreatQuadPhaseTerm:ComputeRadMoments 1",&start);
@@ -1178,7 +1197,8 @@ void srTDriftSpace::EstimateWfrRadToSub_AnalytTreatQuadPhaseTerm(srTSRWRadStruct
 		if((!MomX.precCenMomIsOK) || (MomX.SqrtMxpxp == 0) || (MomX.SqrtMzpzp == 0))
 		//if((!MomX.precCenMomIsOK) || (MomX.SqrtMxpxp == 0) || (MomX.SqrtMzpzp == 0) || ((abs_s1X <= pRadAccessData->RobsXAbsErr) && (!pRadAccessData->MomWereCalcNum)))
 		{//OC13112010: uncommented
-			ComputeRadMoments(pRadAccessData);
+			//ComputeRadMoments(pRadAccessData);
+			ComputeRadMoments(pRadAccessData, pvGPU); //HG27072024
 
 			//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
 			//srwlPrintTime(":EstimateWfrRadToSub_AnalytTreatQuadPhaseTerm:ComputeRadMoments 2",&start);
@@ -1198,7 +1218,8 @@ void srTDriftSpace::EstimateWfrRadToSub_AnalytTreatQuadPhaseTerm(srTSRWRadStruct
 		if((!MomZ.precCenMomIsOK) || (MomZ.SqrtMxpxp == 0) || (MomZ.SqrtMzpzp == 0))
 		//if((!MomZ.precCenMomIsOK) || (MomZ.SqrtMxpxp == 0) || (MomZ.SqrtMzpzp == 0) || ((abs_s1Z <= pRadAccessData->RobsZAbsErr) && (!pRadAccessData->MomWereCalcNum)))
 		{//OC13112010: uncommented
-			ComputeRadMoments(pRadAccessData);
+			//ComputeRadMoments(pRadAccessData);
+			ComputeRadMoments(pRadAccessData, pvGPU); //HG27072024
 
 			//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
 			//srwlPrintTime(":EstimateWfrRadToSub_AnalytTreatQuadPhaseTerm:ComputeRadMoments 3",&start);

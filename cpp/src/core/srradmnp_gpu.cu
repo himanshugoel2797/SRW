@@ -14,6 +14,7 @@
 #ifdef _OFFLOAD_GPU
 #include <stdio.h>
 #include <stdlib.h>
+#include <array>
 #include <string>
 #include <assert.h>
 #include <math.h>
@@ -152,8 +153,8 @@ __global__ void ExtractSingleElecIntensity2DvsXZ_Kernel(srTRadExtract RadExtract
 
 		if (intOverEnIsRequired) //OC140813
 		{//integrate over photon energy / time
-			float* pEx_StAux = pEx_St;
-			float* pEz_StAux = pEz_St;
+			//float* pEx_StAux = pEx_St;
+			//float* pEz_StAux = pEz_St;
 
 			if (!allStokesReq) //OC17042020
 			{
@@ -238,41 +239,35 @@ __global__ void ExtractSingleElecIntensity2DvsXZ_Kernel(srTRadExtract RadExtract
 		}
 	}
 }
-//template <bool allStokesReq, bool intOverEnIsRequired>
-//static inline void ExtractSingleElecIntensity2DvsXZ_GPUSub(dim3 &blocks, dim3 &threads, srTRadExtract RadExtract, srTSRWRadStructAccessData RadAccessData, srTRadGenManip *local_copy, double* arAuxInt, long long ie0, long long ie1, double InvStepRelArg, int Int_or_ReE)
-template <bool allStokesReq, bool intOverEnIsRequired, bool NpIsEven>
-static inline void ExtractSingleElecIntensity2DvsXZ_GPUSub(dim3 &blocks, dim3 &threads, srTRadExtract RadExtract, srTSRWRadStructAccessData *pRadAccessData, srTRadGenManip *local_copy, long long ie0, long long ie1, double InvStepRelArg, int Int_or_ReE) //HG27072024
-{
-	switch(RadExtract.PolarizCompon)
-	{
-		//case 5: ExtractSingleElecIntensity2DvsXZ_Kernel<allStokesReq, intOverEnIsRequired, 5><<<blocks, threads>>>(RadExtract, RadAccessData, local_copy, arAuxInt, ie0, ie1, InvStepRelArg, Int_or_ReE); break;
-		//case 4: ExtractSingleElecIntensity2DvsXZ_Kernel<allStokesReq, intOverEnIsRequired, 4><<<blocks, threads>>>(RadExtract, RadAccessData, local_copy, arAuxInt, ie0, ie1, InvStepRelArg, Int_or_ReE); break;
-		//case 3: ExtractSingleElecIntensity2DvsXZ_Kernel<allStokesReq, intOverEnIsRequired, 3><<<blocks, threads>>>(RadExtract, RadAccessData, local_copy, arAuxInt, ie0, ie1, InvStepRelArg, Int_or_ReE); break;
-		//case 2: ExtractSingleElecIntensity2DvsXZ_Kernel<allStokesReq, intOverEnIsRequired, 2><<<blocks, threads>>>(RadExtract, RadAccessData, local_copy, arAuxInt, ie0, ie1, InvStepRelArg, Int_or_ReE); break;
-		//case 1: ExtractSingleElecIntensity2DvsXZ_Kernel<allStokesReq, intOverEnIsRequired, 1><<<blocks, threads>>>(RadExtract, RadAccessData, local_copy, arAuxInt, ie0, ie1, InvStepRelArg, Int_or_ReE); break;
-		//case 0: ExtractSingleElecIntensity2DvsXZ_Kernel<allStokesReq, intOverEnIsRequired, 0><<<blocks, threads>>>(RadExtract, RadAccessData, local_copy, arAuxInt, ie0, ie1, InvStepRelArg, Int_or_ReE); break;
-		//case -1: ExtractSingleElecIntensity2DvsXZ_Kernel<allStokesReq, intOverEnIsRequired, -1><<<blocks, threads>>>(RadExtract, RadAccessData, local_copy, arAuxInt, ie0, ie1, InvStepRelArg, Int_or_ReE); break;
-		//case -2: ExtractSingleElecIntensity2DvsXZ_Kernel<allStokesReq, intOverEnIsRequired, -2><<<blocks, threads>>>(RadExtract, RadAccessData, local_copy, arAuxInt, ie0, ie1, InvStepRelArg, Int_or_ReE); break;
-		//case -3: ExtractSingleElecIntensity2DvsXZ_Kernel<allStokesReq, intOverEnIsRequired, -3><<<blocks, threads>>>(RadExtract, RadAccessData, local_copy, arAuxInt, ie0, ie1, InvStepRelArg, Int_or_ReE); break;
-		//case -4: ExtractSingleElecIntensity2DvsXZ_Kernel<allStokesReq, intOverEnIsRequired, -4><<<blocks, threads>>>(RadExtract, RadAccessData, local_copy, arAuxInt, ie0, ie1, InvStepRelArg, Int_or_ReE); break;
-		//default: ExtractSingleElecIntensity2DvsXZ_Kernel<allStokesReq, intOverEnIsRequired, -5><<<blocks, threads>>>(RadExtract, RadAccessData, local_copy, arAuxInt, ie0, ie1, InvStepRelArg, Int_or_ReE); break;
-		case 5: ExtractSingleElecIntensity2DvsXZ_Kernel<allStokesReq, intOverEnIsRequired,   5, NpIsEven><<<blocks, threads>>>(RadExtract, pRadAccessData, local_copy, ie0, ie1, InvStepRelArg, Int_or_ReE); break; //HG31072024
-		case 4: ExtractSingleElecIntensity2DvsXZ_Kernel<allStokesReq, intOverEnIsRequired,   4, NpIsEven><<<blocks, threads>>>(RadExtract, pRadAccessData, local_copy, ie0, ie1, InvStepRelArg, Int_or_ReE); break;
-		case 3: ExtractSingleElecIntensity2DvsXZ_Kernel<allStokesReq, intOverEnIsRequired,   3, NpIsEven><<<blocks, threads>>>(RadExtract, pRadAccessData, local_copy, ie0, ie1, InvStepRelArg, Int_or_ReE); break;
-		case 2: ExtractSingleElecIntensity2DvsXZ_Kernel<allStokesReq, intOverEnIsRequired,   2, NpIsEven><<<blocks, threads>>>(RadExtract, pRadAccessData, local_copy, ie0, ie1, InvStepRelArg, Int_or_ReE); break;
-		case 1: ExtractSingleElecIntensity2DvsXZ_Kernel<allStokesReq, intOverEnIsRequired,   1, NpIsEven><<<blocks, threads>>>(RadExtract, pRadAccessData, local_copy, ie0, ie1, InvStepRelArg, Int_or_ReE); break;
-		case 0: ExtractSingleElecIntensity2DvsXZ_Kernel<allStokesReq, intOverEnIsRequired,   0, NpIsEven><<<blocks, threads>>>(RadExtract, pRadAccessData, local_copy, ie0, ie1, InvStepRelArg, Int_or_ReE); break;
-		case -1: ExtractSingleElecIntensity2DvsXZ_Kernel<allStokesReq, intOverEnIsRequired, -1, NpIsEven><<<blocks, threads>>>(RadExtract, pRadAccessData, local_copy, ie0, ie1, InvStepRelArg, Int_or_ReE); break;
-		case -2: ExtractSingleElecIntensity2DvsXZ_Kernel<allStokesReq, intOverEnIsRequired, -2, NpIsEven><<<blocks, threads>>>(RadExtract, pRadAccessData, local_copy, ie0, ie1, InvStepRelArg, Int_or_ReE); break;
-		case -3: ExtractSingleElecIntensity2DvsXZ_Kernel<allStokesReq, intOverEnIsRequired, -3, NpIsEven><<<blocks, threads>>>(RadExtract, pRadAccessData, local_copy, ie0, ie1, InvStepRelArg, Int_or_ReE); break;
-		case -4: ExtractSingleElecIntensity2DvsXZ_Kernel<allStokesReq, intOverEnIsRequired, -4, NpIsEven><<<blocks, threads>>>(RadExtract, pRadAccessData, local_copy, ie0, ie1, InvStepRelArg, Int_or_ReE); break;
-		default: ExtractSingleElecIntensity2DvsXZ_Kernel<allStokesReq, intOverEnIsRequired, -5, NpIsEven><<<blocks, threads>>>(RadExtract, pRadAccessData, local_copy, ie0, ie1, InvStepRelArg, Int_or_ReE); break;
-	}
-}
 
 //int srTRadGenManip::ExtractSingleElecIntensity2DvsXZ_GPU(srTRadExtract& RadExtract, double* arAuxInt, long long ie0, long long ie1, double InvStepRelArg, TGPUUsageArg* pGPU)
 int srTRadGenManip::ExtractSingleElecIntensity2DvsXZ_GPU(srTRadExtract& RadExtract, long long ie0, long long ie1, double InvStepRelArg, TGPUUsageArg* pGPU) //HG31072024
 {
+#define GEN_MEMBERS(i) \
+	ExtractSingleElecIntensity2DvsXZ_Kernel<false, false, i, false>, \
+	ExtractSingleElecIntensity2DvsXZ_Kernel<false, false, i, true>, \
+	ExtractSingleElecIntensity2DvsXZ_Kernel<false, true,  i, false>, \
+	ExtractSingleElecIntensity2DvsXZ_Kernel<false, true,  i, true>, \
+	ExtractSingleElecIntensity2DvsXZ_Kernel<true,  false, i, false>, \
+	ExtractSingleElecIntensity2DvsXZ_Kernel<true,  false, i, true>, \
+	ExtractSingleElecIntensity2DvsXZ_Kernel<true,  true,  i, false>, \
+	ExtractSingleElecIntensity2DvsXZ_Kernel<true,  true,  i, true>,
+
+	decltype(ExtractSingleElecIntensity2DvsXZ_Kernel<false, false, 0, false>) *ExtractSingleElecIntensity2DvsXZ_tbl[] = {
+		GEN_MEMBERS(-5)
+		GEN_MEMBERS(-4)
+		GEN_MEMBERS(-3)
+		GEN_MEMBERS(-2)
+		GEN_MEMBERS(-1)
+		GEN_MEMBERS(0)
+		GEN_MEMBERS(1)
+		GEN_MEMBERS(2)
+		GEN_MEMBERS(3)
+		GEN_MEMBERS(4)
+		GEN_MEMBERS(5)
+	};
+#undef GEN_MEMBERS
+
 	srTSRWRadStructAccessData& RadAccessData = *((srTSRWRadStructAccessData*)(hRadAccessData.ptr()));
 
     const int bs = 256;
@@ -307,13 +302,13 @@ int srTRadGenManip::ExtractSingleElecIntensity2DvsXZ_GPU(srTRadExtract& RadExtra
 		if (allStokesReq)
 		{
 			RadExtract.pExtractedData = CAuxGPU::ToDevice(pGPU, RadExtract.pExtractedData, 4*RadAccessData.nx*RadAccessData.nz, CAuxGPU::DONT_COPY);
-			CAuxGPU::Memset(pGPU, RadExtract.pExtractedData, 0, 4*RadAccessData.nx*RadAccessData.nz);
+			CAuxGPU::Memset(pGPU, RadExtract.pExtractedData, 0.0f, 4*RadAccessData.nx*RadAccessData.nz);
 			CAuxGPU::EnsureDeviceMemoryReady(pGPU, RadExtract.pExtractedData);
 		}
 		else
 		{
 			RadExtract.pExtractedData = CAuxGPU::ToDevice(pGPU, RadExtract.pExtractedData, RadAccessData.nx*RadAccessData.nz, CAuxGPU::DONT_COPY);
-			CAuxGPU::Memset(pGPU, RadExtract.pExtractedData, 0, RadAccessData.nx*RadAccessData.nz);
+			CAuxGPU::Memset(pGPU, RadExtract.pExtractedData, 0.0f, RadAccessData.nx*RadAccessData.nz);
 			CAuxGPU::EnsureDeviceMemoryReady(pGPU, RadExtract.pExtractedData);
 		}
 	}
@@ -322,42 +317,21 @@ int srTRadGenManip::ExtractSingleElecIntensity2DvsXZ_GPU(srTRadExtract& RadExtra
 		if (allStokesReq)
 		{
 			RadExtract.pExtractedDataD = CAuxGPU::ToDevice(pGPU, RadExtract.pExtractedDataD, 4*RadAccessData.nx*RadAccessData.nz, CAuxGPU::DONT_COPY);
-			CAuxGPU::Memset(pGPU, RadExtract.pExtractedDataD, 0, 4*RadAccessData.nx*RadAccessData.nz);
+			CAuxGPU::Memset(pGPU, RadExtract.pExtractedDataD, 0.0, 4*RadAccessData.nx*RadAccessData.nz);
 			CAuxGPU::EnsureDeviceMemoryReady(pGPU, RadExtract.pExtractedDataD);
 		}
 		else
 		{
 			RadExtract.pExtractedDataD = CAuxGPU::ToDevice(pGPU, RadExtract.pExtractedDataD, RadAccessData.nx*RadAccessData.nz, CAuxGPU::DONT_COPY);
-			CAuxGPU::Memset(pGPU, RadExtract.pExtractedDataD, 0, RadAccessData.nx*RadAccessData.nz);
+			CAuxGPU::Memset(pGPU, RadExtract.pExtractedDataD, 0.0, RadAccessData.nx*RadAccessData.nz);
 			CAuxGPU::EnsureDeviceMemoryReady(pGPU, RadExtract.pExtractedDataD);
 		}
 	}
 
 	bool NpIsEven = ((RadAccessData.ne % 2) == 0);
+	int idx = ((RadExtract.PolarizCompon + 5) << 3) | ((allStokesReq & 1) << 2) | ((intOverEnIsRequired & 1) << 1) | (NpIsEven & 1);
+	ExtractSingleElecIntensity2DvsXZ_tbl[idx]<<<blocks, threads>>>(RadExtract, pRadAccessData_dev, local_copy, ie0, ie1, InvStepRelArg, Int_or_ReE);
 
-	if (NpIsEven)
-		if (allStokesReq)
-			if (intOverEnIsRequired)
-				ExtractSingleElecIntensity2DvsXZ_GPUSub<true, true, true> (blocks, threads, RadExtract, pRadAccessData_dev, local_copy, ie0, ie1, InvStepRelArg, Int_or_ReE);
-			else
-				ExtractSingleElecIntensity2DvsXZ_GPUSub<true, false, true> (blocks, threads, RadExtract, pRadAccessData_dev, local_copy, ie0, ie1, InvStepRelArg, Int_or_ReE);
-		else
-			if (intOverEnIsRequired)
-				ExtractSingleElecIntensity2DvsXZ_GPUSub<false, true, true> (blocks, threads, RadExtract, pRadAccessData_dev, local_copy, ie0, ie1, InvStepRelArg, Int_or_ReE);
-			else
-				ExtractSingleElecIntensity2DvsXZ_GPUSub<false, false, true> (blocks, threads, RadExtract, pRadAccessData_dev, local_copy, ie0, ie1, InvStepRelArg, Int_or_ReE);
-	else
-		if (allStokesReq)
-			if (intOverEnIsRequired)
-				ExtractSingleElecIntensity2DvsXZ_GPUSub<true, true, false> (blocks, threads, RadExtract, pRadAccessData_dev, local_copy, ie0, ie1, InvStepRelArg, Int_or_ReE);
-			else
-				ExtractSingleElecIntensity2DvsXZ_GPUSub<true, false, false> (blocks, threads, RadExtract, pRadAccessData_dev, local_copy, ie0, ie1, InvStepRelArg, Int_or_ReE);
-		else
-			if (intOverEnIsRequired)
-				ExtractSingleElecIntensity2DvsXZ_GPUSub<false, true, false> (blocks, threads, RadExtract, pRadAccessData_dev, local_copy, ie0, ie1, InvStepRelArg, Int_or_ReE);
-			else
-				ExtractSingleElecIntensity2DvsXZ_GPUSub<false, false, false> (blocks, threads, RadExtract, pRadAccessData_dev, local_copy, ie0, ie1, InvStepRelArg, Int_or_ReE);
-	
 	if(Int_or_ReE != 2) //HG13012024 Fixed bug: Output array was not allocated properly
 	{
 		if(RadExtract.pExtractedData != NULL)
@@ -581,9 +555,38 @@ __global__ void ExtractSingleElecMutualIntensityVsXZ_Kernel(const float* __restr
 	}
 }
 
-template <int PolCom, int gt1_iter>
-int ExtractSingleElecMutualIntensityVsXZ_GPUSub(float* pEx, float* pEz, float* pMI0, long nx, long nz, long ne, long itStart, long itEnd, long PerX, long iter, bool EhOK, bool EvOK, TGPUUsageArg* pGPU)
+//template <int PolCom, int gt1_iter>
+//int ExtractSingleElecMutualIntensityVsXZ_GPUSub(float* pEx, float* pEz, float* pMI0, long nx, long nz, long ne, long itStart, long itEnd, long PerX, long iter, int PolCom, bool EhOK, bool EvOK, TGPUUsageArg* pGPU)
+int srTRadGenManip::ExtractSingleElecMutualIntensityVsXZ_GPU(float* pEx, float* pEz, float* pMI0, long nx, long nz, long ne, long itStart, long itEnd, long PerX, long iter, int PolCom, bool EhOK, bool EvOK, TGPUUsageArg* pGPU)
 {
+#define GEN_MEMBERS0(i, a, b) \
+	ExtractSingleElecMutualIntensityVsXZ_Kernel<i, a, b, 0, 1>, \
+	ExtractSingleElecMutualIntensityVsXZ_Kernel<i, a, b, 1, 1>, \
+	ExtractSingleElecMutualIntensityVsXZ_Kernel<i, a, b, -1, 1>, \
+	NULL,
+
+#define GEN_MEMBERS(i) \
+	GEN_MEMBERS0(i, false, false) \
+	GEN_MEMBERS0(i, false, true) \
+	GEN_MEMBERS0(i, true, false) \
+	GEN_MEMBERS0(i, true, true)
+
+	decltype(ExtractSingleElecMutualIntensityVsXZ_Kernel<0, false, false, 0, 1>) *ExtractSingleElecMutualIntensityVsXZ_tbl[] = {
+		GEN_MEMBERS(-5)
+		GEN_MEMBERS(-4)
+		GEN_MEMBERS(-3)
+		GEN_MEMBERS(-2)
+		GEN_MEMBERS(-1)
+		GEN_MEMBERS(0)
+		GEN_MEMBERS(1)
+		GEN_MEMBERS(2)
+		GEN_MEMBERS(3)
+		GEN_MEMBERS(4)
+		GEN_MEMBERS(5)
+	};
+#undef GEN_MEMBERS0
+#undef GEN_MEMBERS
+
 	long long nxnz = ((long long)nx) * ((long long)nz); //HG26022024 NOTE: GPU implementation is only called for nxnz < UINT_MAX to avoid integer overflows
 
 	const int itPerBlk = 1;
@@ -596,22 +599,11 @@ int ExtractSingleElecMutualIntensityVsXZ_GPUSub(float* pEx, float* pEz, float* p
 	pMI0 = CAuxGPU::ToDevice(pGPU, pMI0, (itEnd - itStart)*nxnz*2);
 	CAuxGPU::EnsureDeviceMemoryReady(pGPU, pEx, pEz, pMI0); //HG31072024 Bug-fix
 
-	if (EhOK)
-	{
-		//HG26022024
-		if (EvOK) ExtractSingleElecMutualIntensityVsXZ_Kernel<PolCom, true, true, gt1_iter, itPerBlk> << <grid, threads >> > (pEx, pEz, pMI0, (long)nxnz, itStart, itEnd, PerX, iter);
-		else ExtractSingleElecMutualIntensityVsXZ_Kernel<PolCom, true, false, gt1_iter, itPerBlk> << <grid, threads >> > (pEx, pEz, pMI0, (long)nxnz, itStart, itEnd, PerX, iter);
-		//if (EvOK) ExtractSingleElecMutualIntensityVsXZ_Kernel<PolCom, true, true, gt1_iter, itPerBlk> << <grid, threads >> > (pEx, pEz, pMI0, nxnz, itStart, itEnd, PerX, iter);
-		//else ExtractSingleElecMutualIntensityVsXZ_Kernel<PolCom, true, false, gt1_iter, itPerBlk> << <grid, threads >> > (pEx, pEz, pMI0, nxnz, itStart, itEnd, PerX, iter);
-	}
-	else
-	{
-		//HG26022024
-		if (EvOK) ExtractSingleElecMutualIntensityVsXZ_Kernel<PolCom, false, true, gt1_iter, itPerBlk> << <grid, threads >> > (pEx, pEz, pMI0, (long)nxnz, itStart, itEnd, PerX, iter);
-		else ExtractSingleElecMutualIntensityVsXZ_Kernel<PolCom, false, false, gt1_iter, itPerBlk> << <grid, threads >> > (pEx, pEz, pMI0, (long)nxnz, itStart, itEnd, PerX, iter);
-		//if (EvOK) ExtractSingleElecMutualIntensityVsXZ_Kernel<PolCom, false, true, gt1_iter, itPerBlk> << <grid, threads >> > (pEx, pEz, pMI0, nxnz, itStart, itEnd, PerX, iter);
-		//else ExtractSingleElecMutualIntensityVsXZ_Kernel<PolCom, false, false, gt1_iter, itPerBlk> << <grid, threads >> > (pEx, pEz, pMI0, nxnz, itStart, itEnd, PerX, iter);
-	}
+	int idx = ((PolCom + 5) << 4) | ((EhOK & 1) << 3) | ((EvOK & 1) << 2);
+	if (iter > 0) idx |= 1;
+	else if (iter < 0) idx |= 2;
+
+	ExtractSingleElecMutualIntensityVsXZ_tbl[idx]<<<grid, threads >>> (pEx, pEz, pMI0, (long)nxnz, itStart, itEnd, PerX, iter);
 
 	pEx = CAuxGPU::ToHostAndFree(pGPU, pEx);
 	pEz = CAuxGPU::ToHostAndFree(pGPU, pEz);
@@ -627,45 +619,6 @@ int ExtractSingleElecMutualIntensityVsXZ_GPUSub(float* pEx, float* pEz, float* p
 //	printf("%s\r\n", cudaGetErrorString(err));
 //#endif
 	return 0;
-}
-
-int srTRadGenManip::ExtractSingleElecMutualIntensityVsXZ_GPU(float* pEx, float* pEz, float* pMI0, long nx, long nz, long ne, long itStart, long itEnd, long PerX, long iter, int PolCom, bool EhOK, bool EvOK, TGPUUsageArg* pGPU)
-{
-	if(iter > 0)
-	{
-		switch (PolCom)
-		{
-		case  1: return ExtractSingleElecMutualIntensityVsXZ_GPUSub<  1, 1>(pEx, pEz, pMI0, nx, nz, ne, itStart, itEnd, PerX, iter, EhOK, EvOK, pGPU);
-		case  2: return ExtractSingleElecMutualIntensityVsXZ_GPUSub<  2, 1>(pEx, pEz, pMI0, nx, nz, ne, itStart, itEnd, PerX, iter, EhOK, EvOK, pGPU);
-		case  0: return ExtractSingleElecMutualIntensityVsXZ_GPUSub<  0, 1>(pEx, pEz, pMI0, nx, nz, ne, itStart, itEnd, PerX, iter, EhOK, EvOK, pGPU);
-		case  3: return ExtractSingleElecMutualIntensityVsXZ_GPUSub<  3, 1>(pEx, pEz, pMI0, nx, nz, ne, itStart, itEnd, PerX, iter, EhOK, EvOK, pGPU);
-		case  4: return ExtractSingleElecMutualIntensityVsXZ_GPUSub<  4, 1>(pEx, pEz, pMI0, nx, nz, ne, itStart, itEnd, PerX, iter, EhOK, EvOK, pGPU);
-		case  5: return ExtractSingleElecMutualIntensityVsXZ_GPUSub<  5, 1>(pEx, pEz, pMI0, nx, nz, ne, itStart, itEnd, PerX, iter, EhOK, EvOK, pGPU);
-		case -1: return ExtractSingleElecMutualIntensityVsXZ_GPUSub< -1, 1>(pEx, pEz, pMI0, nx, nz, ne, itStart, itEnd, PerX, iter, EhOK, EvOK, pGPU);
-		case -2: return ExtractSingleElecMutualIntensityVsXZ_GPUSub< -2, 1>(pEx, pEz, pMI0, nx, nz, ne, itStart, itEnd, PerX, iter, EhOK, EvOK, pGPU);
-		case -3: return ExtractSingleElecMutualIntensityVsXZ_GPUSub< -3, 1>(pEx, pEz, pMI0, nx, nz, ne, itStart, itEnd, PerX, iter, EhOK, EvOK, pGPU);
-		case -4: return ExtractSingleElecMutualIntensityVsXZ_GPUSub< -4, 1>(pEx, pEz, pMI0, nx, nz, ne, itStart, itEnd, PerX, iter, EhOK, EvOK, pGPU);
-		default: return ExtractSingleElecMutualIntensityVsXZ_GPUSub< -5, 1>(pEx, pEz, pMI0, nx, nz, ne, itStart, itEnd, PerX, iter, EhOK, EvOK, pGPU);
-		}
-	}
-	else if(iter == 0)
-	{
-		switch (PolCom)
-		{
-		case  0: return ExtractSingleElecMutualIntensityVsXZ_GPUSub<  0, 0>(pEx, pEz, pMI0, nx, nz, ne, itStart, itEnd, PerX, iter, EhOK, EvOK, pGPU);
-		case  1: return ExtractSingleElecMutualIntensityVsXZ_GPUSub<  1, 0>(pEx, pEz, pMI0, nx, nz, ne, itStart, itEnd, PerX, iter, EhOK, EvOK, pGPU);
-		case  2: return ExtractSingleElecMutualIntensityVsXZ_GPUSub<  2, 0>(pEx, pEz, pMI0, nx, nz, ne, itStart, itEnd, PerX, iter, EhOK, EvOK, pGPU);
-		case  3: return ExtractSingleElecMutualIntensityVsXZ_GPUSub<  3, 0>(pEx, pEz, pMI0, nx, nz, ne, itStart, itEnd, PerX, iter, EhOK, EvOK, pGPU);
-		case  4: return ExtractSingleElecMutualIntensityVsXZ_GPUSub<  4, 0>(pEx, pEz, pMI0, nx, nz, ne, itStart, itEnd, PerX, iter, EhOK, EvOK, pGPU);
-		case  5: return ExtractSingleElecMutualIntensityVsXZ_GPUSub<  5, 0>(pEx, pEz, pMI0, nx, nz, ne, itStart, itEnd, PerX, iter, EhOK, EvOK, pGPU);
-		case -1: return ExtractSingleElecMutualIntensityVsXZ_GPUSub< -1, 0>(pEx, pEz, pMI0, nx, nz, ne, itStart, itEnd, PerX, iter, EhOK, EvOK, pGPU);
-		case -2: return ExtractSingleElecMutualIntensityVsXZ_GPUSub< -2, 0>(pEx, pEz, pMI0, nx, nz, ne, itStart, itEnd, PerX, iter, EhOK, EvOK, pGPU);
-		case -3: return ExtractSingleElecMutualIntensityVsXZ_GPUSub< -3, 0>(pEx, pEz, pMI0, nx, nz, ne, itStart, itEnd, PerX, iter, EhOK, EvOK, pGPU);
-		case -4: return ExtractSingleElecMutualIntensityVsXZ_GPUSub< -4, 0>(pEx, pEz, pMI0, nx, nz, ne, itStart, itEnd, PerX, iter, EhOK, EvOK, pGPU);
-		default: return ExtractSingleElecMutualIntensityVsXZ_GPUSub< -5, 0>(pEx, pEz, pMI0, nx, nz, ne, itStart, itEnd, PerX, iter, EhOK, EvOK, pGPU);
-		}
-	}
-	return 0; //OC19022024
 }
 
 #endif

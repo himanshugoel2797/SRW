@@ -145,7 +145,8 @@ public:
 		return 0;
 	}
 
-	int PropagateRadMoments(srTSRWRadStructAccessData* pRadAccessData, srTMomentsRatios* MomRatArray)
+	//int PropagateRadMoments(srTSRWRadStructAccessData* pRadAccessData, srTMomentsRatios* MomRatArray)
+	int PropagateRadMoments(srTSRWRadStructAccessData* pRadAccessData, srTMomentsRatios* MomRatArray, void* pvGPU=0) //HG27072024
 	{
 		//OC10032024
 		double eHalfRange = 0.;
@@ -156,7 +157,8 @@ public:
 
 		SetupFocalDistForPhotonEnergy(pRadAccessData->eStart + eHalfRange); //OC10032024
 		//SetupFocalDistForPhotonEnergy(pRadAccessData->eStart);
-		return srTFocusingElem::PropagateRadMoments(pRadAccessData, MomRatArray);
+		//return srTFocusingElem::PropagateRadMoments(pRadAccessData, MomRatArray);
+		return srTFocusingElem::PropagateRadMoments(pRadAccessData, MomRatArray, pvGPU); //HG27072024
 	}
 
 	void SetupFocalDistForPhotonEnergy(double ePh)

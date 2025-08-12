@@ -79,13 +79,9 @@ void srTSRWRadStructAccessData::MultiplyElFieldByPhaseLin_GPU(double xMult, doub
 		//CAuxGPU::EnsureDeviceMemoryReady(pGpuUsage_, pBaseRadZ);
 	}
 
-    int minGridSize = 0; //HG05002024
-    int bs = 256;
     dim3 blocks(nx, nz);
-    dim3 threads(bs, 1);
-	cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, MultiplyElFieldByPhaseLin_Kernel, 0, nx); //HG05002024
-    threads.x = bs;
-	blocks.x = (nx + bs - 1) / bs;
+    dim3 threads(1);
+    CAuxGPU::CalcLaunchDims(MultiplyElFieldByPhaseLin_Kernel, blocks, blocks, threads);
 
     MultiplyElFieldByPhaseLin_Kernel<<<blocks, threads>>> (xMult, zMult, pBaseRadX, pBaseRadZ, nx, nz, ne, (float)xStart, (float)zStart, (float)xStep, (float)zStep);
     //MultiplyElFieldByPhaseLin_Kernel<<<blocks, threads>>> (xMult, zMult, pBaseRadX, pBaseRadZ, nz, nx, ne, zStart, zStep, xStart, xStep);
@@ -314,25 +310,16 @@ void srTSRWRadStructAccessData::MirrorFieldData_GPU(int sx, int sz, TGPUUsageArg
 		//CAuxGPU::EnsureDeviceMemoryReady(pGpuUsage_, pEZ0);
 	}
 
-    int minGridSize = 0; //HG05002024
-    int bs = 256;
-    dim3 blocks(nx, nz);
-    dim3 threads(bs, 1);
-	if ((sx < 0) && (sz > 0)) cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, MirrorFieldData_Kernel<0>, 0, nx); //HG05002024
-	else if ((sx > 0) && (sz < 0)) cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, MirrorFieldData_Kernel<1>, 0, nx);
-	else cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, MirrorFieldData_Kernel<2>, 0, nx);
-    threads.x = bs;
-	blocks.x = (nx + bs - 1) / bs;
+	decltype(MirrorFieldData_Kernel<0>) *kern = NULL;
+	if ((sx < 0) && (sz > 0)) kern = MirrorFieldData_Kernel<0>; //HG05002024
+	else if ((sx > 0) && (sz < 0)) kern = MirrorFieldData_Kernel<1>;
+	else kern = MirrorFieldData_Kernel<2>;
 
-	//if ((sx > 0) && (sz > 0))
-	//	return;
-	//else if ((sx < 0) && (sz > 0))
-	if ((sx < 0) && (sz > 0)) //HG26072024 Bug fix
-		MirrorFieldData_Kernel<0> <<<blocks, threads>>>(nx, nz, ne, pEX0, pEZ0);
-	else if ((sx > 0) && (sz < 0))
-		MirrorFieldData_Kernel<1> <<<blocks, threads >>> (nx, nz, ne, pEX0, pEZ0);
-	else
-		MirrorFieldData_Kernel<2> <<<blocks, threads >>> (nx, nz, ne, pEX0, pEZ0);
+    dim3 blocks(nx, nz);
+    dim3 threads(1);
+    CAuxGPU::CalcLaunchDims(kern, blocks, blocks, threads);
+
+	kern<<<blocks, threads>>> (nx, nz, ne, pEX0, pEZ0);
 
 	if (pEX0 != NULL)
 		CAuxGPU::MarkUpdated(pGPU, pEX0, CAuxGPU::DEVICE); //OC03082023

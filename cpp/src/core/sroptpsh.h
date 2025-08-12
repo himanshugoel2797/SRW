@@ -53,10 +53,12 @@ public:
 	int SetUpPhaseShiftWave1D(srTRadSect1D& Sect1D, srTWaveAccessData& PhShData1D);
 	int SetUpPhaseShiftWave(srTSRWRadStructAccessData& RadData, srTWaveAccessData& PhShData);
 
-	int PropagateRadMoments(srTSRWRadStructAccessData* pRadAccessData, srTMomentsRatios* MomRatArray)
+	//int PropagateRadMoments(srTSRWRadStructAccessData* pRadAccessData, srTMomentsRatios* MomRatArray)
+	int PropagateRadMoments(srTSRWRadStructAccessData* pRadAccessData, srTMomentsRatios* MomRatArray, void* pvGPU=0) //HG27072024
 	{
 		if(!IsFocusing) return 0;
-		return srTFocusingElem::PropagateRadMoments(pRadAccessData, MomRatArray);
+		//return srTFocusingElem::PropagateRadMoments(pRadAccessData, MomRatArray);
+		return srTFocusingElem::PropagateRadMoments(pRadAccessData, MomRatArray, pvGPU); //HG27072024
 	}
 	int PropagateWaveFrontRadius(srTSRWRadStructAccessData* pRadAccessData)
 	{

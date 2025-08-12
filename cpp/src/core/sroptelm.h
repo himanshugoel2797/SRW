@@ -130,7 +130,8 @@ public:
 	//virtual int PropagateRadiation(srTSRWRadStructAccessData*, srTParPrecWfrPropag&, srTRadResizeVect&) { return 0;}
 	virtual int PropagateRadiation(srTSRWRadStructAccessData*, srTParPrecWfrPropag&, srTRadResizeVect&, void* pvGPU=0) { return 0;} //HG01122023
 
-	virtual int PropagateRadMoments(srTSRWRadStructAccessData*, srTMomentsRatios*) { return 0;}
+	//virtual int PropagateRadMoments(srTSRWRadStructAccessData*, srTMomentsRatios*) { return 0;}
+	virtual int PropagateRadMoments(srTSRWRadStructAccessData*, srTMomentsRatios*, void* =0) { return 0;} //HG27072024
 	virtual int PropagateWaveFrontRadius(srTSRWRadStructAccessData*) { return 0;}
 	virtual int PropagateWaveFrontRadius1D(srTRadSect1D*) { return 0;}
 	virtual int Propagate4x4PropMatr(srTSRWRadStructAccessData*) { return 0;}
@@ -291,7 +292,11 @@ public:
 	int SetupWfrEdgeCorrData1D(srTRadSect1D*, float*, float*, srTDataPtrsForWfrEdgeCorr1D&);
 	void MakeWfrEdgeCorrection1D(srTRadSect1D*, float*, float*, srTDataPtrsForWfrEdgeCorr1D&);
 
-	int ComputeRadMoments(srTSRWRadStructAccessData*);
+	//int ComputeRadMoments(srTSRWRadStructAccessData*);
+	int ComputeRadMoments(srTSRWRadStructAccessData*, void* =0); //HG26072024
+#ifdef _OFFLOAD_GPU //HG31072024
+	void ComputeRadMoments_GPU(srTSRWRadStructAccessData* pSRWRadStructAccessData, int ie, double* SumsZ, int* IndLims, TGPUUsageArg* pGPU);
+#endif
 
 	int RadResizeGen(srTSRWRadStructAccessData&, srTRadResize&, void* pvGPU=0); //HG01122023
 	//int RadResizeGen(srTSRWRadStructAccessData&, srTRadResize&);

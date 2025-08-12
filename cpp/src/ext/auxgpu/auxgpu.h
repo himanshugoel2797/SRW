@@ -17,11 +17,13 @@
 #include <cstdarg>
 #include <cstdlib>
 #include <stdio.h>
+#include <typeinfo>
 
 #ifdef _OFFLOAD_GPU
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
 #include <map>
+#include <initializer_list>
 //#if CUDART_VERSION < 11020
 //#error CUDA version too low, need at least 11.2
 //#endif
@@ -53,10 +55,40 @@ struct TGPUUsageArg //OC18022024
 #define GPU_PORTABLE 
 #endif
 
+#ifdef __CUDACC__
+	const int PerThread = 16;
+	template<typename T> __global__ void Memset_Kernel(T* p, T val, long long n)
+	{
+		long long offset = blockIdx.x * blockDim.x + threadIdx.x;
+		offset *= PerThread;
+		long long dst = min(offset + PerThread, n);
+		for (; offset < dst; offset++)
+			p[offset] = val;
+	}
+#endif
+
  //*************************************************************************
 class CAuxGPU
 {
 private:
+
+#ifdef _OFFLOAD_GPU
+	typedef struct
+	{
+		void *devicePtr;
+		void *hostPtr;
+		size_t size;
+		bool HostToDevUpdated;
+		bool DevToHostUpdated;
+		cudaEvent_t h2d_event;
+		cudaEvent_t d2h_event;
+		bool pinned; //HG26072024
+	} memAllocInfo_t;
+	static std::map<void*, memAllocInfo_t> gpuMap;
+	//static bool memcpy_stream_initialized = false; //HG02082024 (commented-out)
+	static std::map<int, cudaStream_t*> streams; //HG02082024
+#endif
+
 	static cudaStream_t memcpy_stream;
 	
 	//static void* ToDevice(TGPUUsageArg* arg, void* hostPtr, size_t size, bool dontCopy = false); //HG26072024
@@ -108,28 +140,16 @@ public:
 	static T* ToDevice(TGPUUsageArg* arg, T* hostPtr, size_t elemCount, int flags=0) //HG30042025
 	{
 #ifdef _OFFLOAD_GPU
-		const int typeSize = (typeid(T) == typeid(void)) ? 1 : sizeof(T);
+		const int typeSize = sizeof(T);
 		return (T*)_ToDevice(arg, (void*)hostPtr, elemCount * typeSize, flags);
 #endif
 		return hostPtr;
 	}
 
-#ifdef __CUDACC__
-	const int PerThread = 16;
-	template<typename T> __global__ void Memset_Kernel(T* p, T val, long long n)
-	{
-		long long offset = blockIdx.x * blockDim.x + threadIdx.x;
-		offset *= PerThread;
-		long long dst = min(offset + PerThread, n);
-		for (; offset < dst; offset++)
-			p[offset] = val;
-	}
-#endif
-
 	template <typename T>
 	static void Memset(TGPUUsageArg* arg, T* devicePtr, T value, size_t elemCount) //HG30042025
 	{
-#ifdef _OFFLOAD_GPU && __CUDACC__
+#if defined(_OFFLOAD_GPU) && defined(__CUDACC__)
 		if (arg == NULL)
 			return;
 		if (arg->deviceIndex == 0)
@@ -141,7 +161,7 @@ public:
 		if (elemCount == 0)
 			return;
 		if (gpuMap.find(devicePtr) != gpuMap.end()){
-			void* devPtr = gpuMap[hostPtr].devicePtr;
+			void* devPtr = devicePtr;
 			if (gpuMap[devPtr].DevToHostUpdated){
 				cudaStreamWaitEvent(memcpy_stream, gpuMap[devPtr].d2h_event);
 				gpuMap[devPtr].DevToHostUpdated = false;
@@ -153,7 +173,7 @@ public:
 			size_t elemCount_orig = elemCount;
 			cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, Memset_Kernel<T>, 0, (elemCount + PerThread - 1) / PerThread);
 			elemCount = ((elemCount + PerThread - 1) / PerThread + bs - 1) / bs;
-			Memset_Kernel<T> <<<elemCount, bs, 0, memcpy_stream>>> (devPtr, value, elemCount_orig);
+			Memset_Kernel<T> <<<elemCount, bs, 0, memcpy_stream>>> ((T*)devPtr, value, elemCount_orig);
 		}
 #endif
 	}
@@ -167,7 +187,7 @@ public:
 	static void* GetHostPtr(TGPUUsageArg* arg, void* devicePtr);
 
 	/**
-	* Transfer memory back to the host if necessary and free the associated device memory. Ensures that the latest copy of the data is on the host by the end.
+	* Transfer memory back to the host if necessary and free the associated device memory. Does not return until the latest copy of the data is on the host.
 	* @param [in] arg pointer to a GPU usage argument structure
 	* @param [in] devicePtr device pointer to the memory to be freed, if a host pointer is provided, the corresponding device pointer is freed
 	* @param [in] flags flags to control the memory transfer (DONT_COPY)
@@ -189,7 +209,7 @@ public:
 	* @param [in] arg pointer to a GPU usage argument structure
 	* @param [in] devicePtr device pointer to the memory block to be operated on
 	*/
-	static void EnsureDeviceMemoryReady(TGPUUsageArg* arg, void* devicePtr);
+	static void EnsureDeviceMemoryReady(TGPUUsageArg* arg, void* devicePtr=0);
 
 	// Makes it possible to pass multiple pointers to EnsureDeviceMemoryReady in a single call
 	template <typename First, typename... T> 
@@ -223,7 +243,7 @@ public:
 	* Mark the region as having been updated.
 	* @param [in] arg pointer to a GPU usage argument structure
 	* @param [in] ptr pointer to the memory region, can be a host or device pointer
-	* @param [in] flags flags to control the memory transfer (HOST_TO_DEV, DEV_TO_HOST)
+	* @param [in] flags flags to control the memory transfer (HOST: host to device, DEVICE: device to host)
 	*/
 	static void MarkUpdated(TGPUUsageArg* arg, void* ptr, int flags=0); //HG26072024
 	//static void MarkUpdated(TGPUUsageArg* arg, void* ptr, bool devToHost, bool hostToDev);
@@ -243,62 +263,42 @@ public:
 	* @param [in] streamIdx the 0-based index of the compute stream to be synchronized
 	*/
 	static void SyncComputeStream(TGPUUsageArg* arg, long long targetStreamIdx, long long streamIdx); //HG24042025
-	
 
+#ifdef __CUDACC__
 	/**
-	* Determine a good distribution of threads within a block given the maximum block size and the block dimensions
-	* @param [in] bs The maximum block size (i.e. the maximum number of threads in a block)
-	* @param [inout] blocks The number of blocks needed in each dimension, assuming each block has only 1 thread. This is updated to keep the size of the calculation the same as the number of threads per block is increased.
-	* @param [out] threads The number of threads in each dimension per block.
+	* Determine a good distribution of threads within a block
+	* @param [in] func The kernel to calculate for.
+	* @param [in] grid The grid size.
+	* @param [out] blocks The resulting block count.
+	* @param [out] threads The resulting thread count.
+	* @param [in] max_x_bs The maximum block size in the X dimension.
+	* @param [in] max_bs_total The maximum block size the kernel is designed to work with.
 	*/
-	static void CalcBlockSizeAndGridSize(int bs, dim3& blocks, dim3& threads) //HG26072024
+	template<typename T>
+	static void CalcLaunchDims(T* kern, dim3 grid, dim3& blocks, dim3& threads, int max_x_bs = 0, int max_bs_total = 0)
 	{
-		if (blocks.x > 1)
+		int minGridSize = 0; //HG05082024
+    	int bs = 256;
+		cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, (void*)kern, 0, max_bs_total);
+		if (max_x_bs == 0) max_x_bs = bs;
+
+		threads.x = (max_x_bs < bs) ? max_x_bs : bs;
+		threads.y = 1;
+		threads.z = 1;
+
+		blocks.x = grid.x / threads.x + !!(grid.x & (threads.x - 1)); //round up the division result
+		blocks.y = grid.y;
+		blocks.z = grid.z;
+
+		int y_v = bs / max_x_bs;
+		if (y_v > 1 && grid.y > 1)
 		{
-			if (blocks.x >= bs)
-			{
-				threads.x = bs;
-				bs = 1;
-				blocks.x = (blocks.x + threads.x - 1) / threads.x;
-			}
-			else
-			{
-				threads.x = blocks.x;
-				blocks.x = 1;
-				bs /= threads.x;
-			}
-		}
-		if (blocks.y > 1)
-		{
-			if (blocks.y >= bs)
-			{
-				threads.y = bs;
-				bs = 1;
-				blocks.y = (blocks.y + threads.y - 1) / threads.y;
-			}
-			else
-			{
-				threads.y = blocks.y;
-				blocks.y = 1;
-				bs /= threads.y;
-			}
-		}
-		if (blocks.z > 1)
-		{
-			if (blocks.z >= bs)
-			{
-				threads.z = bs;
-				bs = 1;
-				blocks.z = (blocks.z + threads.z - 1) / threads.z;
-			}
-			else
-			{
-				threads.z = blocks.z;
-				blocks.z = 1;
-				bs /= threads.z;
-			}
+			//Calculate y grid
+			threads.y = (y_v > grid.y) ? grid.y : y_v;
+			blocks.y = grid.y / threads.y + !!(grid.y & (threads.y - 1)); //round up the division result
 		}
 	}
+#endif
 };
 
 //*************************************************************************

@@ -25,6 +25,7 @@
 #include <iostream>
 #include <chrono>
 #include "srmatsta.h"
+#include "srradmnp.h"
 
 
 namespace cg = cooperative_groups;
@@ -384,18 +385,13 @@ __global__ void PrefixSum_Kernel(T* data, int* bounds, T* sum_l, T* sum_r, T* re
 template<class T>
 int IntegrateOverX_GPU_base(T* p0, int* ixBounds, double xStep, long long Nx, long long Ny, double* AuxArrIntOverX, TGPUUsageArg* pGPU)
 {
-    int minGridSize;
-    int bs = 128;
-    dim3 threads(1, bs);
-    dim3 nblocks(Ny, 1);
-    long long LenArr = Nx;
-    cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, IntegrateOverX_Kernel<T>, 0, (LenArr + PerThreadSum - 1) / PerThreadSum);
-    nblocks.y = ((LenArr + PerThreadSum - 1)/PerThreadSum + bs - 1) / bs;
-    threads.y = bs;
+    dim3 nblocks(Ny, Nx);
+    dim3 threads(1);
+    CAuxGPU::CalcLaunchDims(IntegrateOverX_Kernel<T>, nblocks, nblocks, threads, 1);
 
     p0 = (T*)CAuxGPU::ToDevice(pGPU, p0, Nx * Ny);
     AuxArrIntOverX = CAuxGPU::ToDevice(pGPU, AuxArrIntOverX, Ny, CAuxGPU::DONT_COPY);
-    CAuxGPU::Memset(pGPU, AuxArrIntOverX, 0, Ny);
+    CAuxGPU::Memset(pGPU, AuxArrIntOverX, 0.0, Ny);
     ixBounds = CAuxGPU::ToDevice(pGPU, ixBounds, 2);
     CAuxGPU::EnsureDeviceMemoryReady(pGPU, p0, AuxArrIntOverX, ixBounds);
     IntegrateOverX_Kernel<T><<<nblocks, threads>>>(p0, ixBounds, xStep, (int)Nx, (int)Ny, AuxArrIntOverX);
@@ -403,31 +399,28 @@ int IntegrateOverX_GPU_base(T* p0, int* ixBounds, double xStep, long long Nx, lo
     return 0;
 }
 
-int srTAuxMatStat::IntegrateOverX_GPU(float* p0, int* ixBounds, double xStep, long long Nx, long long Ny, double* AuxArrIntOverX, TGPUUsageArg* pGPU)
+int srTAuxMatStat::IntegrateOverX_GPU(float* p0, int ixStart, int ixEnd, double xStep, long long Nx, long long Ny, double* AuxArrIntOverX, TGPUUsageArg* pGPU)
 {
+    int ixBounds[2] = {ixStart, ixEnd};
     return IntegrateOverX_GPU_base<float>(p0, ixBounds, xStep, Nx, Ny, AuxArrIntOverX, pGPU);
 }
 
-int srTAuxMatStat::IntegrateOverX_GPU(double* p0, int* ixBounds, double xStep, long long Nx, long long Ny, double* AuxArrIntOverX, TGPUUsageArg* pGPU)
+int srTAuxMatStat::IntegrateOverX_GPU(double* p0, int ixStart, int ixEnd, double xStep, long long Nx, long long Ny, double* AuxArrIntOverX, TGPUUsageArg* pGPU)
 {
+    int ixBounds[2] = {ixStart, ixEnd};
     return IntegrateOverX_GPU_base<double>(p0, ixBounds, xStep, Nx, Ny, AuxArrIntOverX, pGPU);
 }
 
 template <class T>
 int IntegrateOverY_GPU_base(T* p0, int* iyBounds, double yStep, long long Nx, long long Ny, double* AuxArrIntOverY, TGPUUsageArg* pGPU)
 {
-    int minGridSize;
-    int bs = 128;
-    dim3 threads(bs, 1);
-    dim3 nblocks(Nx, Ny + 1);
-    cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, IntegrateOverY_Kernel<T>, 0, Nx);
-    nblocks.x = (Nx + bs - 1) / bs;
-    nblocks.y = (Ny + PerThreadSum - 1) / PerThreadSum;
-    threads.x = bs;
+    dim3 nblocks(Nx, Ny / PerThreadSum + !!(Ny & (PerThreadSum - 1)));
+    dim3 threads(1);
+    CAuxGPU::CalcLaunchDims(IntegrateOverY_Kernel<T>, nblocks, nblocks, threads);
 
     p0 = CAuxGPU::ToDevice(pGPU, p0, Nx*Ny);
     AuxArrIntOverY = CAuxGPU::ToDevice(pGPU, AuxArrIntOverY, Nx);
-    CAuxGPU::Memset(pGPU, AuxArrIntOverY, 0, Nx);
+    CAuxGPU::Memset(pGPU, AuxArrIntOverY, 0.0, Nx);
     iyBounds = CAuxGPU::ToDevice(pGPU, iyBounds, 2);
     CAuxGPU::Memset(pGPU, iyBounds, 0, 2);
     CAuxGPU::EnsureDeviceMemoryReady(pGPU, p0, AuxArrIntOverY, iyBounds);
@@ -436,30 +429,30 @@ int IntegrateOverY_GPU_base(T* p0, int* iyBounds, double yStep, long long Nx, lo
     return 0;
 }
 
-int srTAuxMatStat::IntegrateOverY_GPU(float* p0, int* iyBounds, double yStep, long long Nx, long long Ny, double* AuxArrIntOverY, TGPUUsageArg* pGPU)
+int srTAuxMatStat::IntegrateOverY_GPU(float* p0, int iyStart, int iyEnd, double yStep, long long Nx, double* AuxArrIntOverY, TGPUUsageArg* pGPU)
 {
-    return IntegrateOverY_GPU_base<float>(p0, iyBounds, yStep, Nx, Ny, AuxArrIntOverY, pGPU);
+    int iyBounds[2] = {iyStart, iyEnd};
+    return IntegrateOverY_GPU_base<float>(p0, iyBounds, yStep, Nx, iyEnd, AuxArrIntOverY, pGPU);
 }
 
-int srTAuxMatStat::IntegrateOverY_GPU(double* p0, int* iyBounds, double yStep, long long Nx, long long Ny, double* AuxArrIntOverY, TGPUUsageArg* pGPU)
+int srTAuxMatStat::IntegrateOverY_GPU(double* p0, int iyStart, int iyEnd, double yStep, long long Nx, double* AuxArrIntOverY, TGPUUsageArg* pGPU)
 {
-    return IntegrateOverY_GPU_base<double>(p0, iyBounds, yStep, Nx, Ny, AuxArrIntOverY, pGPU);
+    int iyBounds[2] = {iyStart, iyEnd};
+    return IntegrateOverY_GPU_base<double>(p0, iyBounds, yStep, Nx, iyEnd, AuxArrIntOverY, pGPU);
 }
 
 template <class T>
 int IntegrateSimple_GPU_base(T* p0, long long LenArr, double Multiplier, double* OutVal, TGPUUsageArg* pGPU)
 {
-    int minGridSize;
-    int bs = 1024;
-    int nblocks = 1;
-    cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, SumVector_FixedStride_Kernel<T>, 0, (LenArr + PerThreadSum - 1) / PerThreadSum);
-    nblocks = ((LenArr + PerThreadSum - 1)/PerThreadSum + bs - 1) / bs;
+    dim3 nblocks(LenArr / PerThreadSum + !!(LenArr & (PerThreadSum - 1)), 1);
+    dim3 threads(1);
+    CAuxGPU::CalcLaunchDims(SumVector_FixedStride_Kernel<T>, nblocks, nblocks, threads);
 
     p0 = CAuxGPU::ToDevice(pGPU, p0, LenArr);
     OutVal = CAuxGPU::ToDevice(pGPU, OutVal, 1);
-    CAuxGPU::Memset(pGPU, OutVal, 0, 1);
+    CAuxGPU::Memset(pGPU, OutVal, 0.0, 1);
     CAuxGPU::EnsureDeviceMemoryReady(pGPU, p0, OutVal);
-    SumVector_FixedStride_Kernel<T><<<nblocks, bs>>>(p0, 0LL, LenArr - 1, Multiplier, OutVal);
+    SumVector_FixedStride_Kernel<T><<<nblocks, threads>>>(p0, 0LL, LenArr - 1, Multiplier, OutVal);
     CAuxGPU::MarkUpdated(pGPU, OutVal, CAuxGPU::DEVICE);
     return 0;
 }
@@ -477,36 +470,31 @@ int srTAuxMatStat::IntegrateSimple_GPU(double* p0, long long LenArr, double Mult
 template <class T>
 int PrefixSum_GPU(T* data, int len, int* sum_bounds, int* final_bounds, double RelPowLevel, double* IntegratedIntens, TGPUUsageArg* pGPU)
 {
-    int minGridSize;
-    int bs = 1024;
-    dim3 threads(bs, 1);
-    dim3 nblocks((len + bs - 1) / bs, 1);
-    cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, PrefixSum<T>, 0, len);
-    if (bs > 32) bs = ((bs + 31) / 32) * 32; //Round up block size to the nearest multiple of 32
-    nblocks.x = (len + bs - 1) / bs;
-    threads.x = bs;
+    dim3 nblocks0(len, 1);
+    dim3 nblocks1(len, 1);
+    dim3 threads0(1);
+    dim3 threads1(1);
+    CAuxGPU::CalcLaunchDims(PrefixSum_Kernel<T, 0>, nblocks0, nblocks0, threads0);
+    CAuxGPU::CalcLaunchDims(PrefixSum_Kernel<T, 1>, nblocks1, nblocks1, threads1);
 
     data = CAuxGPU::ToDevice(pGPU, data, len);
     sum_bounds = CAuxGPU::ToDevice(pGPU, sum_bounds, 2);
     final_bounds = CAuxGPU::ToDevice(pGPU, final_bounds, 2);
-    T* residual_sum_l = CAuxGPU::ToDevice(pGPU, NULL, (nblocks.x + 1) * 2);
-    CAuxGPU::Memset(pGPU, residual_sum_l, 0, (nblocks.x + 1) * 2);
-    T* residual_sum_r = residual_sum_l + nblocks.x + 1;
-    T* sum_l = CAuxGPU::ToDevice(pGPU, NULL, len);
+    T* residual_sum_l = CAuxGPU::ToDevice(pGPU, (T*)NULL, (nblocks0.x + 1) * 2);
+    CAuxGPU::Memset(pGPU, residual_sum_l, (T)0, (nblocks0.x + 1) * 2);
+    T* residual_sum_r = residual_sum_l + nblocks0.x + 1;
+    T* sum_l = CAuxGPU::ToDevice(pGPU, (T*)NULL, len);
     T* sum_r = sum_l + len;
-    int* bounds_l = CAuxGPU::ToDevice(pGPU, NULL, nblocks.x * 2);
-    int* bounds_r = bounds_l + nblocks.x;
-    int tertiary_sum_bounds[2] { 0, nblocks.x - 1 };
+    int* bounds_l = CAuxGPU::ToDevice(pGPU, (int*)NULL, nblocks0.x * 2);
+    int* bounds_r = bounds_l + nblocks0.x;
+    int tertiary_sum_bounds[2] { 0, (int)nblocks0.x - 1 };
     int* tertiary_sum_bounds_d = CAuxGPU::ToDevice(pGPU, tertiary_sum_bounds, 2);
 
     CAuxGPU::EnsureDeviceMemoryReady(pGPU, data, sum_bounds, final_bounds, residual_sum_l, sum_l, bounds_l, tertiary_sum_bounds_d);
 
-    if (bs > 32) PrefixSum_Kernel<T, 0, true><<<nblocks, threads>>>(data, sum_bounds, sum_l, sum_r, residual_sum_l, residual_sum_r);
-    else PrefixSum_Kernel<T, 0, false><<<nblocks, threads>>>(data, sum_bounds, sum_l, sum_r, residual_sum_l, residual_sum_r);
-
-    int residual_thds = 32;
-    if (nblocks.x > residual_thds) residual_thds = nblocks.x;
-    if (nblocks.x > 1)
+    int residual_thds = (nblocks0.x > 32) ? nblocks0.x : 32;
+    PrefixSum_Kernel<T, 0><<<nblocks0, threads0>>>(data, sum_bounds, sum_l, sum_r, residual_sum_l, residual_sum_r);
+    if (nblocks0.x > 1)
     {
         if (residual_thds > 32) PrefixSum_Kernel<T, 0, true><<<1, residual_thds>>>(residual_sum_l, tertiary_sum_bounds_d, residual_sum_l, NULL);
         else PrefixSum_Kernel<T, 0, false><<<1, residual_thds>>>(residual_sum_l, tertiary_sum_bounds_d, residual_sum_l, NULL);
@@ -514,7 +502,7 @@ int PrefixSum_GPU(T* data, int len, int* sum_bounds, int* final_bounds, double R
         if (residual_thds > 32) PrefixSum_Kernel<T, 0, true><<<1, residual_thds>>>(residual_sum_r, tertiary_sum_bounds_d, NULL, residual_sum_r);
         else PrefixSum_Kernel<T, 0, false><<<1, residual_thds>>>(residual_sum_r, tertiary_sum_bounds_d, NULL, residual_sum_r);
     }     
-    PrefixSum_Kernel<T, 1><<<nblocks, threads>>>(data, sum_bounds, sum_l, sum_r, residual_sum_l, residual_sum_r, RelPowLevel, IntegratedIntens, bounds_l, bounds_r);
+    PrefixSum_Kernel<T, 1><<<nblocks1, threads1>>>(data, sum_bounds, sum_l, sum_r, residual_sum_l, residual_sum_r, RelPowLevel, IntegratedIntens, bounds_l, bounds_r);
     PrefixSum_Kernel<T, 2><<<1, residual_thds>>>(NULL, tertiary_sum_bounds_d, NULL, NULL, residual_sum_l, residual_sum_r, RelPowLevel, IntegratedIntens, bounds_l, bounds_r, final_bounds);
 
     CAuxGPU::MarkUpdated(pGPU, bounds_l, CAuxGPU::DEVICE);
@@ -534,44 +522,42 @@ int FindIntensityLimits2D_GPU(srTWaveAccessData& InWaveData, double RelPowLevel,
     long Ny = (long)InWaveData.DimSizes[1];
     double xStep = InWaveData.DimSteps[0];
     double yStep = InWaveData.DimSteps[1];
-    double xStart = InWaveData.DimStartValues[0];
-    double yStart = InWaveData.DimStartValues[1];
 
     float* pf0 = NULL;
     double* pd0 = NULL;
     if (*(InWaveData.WaveType) == 'f') pf0 = (float*)InWaveData.pWaveData;
     else pd0 = (double*)InWaveData.pWaveData;
     
-    int *IndLims_d = (int*)CAuxGPU::ToDevice(pGPU, IndLims, 4 * sizeof(int));
-    int *ixBounds_d = IndLims_d;
-    int *iyBounds_d = IndLims_d + 2;
+    int *ixBounds_d = CAuxGPU::ToDevice(pGPU, IndLims, 2);
+    int *iyBounds_d = CAuxGPU::ToDevice(pGPU, IndLims + 2, 2);
 
     //Integrate over X
-    double *AuxArrIntOverX = CAuxGPU::ToDevice(pGPU, NULL, Ny);
-    CAuxGPU::Memset(pGPU, AuxArrIntOverX, 0, Ny);
-    CAuxGPU::EnsureDeviceMemoryReady(pGPU, IndLims_d);
-    if (pf0 != NULL) IntegrateOverX_GPU(pf0, ixBounds_d, xStep, Nx, Ny, AuxArrIntOverX, pGPU);
-    else IntegrateOverX_GPU(pd0, ixBounds_d, xStep, Nx, Ny, AuxArrIntOverX, pGPU);
+    double *AuxArrIntOverX = CAuxGPU::ToDevice<double>(pGPU, NULL, Ny);
+    CAuxGPU::Memset(pGPU, AuxArrIntOverX, 0.0, Ny);
+    CAuxGPU::EnsureDeviceMemoryReady(pGPU, ixBounds_d, iyBounds_d);
+
+    if (pf0 != NULL) IntegrateOverX_GPU_base<float>(pf0, ixBounds_d, xStep, Nx, Ny, AuxArrIntOverX, pGPU);
+    else IntegrateOverX_GPU_base<double>(pd0, ixBounds_d, xStep, Nx, Ny, AuxArrIntOverX, pGPU);
+    
     //Find the limits of integration over X
-    if (pf0 != NULL) PrefixSum_GPU<float>(AuxArrIntOverX, Ny, ixBounds_d, iyBounds_d, RelPowLevel, IntegratedIntens, pGPU);
-    else PrefixSum_GPU<double>(AuxArrIntOverX, Ny, ixBounds_d, iyBounds_d, RelPowLevel, IntegratedIntens, pGPU);
+    PrefixSum_GPU<double>(AuxArrIntOverX, Ny, ixBounds_d, iyBounds_d, RelPowLevel, IntegratedIntens, pGPU);
     
     //Integrate Y over the limits of integration over X
-    double* AuxArrIntOverY = CAuxGPU::ToDevice(pGPU, NULL, Nx);
-    CAuxGPU::Memset(pGPU, AuxArrIntOverY, 0, Nx);
-    if (pf0 != NULL) IntegrateOverY_GPU(pf0, iyBounds_d, yStep, Nx, Ny, AuxArrIntOverY, pGPU);
-    else IntegrateOverY_GPU(pd0, iyBounds_d, yStep, Nx, Ny, AuxArrIntOverY, pGPU);
+    double* AuxArrIntOverY = CAuxGPU::ToDevice<double>(pGPU, NULL, Nx);
+    CAuxGPU::Memset(pGPU, AuxArrIntOverY, 0.0, Nx);
+    if (pf0 != NULL) IntegrateOverY_GPU_base<float>(pf0, iyBounds_d, yStep, Nx, Ny, AuxArrIntOverY, pGPU);
+    else IntegrateOverY_GPU_base<double>(pd0, iyBounds_d, yStep, Nx, Ny, AuxArrIntOverY, pGPU);
+
     //Find the limits of integration over Y
-    if (pf0 != NULL) PrefixSum_GPU<float>(AuxArrIntOverY, Nx, iyBounds_d, ixBounds_d, RelPowLevel, IntegratedIntens, pGPU);
-    else PrefixSum_GPU<double>(AuxArrIntOverY, Nx, iyBounds_d, ixBounds_d, RelPowLevel, IntegratedIntens, pGPU);
+    PrefixSum_GPU<double>(AuxArrIntOverY, Nx, iyBounds_d, ixBounds_d, RelPowLevel, IntegratedIntens, pGPU);
 
     //The integer limits of integration over X and Y are now in ixBounds_d and iyBounds_d respectively
-    CAuxGPU::MarkUpdated(pGPU, IndLims_d, CAuxGPU::DEVICE);
+    CAuxGPU::MarkUpdated(pGPU, ixBounds_d, CAuxGPU::DEVICE);
+    CAuxGPU::MarkUpdated(pGPU, iyBounds_d, CAuxGPU::DEVICE);
     CAuxGPU::MarkUpdated(pGPU, AuxArrIntOverX, CAuxGPU::DEVICE);
     CAuxGPU::MarkUpdated(pGPU, AuxArrIntOverY, CAuxGPU::DEVICE);
     CAuxGPU::ToHostAndFree(pGPU, AuxArrIntOverX);
     CAuxGPU::ToHostAndFree(pGPU, AuxArrIntOverY);
-    
     return 0;
 }
 

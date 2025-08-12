@@ -151,18 +151,11 @@ template <typename T> __global__ void TreatShift_Kernel(T* pData, long HowMany, 
 
 void CGenMathFFT1D::RepairSignAfter1DFFT_GPU(float* pAfterFFT, long HowMany, long Nx) 
 {
-
-    //dim3 blocks(Nx / GMFFT_BLOCK_SIZE + ((Nx & (GMFFT_BLOCK_SIZE - 1)) != 0));
-    //dim3 threads(GMFFT_BLOCK_SIZE, 1);
-    int minGridSize = 0; //HG05082024
-    int bs = 256;
     dim3 blocks(Nx, 1);
-    dim3 threads(bs, 1);
-	cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, RepairSignAfter1DFFT_Kernel<float>, 0, blocks.x);
-    threads.x = bs;
-	blocks.x = (blocks.x + bs - 1) / bs;
-
-    RepairSignAfter1DFFT_Kernel<float> << <blocks, threads >> > (pAfterFFT, HowMany, Nx * 2);
+    dim3 threads(1);
+    CAuxGPU::CalcLaunchDims(RepairSignAfter1DFFT_Kernel<float>, blocks, blocks, threads);
+	
+    RepairSignAfter1DFFT_Kernel<float> <<<blocks, threads >>> (pAfterFFT, HowMany, Nx * 2);
 
 //#ifdef _DEBUG
 //	cudaStreamSynchronize(0);
@@ -173,18 +166,11 @@ void CGenMathFFT1D::RepairSignAfter1DFFT_GPU(float* pAfterFFT, long HowMany, lon
 
 void CGenMathFFT1D::RotateDataAfter1DFFT_GPU(float* pAfterFFT, long HowMany, long Nx) 
 {
-
-    //dim3 blocks(Nx / (2 * GMFFT_BLOCK_SIZE) + ((Nx / 2 & (GMFFT_BLOCK_SIZE - 1)) != 0));
-    //dim3 threads(GMFFT_BLOCK_SIZE, 1);
-    int minGridSize = 0; //HG05082024
-    int bs = 256;
     dim3 blocks(Nx/2, 1);
-    dim3 threads(bs, 1);
-	cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, RotateDataAfter1DFFT_Kernel<float>, 0, blocks.x);
-    threads.x = bs;
-	blocks.x = (blocks.x + bs - 1) / bs;
+    dim3 threads(1);
+    CAuxGPU::CalcLaunchDims(RotateDataAfter1DFFT_Kernel<float>, blocks, blocks, threads);
 
-    RotateDataAfter1DFFT_Kernel<float> << <blocks, threads >> > (pAfterFFT, HowMany, Nx * 2, Nx);
+    RotateDataAfter1DFFT_Kernel<float> <<<blocks, threads >>> (pAfterFFT, HowMany, Nx * 2, Nx);
 
 //#ifdef _DEBUG
 //	cudaStreamSynchronize(0);
@@ -195,25 +181,11 @@ void CGenMathFFT1D::RotateDataAfter1DFFT_GPU(float* pAfterFFT, long HowMany, lon
 
 void CGenMathFFT1D::RepairAndRotateDataAfter1DFFT_GPU(float* pAfterFFT, long HowMany, long Nx, float Mult) 
 {
-
-//#ifdef _DEBUG
-//	cudaStreamSynchronize(0);
-//	auto err = cudaGetLastError();
-//	printf("%s\r\n", cudaGetErrorString(err));
-//#endif
-
-
-    //dim3 blocks(Nx / (2 * GMFFT_BLOCK_SIZE) + (((Nx / 2) & (GMFFT_BLOCK_SIZE - 1)) != 0), 1);
-    //dim3 threads(GMFFT_BLOCK_SIZE, 1);
-    int minGridSize = 0; //HG05082024
-    int bs = 256;
     dim3 blocks(Nx/2, 1);
-    dim3 threads(bs, 1);
-	cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, RepairAndRotateAfter1DFFT_Kernel<float>, 0, blocks.x);
-    threads.x = bs;
-	blocks.x = (blocks.x + bs - 1) / bs;
+    dim3 threads(1);
+    CAuxGPU::CalcLaunchDims(RepairAndRotateAfter1DFFT_Kernel<float>, blocks, blocks, threads);
 
-    RepairAndRotateAfter1DFFT_Kernel<float> << <blocks, threads >> > (pAfterFFT, HowMany, Nx, Mult);
+    RepairAndRotateAfter1DFFT_Kernel<float> <<<blocks, threads >>> (pAfterFFT, HowMany, Nx, Mult);
 
 //#ifdef _DEBUG
 //	cudaStreamSynchronize(0);
@@ -224,18 +196,11 @@ void CGenMathFFT1D::RepairAndRotateDataAfter1DFFT_GPU(float* pAfterFFT, long How
 
 void CGenMathFFT1D::NormalizeDataAfter1DFFT_GPU(float* pAfterFFT, long HowMany, long Nx, double Mult) 
 {
-
-    //dim3 blocks(Nx / GMFFT_BLOCK_SIZE + ((Nx & (GMFFT_BLOCK_SIZE - 1)) != 0), 1);
-    //dim3 threads(GMFFT_BLOCK_SIZE, 1);
-    int minGridSize = 0; //HG05082024
-    int bs = 256;
     dim3 blocks(Nx, 1);
-    dim3 threads(bs, 1);
-	cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, NormalizeDataAfter1DFFT_Kernel<float>, 0, blocks.x);
-    threads.x = bs;
-	blocks.x = (blocks.x + bs - 1) / bs;
+    dim3 threads(1);
+    CAuxGPU::CalcLaunchDims(NormalizeDataAfter1DFFT_Kernel<float>, blocks, blocks, threads);
 
-    NormalizeDataAfter1DFFT_Kernel<float> << <blocks, threads >> > (pAfterFFT, HowMany, Nx * 2, (float)Mult); //OC06092023
+    NormalizeDataAfter1DFFT_Kernel<float> <<<blocks, threads >>> (pAfterFFT, HowMany, Nx * 2, (float)Mult); //OC06092023
     //NormalizeDataAfter1DFFT_Kernel<float> << <blocks, threads >> > (pAfterFFT, HowMany, Nx * 2, Mult);
 
 //#ifdef _DEBUG
@@ -247,18 +212,11 @@ void CGenMathFFT1D::NormalizeDataAfter1DFFT_GPU(float* pAfterFFT, long HowMany, 
 
 void CGenMathFFT1D::FillArrayShift_GPU(double t0, double tStep, long Nx, float* tShiftX) 
 {
-
-    //dim3 blocks(Nx / (2 * GMFFT_BLOCK_SIZE) + ((Nx / 2 & (GMFFT_BLOCK_SIZE - 1)) != 0), 1);
-    //dim3 threads(GMFFT_BLOCK_SIZE, 1);
-    int minGridSize = 0; //HG05082024
-    int bs = 256;
     dim3 blocks(Nx/2, 1);
-    dim3 threads(bs, 1);
-	cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, FillArrayShift_Kernel<float>, 0, blocks.x);
-    threads.x = bs;
-	blocks.x = (blocks.x + bs - 1) / bs;
+    dim3 threads(1);
+    CAuxGPU::CalcLaunchDims(FillArrayShift_Kernel<float>, blocks, blocks, threads);
 
-    FillArrayShift_Kernel<float> << <blocks, threads >> > (t0, tStep, Nx, tShiftX);
+    FillArrayShift_Kernel<float> <<<blocks, threads >>> (t0, tStep, Nx, tShiftX);
 
 //#ifdef _DEBUG
 //	cudaStreamSynchronize(0);
@@ -269,18 +227,11 @@ void CGenMathFFT1D::FillArrayShift_GPU(double t0, double tStep, long Nx, float* 
 
 void CGenMathFFT1D::TreatShift_GPU(float* pData, long HowMany, long Nx, float* tShiftX) 
 {
-
-    //dim3 blocks(Nx / GMFFT_BLOCK_SIZE + ((Nx & (GMFFT_BLOCK_SIZE - 1)) != 0));
-    //dim3 threads(GMFFT_BLOCK_SIZE, 1);
-    int minGridSize = 0; //HG05082024
-    int bs = 256;
     dim3 blocks(Nx, 1);
-    dim3 threads(bs, 1);
-	cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, TreatShift_Kernel<float>, 0, blocks.x);
-    threads.x = bs;
-	blocks.x = (blocks.x + bs - 1) / bs;
+    dim3 threads(1);
+    CAuxGPU::CalcLaunchDims(TreatShift_Kernel<float>, blocks, blocks, threads);
 
-    TreatShift_Kernel<float> << <blocks, threads >> > (pData, HowMany, Nx * 2, tShiftX);
+    TreatShift_Kernel<float> <<<blocks, threads >>> (pData, HowMany, Nx * 2, tShiftX);
 
 //#ifdef _DEBUG
 //	cudaStreamSynchronize(0);
@@ -291,18 +242,11 @@ void CGenMathFFT1D::TreatShift_GPU(float* pData, long HowMany, long Nx, float* t
 
 void CGenMathFFT1D::RepairSignAfter1DFFT_GPU(double* pAfterFFT, long HowMany, long Nx) 
 {
-
-    //dim3 blocks(Nx / GMFFT_BLOCK_SIZE + ((Nx & (GMFFT_BLOCK_SIZE - 1)) != 0));
-    //dim3 threads(GMFFT_BLOCK_SIZE, 1);
-    int minGridSize = 0; //HG05082024
-    int bs = 256;
     dim3 blocks(Nx, 1);
-    dim3 threads(bs, 1);
-	cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, RepairSignAfter1DFFT_Kernel<double>, 0, blocks.x);
-    threads.x = bs;
-	blocks.x = (blocks.x + bs - 1) / bs;
+    dim3 threads(1);
+    CAuxGPU::CalcLaunchDims(RepairSignAfter1DFFT_Kernel<double>, blocks, blocks, threads);
 
-    RepairSignAfter1DFFT_Kernel<double> << <blocks, threads >> > (pAfterFFT, HowMany, Nx * 2);
+    RepairSignAfter1DFFT_Kernel<double> <<<blocks, threads >>> (pAfterFFT, HowMany, Nx * 2);
 
 //#ifdef _DEBUG
 //	cudaStreamSynchronize(0);
@@ -313,18 +257,11 @@ void CGenMathFFT1D::RepairSignAfter1DFFT_GPU(double* pAfterFFT, long HowMany, lo
 
 void CGenMathFFT1D::RotateDataAfter1DFFT_GPU(double* pAfterFFT, long HowMany, long Nx) 
 {
-
-    //dim3 blocks(Nx / (2 * GMFFT_BLOCK_SIZE) + ((Nx & (2 * GMFFT_BLOCK_SIZE - 1)) != 0));
-    //dim3 threads(GMFFT_BLOCK_SIZE, 1);
-    int minGridSize = 0; //HG05082024
-    int bs = 256;
     dim3 blocks(Nx/2, 1);
-    dim3 threads(bs, 1);
-	cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, RotateDataAfter1DFFT_Kernel<double>, 0, blocks.x);
-    threads.x = bs;
-	blocks.x = (blocks.x + bs - 1) / bs;
+    dim3 threads(1);
+    CAuxGPU::CalcLaunchDims(RotateDataAfter1DFFT_Kernel<double>, blocks, blocks, threads);
 
-    RotateDataAfter1DFFT_Kernel<double> << <blocks, threads >> > (pAfterFFT, HowMany, Nx * 2, Nx);
+    RotateDataAfter1DFFT_Kernel<double> <<<blocks, threads >>> (pAfterFFT, HowMany, Nx * 2, Nx);
 
 //#ifdef _DEBUG
 //	cudaStreamSynchronize(0);
@@ -335,18 +272,11 @@ void CGenMathFFT1D::RotateDataAfter1DFFT_GPU(double* pAfterFFT, long HowMany, lo
 
 void CGenMathFFT1D::RepairAndRotateDataAfter1DFFT_GPU(double* pAfterFFT, long HowMany, long Nx, double Mult) 
 {
-
-    //dim3 blocks(Nx / (2 * GMFFT_BLOCK_SIZE) + (((Nx / 2) & (GMFFT_BLOCK_SIZE - 1)) != 0), 1);
-    //dim3 threads(GMFFT_BLOCK_SIZE, 1);
-    int minGridSize = 0; //HG05082024
-    int bs = 256;
     dim3 blocks(Nx/2, 1);
-    dim3 threads(bs, 1);
-	cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, RepairAndRotateAfter1DFFT_Kernel<double>, 0, blocks.x);
-    threads.x = bs;
-	blocks.x = (blocks.x + bs - 1) / bs;
+    dim3 threads(1);
+    CAuxGPU::CalcLaunchDims(RepairAndRotateAfter1DFFT_Kernel<double>, blocks, blocks, threads);
 
-    RepairAndRotateAfter1DFFT_Kernel<double> << <blocks, threads >> > (pAfterFFT, HowMany, Nx, (float)Mult); //OC06092023 (check why it's not ..T Mult..)
+    RepairAndRotateAfter1DFFT_Kernel<double> <<<blocks, threads >>> (pAfterFFT, HowMany, Nx, (float)Mult); //OC06092023 (check why it's not ..T Mult..)
     //RepairAndRotateAfter1DFFT_Kernel<double> << <blocks, threads >> > (pAfterFFT, HowMany, Nx, Mult);
 
 //#ifdef _DEBUG
@@ -358,18 +288,11 @@ void CGenMathFFT1D::RepairAndRotateDataAfter1DFFT_GPU(double* pAfterFFT, long Ho
 
 void CGenMathFFT1D::NormalizeDataAfter1DFFT_GPU(double* pAfterFFT, long HowMany, long Nx, double Mult) 
 {
-
-    //dim3 blocks(Nx / GMFFT_BLOCK_SIZE + ((Nx & (GMFFT_BLOCK_SIZE - 1)) != 0));
-    //dim3 threads(GMFFT_BLOCK_SIZE, 1);
-    int minGridSize = 0; //HG05082024
-    int bs = 256;
     dim3 blocks(Nx, 1);
-    dim3 threads(bs, 1);
-	cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, NormalizeDataAfter1DFFT_Kernel<double>, 0, blocks.x);
-    threads.x = bs;
-	blocks.x = (blocks.x + bs - 1) / bs;
+    dim3 threads(1);
+    CAuxGPU::CalcLaunchDims(NormalizeDataAfter1DFFT_Kernel<double>, blocks, blocks, threads);
 
-    NormalizeDataAfter1DFFT_Kernel<double> << <blocks, threads >> > (pAfterFFT, HowMany, Nx * 2, Mult);
+    NormalizeDataAfter1DFFT_Kernel<double> <<<blocks, threads >>> (pAfterFFT, HowMany, Nx * 2, Mult);
 
 //#ifdef _DEBUG
 //	cudaStreamSynchronize(0);
@@ -380,18 +303,11 @@ void CGenMathFFT1D::NormalizeDataAfter1DFFT_GPU(double* pAfterFFT, long HowMany,
 
 void CGenMathFFT1D::FillArrayShift_GPU(double t0, double tStep, long Nx, double* tShiftX) 
 {
-
-    //dim3 blocks(Nx / (2 * GMFFT_BLOCK_SIZE) + ((Nx & (2 * GMFFT_BLOCK_SIZE - 1)) != 0), 1);
-    //dim3 threads(GMFFT_BLOCK_SIZE, 1);
-    int minGridSize = 0; //HG05082024
-    int bs = 256;
     dim3 blocks(Nx/2, 1);
-    dim3 threads(bs, 1);
-	cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, FillArrayShift_Kernel<double>, 0, blocks.x);
-    threads.x = bs;
-	blocks.x = (blocks.x + bs - 1) / bs;
+    dim3 threads(1);
+    CAuxGPU::CalcLaunchDims(FillArrayShift_Kernel<double>, blocks, blocks, threads);
 
-    FillArrayShift_Kernel<double> << <blocks, threads >> > (t0, tStep, Nx, tShiftX);
+    FillArrayShift_Kernel<double> <<<blocks, threads >>> (t0, tStep, Nx, tShiftX);
 
 //#ifdef _DEBUG
 //	cudaStreamSynchronize(0);
@@ -402,18 +318,11 @@ void CGenMathFFT1D::FillArrayShift_GPU(double t0, double tStep, long Nx, double*
 
 void CGenMathFFT1D::TreatShift_GPU(double* pData, long HowMany, long Nx, double* tShiftX) 
 {
-
-    //dim3 blocks(Nx / GMFFT_BLOCK_SIZE + ((Nx & (GMFFT_BLOCK_SIZE - 1)) != 0));
-    //dim3 threads(GMFFT_BLOCK_SIZE, 1);
-    int minGridSize = 0; //HG05082024
-    int bs = 256;
     dim3 blocks(Nx, 1);
-    dim3 threads(bs, 1);
-	cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, TreatShift_Kernel<double>, 0, blocks.x);
-    threads.x = bs;
-	blocks.x = (blocks.x + bs - 1) / bs;
+    dim3 threads(1);
+    CAuxGPU::CalcLaunchDims(TreatShift_Kernel<double>, blocks, blocks, threads);
 
-    TreatShift_Kernel<double> << <blocks, threads >> > (pData, HowMany, Nx * 2, tShiftX);
+    TreatShift_Kernel<double> <<<blocks, threads >>> (pData, HowMany, Nx * 2, tShiftX);
 
 //#ifdef _DEBUG
 //	cudaStreamSynchronize(0);
@@ -600,65 +509,36 @@ template <typename T, bool NeedsShiftX, bool NeedsShiftY> __global__ void TreatS
 
 void CGenMathFFT2D::RepairSignAfter2DFFT_GPU(float* pAfterFFT, long Nx, long Ny)
 {
-
-    //dim3 blocks(Nx / GMFFT_BLOCK_SIZE + ((Nx & (GMFFT_BLOCK_SIZE - 1)) != 0), Ny);
-    //dim3 threads(GMFFT_BLOCK_SIZE, 1);
-    int minGridSize = 0; //HG05082024
-    int bs = 256;
     dim3 blocks(Nx, Ny);
-    dim3 threads(bs, 1);
-	cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, RepairSignAfter2DFFT_Kernel<float>, 0, blocks.x);
-    threads.x = bs;
-	blocks.x = (blocks.x + bs - 1) / bs;
+    dim3 threads(1);
+    CAuxGPU::CalcLaunchDims(RepairSignAfter2DFFT_Kernel<float>, blocks, blocks, threads);
     
-    RepairSignAfter2DFFT_Kernel<float> << <blocks, threads >> > (pAfterFFT, Nx, Ny);
+    RepairSignAfter2DFFT_Kernel<float> <<<blocks, threads >>> (pAfterFFT, Nx, Ny);
 }
 
 void CGenMathFFT2D::RotateDataAfter2DFFT_GPU(float* pAfterFFT, long Nx, long Ny)
 {
-
-    //dim3 blocks(Nx / (2 * GMFFT_BLOCK_SIZE) + ((Nx / 2 & (GMFFT_BLOCK_SIZE - 1)) != 0), Ny);
-    //dim3 threads(GMFFT_BLOCK_SIZE, 1);
-    int minGridSize = 0; //HG05082024
-    int bs = 256;
     dim3 blocks(Nx/2, Ny);
-    dim3 threads(bs, 1);
-	cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, RotateDataAfter2DFFT_Kernel<float>, 0, blocks.x);
-    threads.x = bs;
-	blocks.x = (blocks.x + bs - 1) / bs;
+    dim3 threads(1);
+    CAuxGPU::CalcLaunchDims(RotateDataAfter2DFFT_Kernel<float>, blocks, blocks, threads);
 
-    RotateDataAfter2DFFT_Kernel<float> << <blocks, threads >> > (pAfterFFT, Nx / 2, Nx, Ny / 2, Ny);
+    RotateDataAfter2DFFT_Kernel<float> <<<blocks, threads >>> (pAfterFFT, Nx / 2, Nx, Ny / 2, Ny);
 }
 
 void CGenMathFFT2D::RepairSignAndRotateDataAfter2DFFT_GPU(float* pAfterFFT, long Nx, long Ny, float Mult)
 {
-
-    //dim3 blocks(Nx / (2 * GMFFT_BLOCK_SIZE) + ((Nx / 2 & (GMFFT_BLOCK_SIZE - 1)) != 0), Ny/2);
-    //dim3 threads(GMFFT_BLOCK_SIZE, 1);
-    int minGridSize = 0; //HG05082024
-    int bs = 256;
     dim3 blocks(Nx/2, Ny/2);
-    dim3 threads(bs, 1);
-	cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, RepairSignAndRotateDataAfter2DFFT_Kernel<float2, float>, 0, blocks.x);
-    threads.x = bs;
-	blocks.x = (blocks.x + bs - 1) / bs;
+    dim3 threads(1);
+    CAuxGPU::CalcLaunchDims(RepairSignAndRotateDataAfter2DFFT_Kernel<float2, float>, blocks, blocks, threads);
 
-    RepairSignAndRotateDataAfter2DFFT_Kernel<float2, float> << <blocks, threads >> > ((float2*)pAfterFFT, Nx / 2, Nx, Ny / 2, Ny, Mult);
+    RepairSignAndRotateDataAfter2DFFT_Kernel<float2, float> <<<blocks, threads >>> ((float2*)pAfterFFT, Nx / 2, Nx, Ny / 2, Ny, Mult);
 }
 
 void CGenMathFFT2D::NormalizeDataAfter2DFFT_GPU(float* pAfterFFT, long Nx, long Ny, double Mult)
 {
-
-    //dim3 blocks(Nx / GMFFT_BLOCK_SIZE + ((Nx & (GMFFT_BLOCK_SIZE - 1)) != 0), Ny); //HG26022024
-    //dim3 blocks((Nx * Ny) / GMFFT_BLOCK_SIZE + (((Nx * Ny) & (GMFFT_BLOCK_SIZE - 1)) != 0), 1);
-    //dim3 threads(GMFFT_BLOCK_SIZE, 1);
-    int minGridSize = 0; //HG05082024
-    int bs = 256;
     dim3 blocks(Nx, Ny);
-    dim3 threads(bs, 1);
-	cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, NormalizeDataAfter2DFFT_Kernel<float>, 0, blocks.x);
-    threads.x = bs;
-	blocks.x = (blocks.x + bs - 1) / bs;
+    dim3 threads(1);
+    CAuxGPU::CalcLaunchDims(NormalizeDataAfter2DFFT_Kernel<float>, blocks, blocks, threads);
 
     NormalizeDataAfter2DFFT_Kernel<float> << <blocks, threads >> > (pAfterFFT, Nx, Ny, (float)Mult); //HG26022024
     //NormalizeDataAfter2DFFT_Kernel<float> << <blocks, threads >> > (pAfterFFT, Nx * Ny * 2, 1, (float)Mult); //OC06092023
@@ -667,89 +547,66 @@ void CGenMathFFT2D::NormalizeDataAfter2DFFT_GPU(float* pAfterFFT, long Nx, long 
 
 void CGenMathFFT2D::TreatShifts2D_GPU(float* pData, long Nx, long Ny, bool NeedsShiftX, bool NeedsShiftY, float* m_ArrayShiftX, float* m_ArrayShiftY)
 {
+    decltype(TreatShift2D_Kernel<float, true, true>) *kern = NULL;
+    if (NeedsShiftX && NeedsShiftY) kern = TreatShift2D_Kernel<float, true, true>;
+    else if (NeedsShiftX) kern = TreatShift2D_Kernel<float, true, false>;
+    else if (NeedsShiftY) kern = TreatShift2D_Kernel<float, false, true>;
 
-    dim3 blocks((Nx) / GMFFT_BLOCK_SIZE + (((Nx) & (GMFFT_BLOCK_SIZE - 1)) != 0), Ny);
-    dim3 threads(GMFFT_BLOCK_SIZE, 1);
+    dim3 blocks(Nx, Ny);
+    dim3 threads(1);
+    CAuxGPU::CalcLaunchDims(kern, blocks, blocks, threads);
     
-    if (NeedsShiftX && NeedsShiftY) TreatShift2D_Kernel<float, true, true> << <blocks, threads >> > (pData, Nx * 2, Ny, m_ArrayShiftX, m_ArrayShiftY);
-    else if (NeedsShiftX) TreatShift2D_Kernel<float, true, false> << <blocks, threads >> > (pData, Nx * 2, Ny, m_ArrayShiftX, m_ArrayShiftY);
-    else if (NeedsShiftY) TreatShift2D_Kernel<float, false, true> << <blocks, threads >> > (pData, Nx * 2, Ny, m_ArrayShiftX, m_ArrayShiftY);
+    kern<<<blocks, threads >>> (pData, Nx * 2, Ny, m_ArrayShiftX, m_ArrayShiftY);
 }
 
 void CGenMathFFT2D::RepairSignAfter2DFFT_GPU(double* pAfterFFT, long Nx, long Ny)
 {
-
-    //dim3 blocks(Nx / GMFFT_BLOCK_SIZE + ((Nx & (GMFFT_BLOCK_SIZE - 1)) != 0), Ny);
-    //dim3 threads(GMFFT_BLOCK_SIZE, 1);
-    int minGridSize = 0; //HG05082024
-    int bs = 256;
     dim3 blocks(Nx, Ny);
-    dim3 threads(bs, 1);
-	cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, RepairSignAfter2DFFT_Kernel<double>, 0, blocks.x);
-    threads.x = bs;
-	blocks.x = (blocks.x + bs - 1) / bs;
+    dim3 threads(1);
+    CAuxGPU::CalcLaunchDims(RepairSignAfter2DFFT_Kernel<double>, blocks, blocks, threads);
     
-    RepairSignAfter2DFFT_Kernel<double> << <blocks, threads >> > (pAfterFFT, Nx, Ny);
+    RepairSignAfter2DFFT_Kernel<double> <<<blocks, threads >>> (pAfterFFT, Nx, Ny);
 }
 
 void CGenMathFFT2D::RotateDataAfter2DFFT_GPU(double* pAfterFFT, long Nx, long Ny)
 {
-
-    //dim3 blocks(Nx / (2 * GMFFT_BLOCK_SIZE) + ((Nx / 2 & (GMFFT_BLOCK_SIZE - 1)) != 0), Ny);
-    //dim3 threads(GMFFT_BLOCK_SIZE, 1);
-    int minGridSize = 0; //HG05082024
-    int bs = 256;
     dim3 blocks(Nx/2, Ny);
-    dim3 threads(bs, 1);
-	cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, RotateDataAfter2DFFT_Kernel<double>, 0, blocks.x);
-    threads.x = bs;
-	blocks.x = (blocks.x + bs - 1) / bs;
+    dim3 threads(1);
+    CAuxGPU::CalcLaunchDims(RotateDataAfter2DFFT_Kernel<double>, blocks, blocks, threads);
 
-    RotateDataAfter2DFFT_Kernel<double> << <blocks, threads >> > (pAfterFFT, Nx / 2, Nx, Ny / 2, Ny);
+    RotateDataAfter2DFFT_Kernel<double> <<<blocks, threads >>> (pAfterFFT, Nx / 2, Nx, Ny / 2, Ny);
 }
 
 void CGenMathFFT2D::RepairSignAndRotateDataAfter2DFFT_GPU(double* pAfterFFT, long Nx, long Ny, double Mult)
 {
-
-    //dim3 blocks(Nx / (2 * GMFFT_BLOCK_SIZE) + ((Nx / 2 & (GMFFT_BLOCK_SIZE - 1)) != 0), Ny/2);
-    //dim3 threads(GMFFT_BLOCK_SIZE, 1);
-    int minGridSize = 0; //HG05082024
-    int bs = 256;
     dim3 blocks(Nx/2, Ny/2);
-    dim3 threads(bs, 1);
-	cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, RepairSignAndRotateDataAfter2DFFT_Kernel<double2, double>, 0, blocks.x);
-    threads.x = bs;
-	blocks.x = (blocks.x + bs - 1) / bs;
+    dim3 threads(1);
+    CAuxGPU::CalcLaunchDims(RepairSignAndRotateDataAfter2DFFT_Kernel<double2, double>, blocks, blocks, threads);
 
-    RepairSignAndRotateDataAfter2DFFT_Kernel<double2, double> << <blocks, threads >> > ((double2*)pAfterFFT, Nx / 2, Nx, Ny / 2, Ny, Mult);
+    RepairSignAndRotateDataAfter2DFFT_Kernel<double2, double> <<<blocks, threads >>> ((double2*)pAfterFFT, Nx / 2, Nx, Ny / 2, Ny, Mult);
 }
 
 void CGenMathFFT2D::NormalizeDataAfter2DFFT_GPU(double* pAfterFFT, long Nx, long Ny, double Mult)
 {
-
-    //dim3 blocks(Nx / GMFFT_BLOCK_SIZE + ((Nx & (GMFFT_BLOCK_SIZE - 1)) != 0), Ny); //HG26022024
-    //dim3 blocks((Nx * Ny) / GMFFT_BLOCK_SIZE + (((Nx * Ny) & (GMFFT_BLOCK_SIZE - 1)) != 0), 1);
-    //dim3 threads(GMFFT_BLOCK_SIZE, 1);
-    int minGridSize = 0; //HG05082024
-    int bs = 256;
     dim3 blocks(Nx, Ny);
-    dim3 threads(bs, 1);
-	cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, NormalizeDataAfter2DFFT_Kernel<double>, 0, blocks.x);
-    threads.x = bs;
-	blocks.x = (blocks.x + bs - 1) / bs;
+    dim3 threads(1);
+    CAuxGPU::CalcLaunchDims(NormalizeDataAfter2DFFT_Kernel<double>, blocks, blocks, threads);
 
-    NormalizeDataAfter2DFFT_Kernel<double> << <blocks, threads >> > (pAfterFFT, Nx, Ny, Mult); //HG26022024
+    NormalizeDataAfter2DFFT_Kernel<double> <<<blocks, threads >>> (pAfterFFT, Nx, Ny, Mult); //HG26022024
     //NormalizeDataAfter2DFFT_Kernel<double> << <blocks, threads >> > (pAfterFFT, Nx * Ny * 2, 1, Mult);
 }
 
 void CGenMathFFT2D::TreatShifts2D_GPU(double* pData, long Nx, long Ny, bool NeedsShiftX, bool NeedsShiftY, double* m_ArrayShiftX, double* m_ArrayShiftY)
 {
+    decltype(TreatShift2D_Kernel<double, true, true>) *kern = NULL;
+    if (NeedsShiftX && NeedsShiftY) kern = TreatShift2D_Kernel<double, true, true>;
+    else if (NeedsShiftX) kern = TreatShift2D_Kernel<double, true, false>;
+    else if (NeedsShiftY) kern = TreatShift2D_Kernel<double, false, true>;
 
-    dim3 blocks((Nx) / GMFFT_BLOCK_SIZE + (((Nx) & (GMFFT_BLOCK_SIZE - 1)) != 0), Ny);
-    dim3 threads(GMFFT_BLOCK_SIZE, 1);
-
-    if (NeedsShiftX && NeedsShiftY) TreatShift2D_Kernel<double, true, true> << <blocks, threads >> > (pData, Nx * 2, Ny, m_ArrayShiftX, m_ArrayShiftY);
-    else if (NeedsShiftX) TreatShift2D_Kernel<double, true, false> << <blocks, threads >> > (pData, Nx * 2, Ny, m_ArrayShiftX, m_ArrayShiftY);
-    else if (NeedsShiftY) TreatShift2D_Kernel<double, false, true> << <blocks, threads >> > (pData, Nx * 2, Ny, m_ArrayShiftX, m_ArrayShiftY);
+    dim3 blocks(Nx, Ny);
+    dim3 threads(1);
+    CAuxGPU::CalcLaunchDims(kern, blocks, blocks, threads);
+    
+    kern<<<blocks, threads >>> (pData, Nx * 2, Ny, m_ArrayShiftX, m_ArrayShiftY);
 }
 #endif

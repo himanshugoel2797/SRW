@@ -108,7 +108,8 @@ public:
 	int RangeShouldBeAdjustedAtPropag() { return 1;}
 	int ResolutionShouldBeAdjustedAtPropag() { return 0;}
 
-	int PropagateRadMoments(srTSRWRadStructAccessData*, srTMomentsRatios*);
+	//int PropagateRadMoments(srTSRWRadStructAccessData*, srTMomentsRatios*);
+	int PropagateRadMoments(srTSRWRadStructAccessData*, srTMomentsRatios*, void* =0); //HG27072024
 	//virtual int CheckIfMomentsShouldBeRecomputed(float MomX_X, float MomX_Z, float MomZ_X, float MomZ_Z, float MomX_SqrtMxx_Mult, float MomX_SqrtMzz_Mult, float MomZ_SqrtMxx_Mult, float MomZ_SqrtMzz_Mult) { return 1;}
 	virtual int CheckIfMomentsShouldBeRecomputed(double MomX_X, double MomX_Z, double MomZ_X, double MomZ_Z, double MomX_SqrtMxx_Mult, double MomX_SqrtMzz_Mult, double MomZ_SqrtMxx_Mult, double MomZ_SqrtMzz_Mult) { return 1;} //OC130311
 };

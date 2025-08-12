@@ -29,20 +29,6 @@ static bool deviceOffloadInitialized = false;
 static int deviceCount = 0;
 
 #ifdef _OFFLOAD_GPU
-typedef struct
-{
-	void *devicePtr;
-	void *hostPtr;
-	size_t size;
-	bool HostToDevUpdated;
-	bool DevToHostUpdated;
-	cudaEvent_t h2d_event;
-	cudaEvent_t d2h_event;
-	bool pinned; //HG26072024
-} memAllocInfo_t;
-static std::map<void*, memAllocInfo_t> gpuMap;
-//static bool memcpy_stream_initialized = false; //HG02082024 (commented-out)
-static std::map<int, cudaStream_t*> streams; //HG02082024
 static int current_device = -1;
 #endif
 
@@ -145,21 +131,29 @@ void* CAuxGPU::_ToDevice(TGPUUsageArg* arg, void* hostPtr, size_t size, int flag
 	bool pinOnHost = flags & PIN_ON_HOST; //HG26072024
 	if (hostPtr == NULL) dontCopy = true; //HG26072024
 	//if (gpuMap.find(hostPtr) != gpuMap.end()){
-	if (hostPtr != NULL && gpuMap.find(hostPtr) != gpuMap.end()) //HG21042025
+	if (hostPtr != NULL) //HG21042025
 	{
-		memAllocInfo_t info = gpuMap[hostPtr];
-		void* devPtr = info.devicePtr;
-		hostPtr = info.hostPtr;
-		if (gpuMap[devPtr].HostToDevUpdated && !dontCopy){
-			//cudaMemcpyAsync(devPtr, hostPtr, size, cudaMemcpyHostToDevice, memcpy_stream);
-			cudaMemcpyAsync(devPtr, hostPtr, size, cudaMemcpyDefault, memcpy_stream); //HG26072024
-			cudaEventRecord(gpuMap[devPtr].h2d_event, memcpy_stream);
+		auto close_l = gpuMap.lower_bound(hostPtr);
+		if (close_l != gpuMap.end())
+		{
+			memAllocInfo_t info = std::prev(close_l)->second;
+			if (info.hostPtr <= hostPtr && (char*)info.hostPtr + info.size > hostPtr)
+			{
+				size_t offset = (char*)hostPtr - (char*)info.hostPtr;
+				void* devPtr = info.devicePtr;
+				hostPtr = info.hostPtr;
+				if (gpuMap[devPtr].HostToDevUpdated && !dontCopy){
+					//cudaMemcpyAsync(devPtr, hostPtr, size, cudaMemcpyHostToDevice, memcpy_stream);
+					cudaMemcpyAsync((char*)devPtr + offset, (char*)hostPtr + offset, size, cudaMemcpyDefault, memcpy_stream); //HG26072024
+					cudaEventRecord(gpuMap[devPtr].h2d_event, memcpy_stream);
+				}
+				//#if _DEBUG
+				//		printf("ToDevice: %p -> %p, %d, D2H: %d, H2D: %d\n", hostPtr, devPtr, size, gpuMap[devPtr].DevToHostUpdated, gpuMap[devPtr].HostToDevUpdated); //HG28072023
+				//#endif
+				gpuMap[devPtr].HostToDevUpdated = false;
+				return (char*)devPtr + offset;
+			}
 		}
-//#if _DEBUG
-//		printf("ToDevice: %p -> %p, %d, D2H: %d, H2D: %d\n", hostPtr, devPtr, size, gpuMap[devPtr].DevToHostUpdated, gpuMap[devPtr].HostToDevUpdated); //HG28072023
-//#endif
-		gpuMap[devPtr].HostToDevUpdated = false;
-		return devPtr;
 	}
 
 	size_t free_mem, total_mem;  //HG26072024 If the memory request is very large, it may be more optimal to pin to host memory

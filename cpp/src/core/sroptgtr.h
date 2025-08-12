@@ -64,9 +64,11 @@ public:
 	void EstimateEffPointsRange(char x_or_z, long icOtherCoord, long& iFirst, long& iLast, double& ArgFirst, double& ArgLast);
 	int EstimateMinimalContinuousIntervals();
 
-	int PropagateRadMoments(srTSRWRadStructAccessData* pRadAccessData, srTMomentsRatios* MomRatArray)
+	//int PropagateRadMoments(srTSRWRadStructAccessData* pRadAccessData, srTMomentsRatios* MomRatArray)
+	int PropagateRadMoments(srTSRWRadStructAccessData* pRadAccessData, srTMomentsRatios* MomRatArray, void* pvGPU=0) //HG27072024
 	{
-		return srTFocusingElem::PropagateRadMoments(pRadAccessData, MomRatArray);
+		//return srTFocusingElem::PropagateRadMoments(pRadAccessData, MomRatArray);
+		return srTFocusingElem::PropagateRadMoments(pRadAccessData, MomRatArray, pvGPU); //HG27072024
 	}
 	int PropagateWaveFrontRadius(srTSRWRadStructAccessData* pRadAccessData)
 	{
@@ -115,7 +117,8 @@ public:
 	int PropagateRadiationSingleE_Meth_0(srTSRWRadStructAccessData* pRadAccessData, srTSRWRadStructAccessData* pPrevRadDataSingleE, void* pvGPU) //HG01122023
 	{
 		int result;
-		if(result = PropagateRadMoments(pRadAccessData, 0)) return result;
+		//if(result = PropagateRadMoments(pRadAccessData, 0)) return result;
+		if(result = PropagateRadMoments(pRadAccessData, 0, pvGPU)) return result; //HG27072024
 		if(result = PropagateWaveFrontRadius(pRadAccessData)) return result;
 		//if(result = PropagateRadiationSimple(pRadAccessData, pBuf)) return result; //OC06092019
 		//OC01102019 (restored)
@@ -164,7 +167,8 @@ public:
 	int RadPointModifierParallel(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars=0, long pBufVarsSz=0, TGPUUsageArg* pGPU=0) override; //OC18022024
 #endif
 
-#ifdef __CUDACC__ // Automatically defined by nvcc when compiling CUDA code.
+//#ifdef __CUDACC__ // Automatically defined by nvcc when compiling CUDA code. //HG30072024 Commented out
+#ifdef __CUDA_ARCH__ // Automatically defined by nvcc when compiling CUDA code.
 	GPU_PORTABLE void RadPointModifierPortable(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBufVars) //HG06022024
 #else
 	void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf=0) //OC29082019

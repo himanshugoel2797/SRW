@@ -64,9 +64,9 @@ template<class T> __global__ void RadPointModifierParallel_Kernel(srTSRWRadStruc
 
 template<class T> int RadPointModifierParallelImpl(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars, long pBufVarsSz, T* tgt_obj, TGPUUsageArg* pGPU)
 {
-	const int bs = 256;
-	dim3 blocks(pRadAccessData->nx / bs + ((pRadAccessData->nx & (bs - 1)) != 0), pRadAccessData->nz);
-	dim3 threads(bs, 1);
+	dim3 blocks(pRadAccessData->nx, pRadAccessData->nz);
+	dim3 threads(1);
+	CAuxGPU::CalcLaunchDims(RadPointModifierParallel_Kernel<T>, blocks, blocks, threads);
 	
 	if (pRadAccessData->pBaseRadX != NULL)
 	{
@@ -87,13 +87,13 @@ template<class T> int RadPointModifierParallelImpl(srTSRWRadStructAccessData* pR
 	void* pBufVars_dev = NULL;
 	if (pBufVarsSz > 0)
 	{
-		pBufVars_dev = CAuxGPU::ToDevice(pGPU, pBufVars, pBufVarsSz);
+		pBufVars_dev = CAuxGPU::ToDevice(pGPU, (char*)pBufVars, pBufVarsSz);
 		CAuxGPU::EnsureDeviceMemoryReady(pGPU, pBufVars_dev);
 	}
 	RadPointModifierParallel_Kernel<T> <<<blocks, threads >>> (*pRadAccessData, pBufVars_dev, local_copy);
     //cudaDeviceSynchronize();
     //cudaFreeAsync(local_copy, 0);
-	if (pBufVarsSz > 0) CAuxGPU::ToHostAndFree(pGPU, pBufVars_dev);
+	if (pBufVarsSz > 0) CAuxGPU::ToHostAndFree(pGPU, (char*)pBufVars_dev);
 	CAuxGPU::ToHostAndFree(pGPU, local_copy);
 
 	CAuxGPU::MarkUpdated(pGPU, pRadAccessData->pBaseRadX, CAuxGPU::DEVICE);

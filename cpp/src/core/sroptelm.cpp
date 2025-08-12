@@ -1605,7 +1605,8 @@ int srTGenOptElem::SetRadRepres1D(srTRadSect1D* pRadSect1D, char CoordOrAng)
 
 //*************************************************************************
 
-int srTGenOptElem::ComputeRadMoments(srTSRWRadStructAccessData* pSRWRadStructAccessData)
+//int srTGenOptElem::ComputeRadMoments(srTSRWRadStructAccessData* pSRWRadStructAccessData)
+int srTGenOptElem::ComputeRadMoments(srTSRWRadStructAccessData* pSRWRadStructAccessData, void* pvGPU) //HG26072024
 {// Here Lengths are in m and Phot energy in eV!
  // This function seems to work correctly only in Frequency-Coordinate representation
 
@@ -1643,7 +1644,8 @@ int srTGenOptElem::ComputeRadMoments(srTSRWRadStructAccessData* pSRWRadStructAcc
 		pSRWRadStructAccessData->wfrReffX = -1.E+023; //sign to use only RobsX, RobsZ for Quad. Term treatment
 		pSRWRadStructAccessData->wfrReffZ = pSRWRadStructAccessData->wfrReffX;
 
-		TreatStronglyOscillatingTerm(*pSRWRadStructAccessData, 'r');
+		//TreatStronglyOscillatingTerm(*pSRWRadStructAccessData, 'r');
+		TreatStronglyOscillatingTerm(*pSRWRadStructAccessData, 'r', 0, -1, pvGPU); //HG26072024
 		WaveFrontTermWasTreated = 1;
 	}
 
@@ -1684,6 +1686,15 @@ int srTGenOptElem::ComputeRadMoments(srTSRWRadStructAccessData* pSRWRadStructAcc
 
 	//Added by SY (for profiling?) at parallelizing SRW via OpenMP:
 	//srwlPrintTime(":ComputeRadMoments : setup",&start);
+#ifdef _OFFLOAD_GPU //HG28072024
+		TGPUUsageArg parGPU(pvGPU);
+		if (CAuxGPU::GPUEnabled(&parGPU))
+		{
+			//TODO: Make proper GPU port for this part, transferring data back to CPU is a temporary solution
+			pSRWRadStructAccessData->pBaseRadX = (float*)CAuxGPU::ToHostAndFree(&parGPU, pSRWRadStructAccessData->pBaseRadX, 2*pSRWRadStructAccessData->ne*pSRWRadStructAccessData->nx*pSRWRadStructAccessData->nz*sizeof(float));
+			pSRWRadStructAccessData->pBaseRadZ = (float*)CAuxGPU::ToHostAndFree(&parGPU, pSRWRadStructAccessData->pBaseRadZ, 2*pSRWRadStructAccessData->ne*pSRWRadStructAccessData->nx*pSRWRadStructAccessData->nz*sizeof(float));
+		}
+#endif
 
 #ifdef _WITH_OMP //OC28102018: added by SY
 	#pragma omp parallel for
@@ -1740,207 +1751,217 @@ int srTGenOptElem::ComputeRadMoments(srTSRWRadStructAccessData* pSRWRadStructAcc
 
 		AuxMatStat.FindIntensityLimitsInds(hRad, ie, RelPowForLimits, IndLims);
 
-		//AuxMatStat.FindIntensityLimitsInds(*pSRWRadStructAccessData, ie, RelPowForLimits, IndLims);
-		//not good for computing precisely intensity
-		//make decision
-		for(int iz=0; iz<pSRWRadStructAccessData->nz; iz++)
-		//for(int iz=IndLims[2]; iz<=IndLims[3]; iz++)
+		#ifdef _OFFLOAD_GPU //HG31072024
+		TGPUUsageArg parGPU(pvGPU);
+		if (CAuxGPU::GPUEnabled(&parGPU))
 		{
-			//if(result = srYield.Check()) return result; //OC28102018 (commented-out due to potential incompatibility with OpenMP parallelization)
-
-			bool vertCoordInsidePowLim = ((iz >= IndLims[2]) && (iz <= IndLims[3]));
-
-			for(int k=0; k<22; k++) SumsX[k] = 0.;
-
-			//long izPerZ = iz*PerZ;
-			long long izPerZ = iz*PerZ;
-			float *fpX_StartForX = fpX0 + izPerZ;
-			float *fpZ_StartForX = fpZ0 + izPerZ;
-
-			double z = pSRWRadStructAccessData->zStart + iz*pSRWRadStructAccessData->zStep;
-
-			for(int ix=0; ix<pSRWRadStructAccessData->nx; ix++)
-			//for(int ix=IndLims[0]; ix<=IndLims[1]; ix++)
+			ComputeRadMoments_GPU(pSRWRadStructAccessData, ie, SumsZ, IndLims, &parGPU);
+		}
+		else
+#endif
+		{
+			//AuxMatStat.FindIntensityLimitsInds(*pSRWRadStructAccessData, ie, RelPowForLimits, IndLims);
+			//not good for computing precisely intensity
+			//make decision
+			for(int iz=0; iz<pSRWRadStructAccessData->nz; iz++)
+			//for(int iz=IndLims[2]; iz<=IndLims[3]; iz++)
 			{
-				bool horCoordInsidePowLim = ((ix >= IndLims[0]) && (ix <= IndLims[1]));
-				bool coordInsidePowLim = vertCoordInsidePowLim && horCoordInsidePowLim;
-
-				//long ixPerX_p_Two_ie = ix*PerX + Two_ie;
-				long long ixPerX_p_Two_ie = ix*PerX + Two_ie;
-				float *fpX = fpX_StartForX + ixPerX_p_Two_ie;
-				float *fpZ = fpZ_StartForX + ixPerX_p_Two_ie;
-
-				double ExRe = 0., ExIm = 0., EzRe = 0., EzIm = 0.;
-				if(ExIsOK)
+				//if(result = srYield.Check()) return result; //OC28102018 (commented-out due to potential incompatibility with OpenMP parallelization)
+	
+				bool vertCoordInsidePowLim = ((iz >= IndLims[2]) && (iz <= IndLims[3]));
+	
+				for(int k=0; k<22; k++) SumsX[k] = 0.;
+	
+				//long izPerZ = iz*PerZ;
+				long long izPerZ = iz*PerZ;
+				float *fpX_StartForX = fpX0 + izPerZ;
+				float *fpZ_StartForX = fpZ0 + izPerZ;
+	
+				double z = pSRWRadStructAccessData->zStart + iz*pSRWRadStructAccessData->zStep;
+	
+				for(int ix=0; ix<pSRWRadStructAccessData->nx; ix++)
+				//for(int ix=IndLims[0]; ix<=IndLims[1]; ix++)
 				{
-					ExRe = *fpX;
-					ExIm = *(fpX+1);
-				}
-				if(EzIsOK)
-				{
-					EzRe = *fpZ;
-					EzIm = *(fpZ+1);
-				}
-
-				double x = pSRWRadStructAccessData->xStart + ix*pSRWRadStructAccessData->xStep;
-				ff[0] = ExRe*ExRe + ExIm*ExIm; // NormX
-				ff[11] = EzRe*EzRe + EzIm*EzIm; // NormZ
-
-				ff[1] = x*ff[0]; // <x>
-				ff[3] = z*ff[0]; // <z>
-				ff[12] = x*ff[11]; // <x>
-				ff[14] = z*ff[11]; // <z>
-
-				if(coordInsidePowLim) //OC13112010
-				{
-					ff[5] = x*ff[1]; // <xx>
-					ff[8] = z*ff[3]; // <zz>
-					ff[16] = x*ff[12]; // <xx>
-					ff[19] = z*ff[14]; // <zz>
-				}
-				else
-				{
-					ff[5] = 0.; // <xx>
-					ff[8] = 0.; // <zz>
-					ff[16] = 0.; // <xx>
-					ff[19] = 0.; // <zz>
-				}
-
-				if(IsCoordRepres && (ix > 0))
-				{
-					float *fpX_Prev = fpX - PerX;
-					float *fpZ_Prev = fpZ - PerX;
-
-					double ExReM = 0., ExImM = 0., EzReM = 0., EzImM = 0.;
+					bool horCoordInsidePowLim = ((ix >= IndLims[0]) && (ix <= IndLims[1]));
+					bool coordInsidePowLim = vertCoordInsidePowLim && horCoordInsidePowLim;
+	
+					//long ixPerX_p_Two_ie = ix*PerX + Two_ie;
+					long long ixPerX_p_Two_ie = ix*PerX + Two_ie;
+					float *fpX = fpX_StartForX + ixPerX_p_Two_ie;
+					float *fpZ = fpZ_StartForX + ixPerX_p_Two_ie;
+	
+					double ExRe = 0., ExIm = 0., EzRe = 0., EzIm = 0.;
 					if(ExIsOK)
 					{
-						ExReM = *fpX_Prev; ExImM = *(fpX_Prev+1);
+						ExRe = *fpX;
+						ExIm = *(fpX+1);
 					}
 					if(EzIsOK)
 					{
-						EzReM = *fpZ_Prev; EzImM = *(fpZ_Prev+1);
+						EzRe = *fpZ;
+						EzIm = *(fpZ+1);
 					}
-
-					double ExReP_mi_ExReM = ExRe - ExReM;
-					double ExImP_mi_ExImM = ExIm - ExImM;
-					double EzReP_mi_EzReM = EzRe - EzReM;
-					double EzImP_mi_EzImM = EzIm - EzImM;
-
-					double ExImP_mi_ExImM_ExRe_mi_ExReP_mi_ExReM_ExIm = ExImP_mi_ExImM*ExRe - ExReP_mi_ExReM*ExIm;
-					ff[2] = ExImP_mi_ExImM_ExRe_mi_ExReP_mi_ExReM_ExIm + TwoPi_d_Lamb_d_Rx_xStep*x*ff[0]; // <x'>
-
-					double EzImP_mi_EzImM_EzRe_mi_EzReP_mi_EzReM_EzIm = EzImP_mi_EzImM*EzRe - EzReP_mi_EzReM*EzIm;
-					ff[13] = EzImP_mi_EzImM_EzRe_mi_EzReP_mi_EzReM_EzIm + TwoPi_d_Lamb_d_Rx_xStep*x*ff[11]; // <x'>
-
+	
+					double x = pSRWRadStructAccessData->xStart + ix*pSRWRadStructAccessData->xStep;
+					ff[0] = ExRe*ExRe + ExIm*ExIm; // NormX
+					ff[11] = EzRe*EzRe + EzIm*EzIm; // NormZ
+	
+					ff[1] = x*ff[0]; // <x>
+					ff[3] = z*ff[0]; // <z>
+					ff[12] = x*ff[11]; // <x>
+					ff[14] = z*ff[11]; // <z>
+	
 					if(coordInsidePowLim) //OC13112010
 					{
-						ff[6] = x*ff[2]; // <xx'>
-						ff[7] = (ExReP_mi_ExReM*ExReP_mi_ExReM + ExImP_mi_ExImM*ExImP_mi_ExImM) 
-								+ ExImP_mi_ExImM_ExRe_mi_ExReP_mi_ExReM_ExIm*TwoPi_d_Lamb_d_Rx_xStep*x
-								+ TwoPi_d_Lamb_d_Rx_xStepE2*x*x*ff[0]; // <x'x'>
-						ff[17] = x*ff[13]; // <xx'>
-						ff[18] = EzReP_mi_EzReM*EzReP_mi_EzReM + EzImP_mi_EzImM*EzImP_mi_EzImM
-								+ EzImP_mi_EzImM_EzRe_mi_EzReP_mi_EzReM_EzIm*TwoPi_d_Lamb_d_Rx_xStep*x
-								+ TwoPi_d_Lamb_d_Rx_xStepE2*x*x*ff[11]; // <x'x'>
+						ff[5] = x*ff[1]; // <xx>
+						ff[8] = z*ff[3]; // <zz>
+						ff[16] = x*ff[12]; // <xx>
+						ff[19] = z*ff[14]; // <zz>
 					}
 					else
 					{
+						ff[5] = 0.; // <xx>
+						ff[8] = 0.; // <zz>
+						ff[16] = 0.; // <xx>
+						ff[19] = 0.; // <zz>
+					}
+	
+					if(IsCoordRepres && (ix > 0))
+					{
+						float *fpX_Prev = fpX - PerX;
+						float *fpZ_Prev = fpZ - PerX;
+	
+						double ExReM = 0., ExImM = 0., EzReM = 0., EzImM = 0.;
+						if(ExIsOK)
+						{
+							ExReM = *fpX_Prev; ExImM = *(fpX_Prev+1);
+						}
+						if(EzIsOK)
+						{
+							EzReM = *fpZ_Prev; EzImM = *(fpZ_Prev+1);
+						}
+	
+						double ExReP_mi_ExReM = ExRe - ExReM;
+						double ExImP_mi_ExImM = ExIm - ExImM;
+						double EzReP_mi_EzReM = EzRe - EzReM;
+						double EzImP_mi_EzImM = EzIm - EzImM;
+	
+						double ExImP_mi_ExImM_ExRe_mi_ExReP_mi_ExReM_ExIm = ExImP_mi_ExImM*ExRe - ExReP_mi_ExReM*ExIm;
+						ff[2] = ExImP_mi_ExImM_ExRe_mi_ExReP_mi_ExReM_ExIm + TwoPi_d_Lamb_d_Rx_xStep*x*ff[0]; // <x'>
+	
+						double EzImP_mi_EzImM_EzRe_mi_EzReP_mi_EzReM_EzIm = EzImP_mi_EzImM*EzRe - EzReP_mi_EzReM*EzIm;
+						ff[13] = EzImP_mi_EzImM_EzRe_mi_EzReP_mi_EzReM_EzIm + TwoPi_d_Lamb_d_Rx_xStep*x*ff[11]; // <x'>
+	
+						if(coordInsidePowLim) //OC13112010
+						{
+							ff[6] = x*ff[2]; // <xx'>
+							ff[7] = (ExReP_mi_ExReM*ExReP_mi_ExReM + ExImP_mi_ExImM*ExImP_mi_ExImM) 
+									+ ExImP_mi_ExImM_ExRe_mi_ExReP_mi_ExReM_ExIm*TwoPi_d_Lamb_d_Rx_xStep*x
+									+ TwoPi_d_Lamb_d_Rx_xStepE2*x*x*ff[0]; // <x'x'>
+							ff[17] = x*ff[13]; // <xx'>
+							ff[18] = EzReP_mi_EzReM*EzReP_mi_EzReM + EzImP_mi_EzImM*EzImP_mi_EzImM
+									+ EzImP_mi_EzImM_EzRe_mi_EzReP_mi_EzReM_EzIm*TwoPi_d_Lamb_d_Rx_xStep*x
+									+ TwoPi_d_Lamb_d_Rx_xStepE2*x*x*ff[11]; // <x'x'>
+						}
+						else
+						{
+							ff[6] = 0.; // <xx'>
+							ff[7] = 0.; // <x'x'>
+							ff[17] = 0.; // <xx'>
+							ff[18] = 0.; // <x'x'>
+						}
+					}
+					else
+					{
+						ff[2] = 0.; // <x'>
 						ff[6] = 0.; // <xx'>
 						ff[7] = 0.; // <x'x'>
+						ff[13] = 0.; // <x'>
 						ff[17] = 0.; // <xx'>
 						ff[18] = 0.; // <x'x'>
 					}
-				}
-				else
-				{
-					ff[2] = 0.; // <x'>
-					ff[6] = 0.; // <xx'>
-					ff[7] = 0.; // <x'x'>
-					ff[13] = 0.; // <x'>
-					ff[17] = 0.; // <xx'>
-					ff[18] = 0.; // <x'x'>
-				}
-
-				if(IsCoordRepres && (iz > 0))
-				{
-					float *fpX_Prev = fpX - PerZ;
-					float *fpZ_Prev = fpZ - PerZ;
-
-					double ExReM = 0., ExImM = 0, EzReM = 0., EzImM = 0.;
-					if(ExIsOK)
+	
+					if(IsCoordRepres && (iz > 0))
 					{
-						ExReM = *fpX_Prev; ExImM = *(fpX_Prev+1);
-					}
-					if(EzIsOK)
-					{
-						EzReM = *fpZ_Prev; EzImM = *(fpZ_Prev+1);
-					}
-
-					double ExReP_mi_ExReM = ExRe - ExReM;
-					double ExImP_mi_ExImM = ExIm - ExImM;
-					double EzReP_mi_EzReM = EzRe - EzReM;
-					double EzImP_mi_EzImM = EzIm - EzImM;
-
-					double ExImP_mi_ExImM_ExRe_mi_ExReP_mi_ExReM_ExIm = ExImP_mi_ExImM*ExRe - ExReP_mi_ExReM*ExIm;
-					ff[4] = ExImP_mi_ExImM_ExRe_mi_ExReP_mi_ExReM_ExIm + TwoPi_d_Lamb_d_Rz_zStep*z*ff[0]; // <z'>
-
-					double EzImP_mi_EzImM_EzRe_mi_EzReP_mi_EzReM_EzIm = EzImP_mi_EzImM*EzRe - EzReP_mi_EzReM*EzIm;
-					ff[15] = EzImP_mi_EzImM_EzRe_mi_EzReP_mi_EzReM_EzIm + TwoPi_d_Lamb_d_Rz_zStep*z*ff[11]; // <z'>
-
-					if(coordInsidePowLim) //OC13112010
-					{
-						ff[9] = z*ff[4]; // <zz'>
-						ff[10] = ExReP_mi_ExReM*ExReP_mi_ExReM + ExImP_mi_ExImM*ExImP_mi_ExImM
-								+ ExImP_mi_ExImM_ExRe_mi_ExReP_mi_ExReM_ExIm*TwoPi_d_Lamb_d_Rz_zStep*z
-								+ TwoPi_d_Lamb_d_Rz_zStepE2*z*z*ff[0]; // <z'z'>
-						ff[20] = z*ff[15]; // <zz'>
-						ff[21] = EzReP_mi_EzReM*EzReP_mi_EzReM + EzImP_mi_EzImM*EzImP_mi_EzImM
-								+ EzImP_mi_EzImM_EzRe_mi_EzReP_mi_EzReM_EzIm*TwoPi_d_Lamb_d_Rz_zStep*z
-								+ TwoPi_d_Lamb_d_Rz_zStepE2*z*z*ff[11]; // <z'z'>
+						float *fpX_Prev = fpX - PerZ;
+						float *fpZ_Prev = fpZ - PerZ;
+	
+						double ExReM = 0., ExImM = 0, EzReM = 0., EzImM = 0.;
+						if(ExIsOK)
+						{
+							ExReM = *fpX_Prev; ExImM = *(fpX_Prev+1);
+						}
+						if(EzIsOK)
+						{
+							EzReM = *fpZ_Prev; EzImM = *(fpZ_Prev+1);
+						}
+	
+						double ExReP_mi_ExReM = ExRe - ExReM;
+						double ExImP_mi_ExImM = ExIm - ExImM;
+						double EzReP_mi_EzReM = EzRe - EzReM;
+						double EzImP_mi_EzImM = EzIm - EzImM;
+	
+						double ExImP_mi_ExImM_ExRe_mi_ExReP_mi_ExReM_ExIm = ExImP_mi_ExImM*ExRe - ExReP_mi_ExReM*ExIm;
+						ff[4] = ExImP_mi_ExImM_ExRe_mi_ExReP_mi_ExReM_ExIm + TwoPi_d_Lamb_d_Rz_zStep*z*ff[0]; // <z'>
+	
+						double EzImP_mi_EzImM_EzRe_mi_EzReP_mi_EzReM_EzIm = EzImP_mi_EzImM*EzRe - EzReP_mi_EzReM*EzIm;
+						ff[15] = EzImP_mi_EzImM_EzRe_mi_EzReP_mi_EzReM_EzIm + TwoPi_d_Lamb_d_Rz_zStep*z*ff[11]; // <z'>
+	
+						if(coordInsidePowLim) //OC13112010
+						{
+							ff[9] = z*ff[4]; // <zz'>
+							ff[10] = ExReP_mi_ExReM*ExReP_mi_ExReM + ExImP_mi_ExImM*ExImP_mi_ExImM
+									+ ExImP_mi_ExImM_ExRe_mi_ExReP_mi_ExReM_ExIm*TwoPi_d_Lamb_d_Rz_zStep*z
+									+ TwoPi_d_Lamb_d_Rz_zStepE2*z*z*ff[0]; // <z'z'>
+							ff[20] = z*ff[15]; // <zz'>
+							ff[21] = EzReP_mi_EzReM*EzReP_mi_EzReM + EzImP_mi_EzImM*EzImP_mi_EzImM
+									+ EzImP_mi_EzImM_EzRe_mi_EzReP_mi_EzReM_EzIm*TwoPi_d_Lamb_d_Rz_zStep*z
+									+ TwoPi_d_Lamb_d_Rz_zStepE2*z*z*ff[11]; // <z'z'>
+						}
+						else
+						{
+							ff[9] = 0.; // <zz'>
+							ff[10] = 0.; // <z'z'>
+							ff[20] = 0.; // <zz'>
+							ff[21] = 0.;
+						}
 					}
 					else
 					{
+						ff[4] = 0.; // <z'>
 						ff[9] = 0.; // <zz'>
 						ff[10] = 0.; // <z'z'>
+						ff[15] = 0.; // <z'>
 						ff[20] = 0.; // <zz'>
-						ff[21] = 0.;
+						ff[21] = 0.; // <z'z'>
 					}
+	
+					if((ix == 0) || (ix == nx_mi_1)) for(int k=0; k<22; k++) ff[k] *= 0.5;
+					if(ix == 1)
+					{
+						ff[2] *= 0.5; // <x'>
+						ff[6] *= 0.5; // <xx'>
+						ff[7] *= 0.5; // <x'x'>
+						ff[13] *= 0.5; // <x'>
+						ff[17] *= 0.5; // <xx'>
+						ff[18] *= 0.5; // <x'x'>
+					}
+					for(int k1=0; k1<22; k1++) SumsX[k1] += ff[k1];
 				}
-				else
+				
+				if((iz == 0) || (iz == nz_mi_1)) for(int k2=0; k2<22; k2++) SumsX[k2] *= 0.5;
+				if(iz == 1)
 				{
-					ff[4] = 0.; // <z'>
-					ff[9] = 0.; // <zz'>
-					ff[10] = 0.; // <z'z'>
-					ff[15] = 0.; // <z'>
-					ff[20] = 0.; // <zz'>
-					ff[21] = 0.; // <z'z'>
+					SumsX[4] *= 0.5; // <z'>
+					SumsX[9] *= 0.5; // <zz'>
+					SumsX[10] *= 0.5; // <z'z'>
+					SumsX[15] *= 0.5; // <z'>
+					SumsX[20] *= 0.5; // <zz'>
+					SumsX[21] *= 0.5; // <z'z'>
 				}
-
-				if((ix == 0) || (ix == nx_mi_1)) for(int k=0; k<22; k++) ff[k] *= 0.5;
-				if(ix == 1)
-				{
-					ff[2] *= 0.5; // <x'>
-					ff[6] *= 0.5; // <xx'>
-					ff[7] *= 0.5; // <x'x'>
-					ff[13] *= 0.5; // <x'>
-					ff[17] *= 0.5; // <xx'>
-					ff[18] *= 0.5; // <x'x'>
-				}
-				for(int k1=0; k1<22; k1++) SumsX[k1] += ff[k1];
+	
+				for(int kk=0; kk<22; kk++) SumsZ[kk] += SumsX[kk];
 			}
-			
-			if((iz == 0) || (iz == nz_mi_1)) for(int k2=0; k2<22; k2++) SumsX[k2] *= 0.5;
-			if(iz == 1)
-			{
-				SumsX[4] *= 0.5; // <z'>
-				SumsX[9] *= 0.5; // <zz'>
-				SumsX[10] *= 0.5; // <z'z'>
-				SumsX[15] *= 0.5; // <z'>
-				SumsX[20] *= 0.5; // <zz'>
-				SumsX[21] *= 0.5; // <z'z'>
-			}
-
-			for(int kk=0; kk<22; kk++) SumsZ[kk] += SumsX[kk];
 		}
 
 		double xStep_zStep_mm2 = (pSRWRadStructAccessData->xStep)*(pSRWRadStructAccessData->zStep)*1.E+06;
@@ -2079,7 +2100,8 @@ int srTGenOptElem::ComputeRadMoments(srTSRWRadStructAccessData* pSRWRadStructAcc
 	//sprintf(str,"%s %d",":ComputeRadMoments : cycles:",pSRWRadStructAccessData->ne);
 	//srwlPrintTime(str,&start);
 
-	if(WaveFrontTermWasTreated) TreatStronglyOscillatingTerm(*pSRWRadStructAccessData, 'a');
+	//if(WaveFrontTermWasTreated) TreatStronglyOscillatingTerm(*pSRWRadStructAccessData, 'a');
+	if(WaveFrontTermWasTreated) TreatStronglyOscillatingTerm(*pSRWRadStructAccessData, 'a', 0, -1, pvGPU); //HG26072024
 
 	//Added by SY (for profiling?) at parallelizing SRW via OpenMP:
 	//srwlPrintTime(":ComputeRadMoments : TreatStronglyOscillatingTerm 2",&start);

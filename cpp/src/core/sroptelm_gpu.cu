@@ -107,15 +107,12 @@ void srTGenOptElem::TreatStronglyOscillatingTerm_GPU(srTSRWRadStructAccessData& 
 	srTSRWRadStructAccessData* pRadAccessData_dev = CAuxGPU::ToDevice(pGPU, &RadAccessData, 1); //HG27072024
 	CAuxGPU::EnsureDeviceMemoryReady(pGPU, pRadAccessData_dev);
 
-	int minGridSize;
-    int bs = 256;
-	cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, TreatStronglyOscillatingTerm_Kernel, 0, (ieBefEnd - ieStart) * RadAccessData.nx * RadAccessData.nz);
 	dim3 blocks(ieBefEnd - ieStart, RadAccessData.nx, RadAccessData.nz);
 	dim3 threads(1, 1, 1);
-	CAuxGPU::CalcBlockSizeAndGridSize(bs, blocks, threads);
+	CAuxGPU::CalcLaunchDims(TreatStronglyOscillatingTerm_Kernel, blocks, blocks, threads, 0, (ieBefEnd - ieStart) * RadAccessData.nx * RadAccessData.nz);
 
     //TreatStronglyOscillatingTerm_Kernel<< <blocks, threads >> > (RadAccessData, TreatPolCompX, TreatPolCompZ, ConstRx, ConstRz, ieStart);
-    TreatStronglyOscillatingTerm_Kernel<< <blocks, threads >> > (pRadAccessData_dev, TreatPolCompX, TreatPolCompZ, ConstRx, ConstRz, ieStart, ieBefEnd); //HG27072024
+    TreatStronglyOscillatingTerm_Kernel<<<blocks, threads >>> (pRadAccessData_dev, TreatPolCompX, TreatPolCompZ, ConstRx, ConstRz, ieStart, ieBefEnd); //HG27072024
 
 	CAuxGPU::ToHostAndFree(pGPU, pRadAccessData_dev); //HG27072024
 	
@@ -327,14 +324,10 @@ void srTGenOptElem::MakeWfrEdgeCorrection_GPU(srTSRWRadStructAccessData* RadAcce
 	//const int bs = 256;
 	//dim3 blocks(RadAccessData->nx / bs + ((RadAccessData->nx & (bs - 1)) != 0), RadAccessData->nz);
 	//dim3 threads(bs, 1);
-	int minGridSize;
-	int bs = 256;
 	dim3 blocks(RadAccessData->nx, RadAccessData->nz);
-	dim3 threads(1, 1);
-    cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, MakeWfrEdgeCorrection_Kernel, 0, RadAccessData->nx);
-    blocks.x = (RadAccessData->nx + bs - 1) / bs;
-    threads.x = bs;
-
+	dim3 threads(1);
+	CAuxGPU::CalcLaunchDims(MakeWfrEdgeCorrection_Kernel, blocks, blocks, threads);
+    
 	//MakeWfrEdgeCorrection_Kernel << <blocks, threads >> > (*RadAccessData, pDataEx, pDataEz, DataPtrs, (float)DataPtrs.dxSt, (float)DataPtrs.dxFi, (float)DataPtrs.dzSt, (float)DataPtrs.dzFi);
 	MakeWfrEdgeCorrection_Kernel <<<blocks, threads>>> (pRadAccessData_dev, pDataEx, pDataEz, DataPtrs, (float)DataPtrs.dxSt, (float)DataPtrs.dxFi, (float)DataPtrs.dzSt, (float)DataPtrs.dzFi); //HG27072024
 
@@ -593,39 +586,18 @@ int srTGenOptElem::RadResizeCore_GPU(srTSRWRadStructAccessData& OldRadAccessData
 	srTSRWRadStructAccessData* pNewRadAccessData_dev = CAuxGPU::ToDevice(pGPU, &NewRadAccessData, 1); //HG27072024
 	CAuxGPU::EnsureDeviceMemoryReady(pGPU, pOldRadAccessData_dev, pNewRadAccessData_dev); //HG27072024
 
-	int minGridSize;
-	int bs0, bs1;
 	dim3 blocks0(nx, nz, ne);
-	dim3 threads0(bs0, 1);
+	dim3 threads0(1);
 	dim3 blocks1(nx, nz, ne);
-	dim3 threads1(bs1, 1);
+	dim3 threads1(1);
+	if (TreatPolCompX) CAuxGPU::CalcLaunchDims(RadResizeCore_Kernel<true, false>, blocks0, blocks0, threads0, 16);
+	if (TreatPolCompZ) CAuxGPU::CalcLaunchDims(RadResizeCore_Kernel<false, true>, blocks1, blocks1, threads1, 16);
 	
-	if (TreatPolCompX) cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs0, RadResizeCore_Kernel<true, false>, 0, nx);
-	if (TreatPolCompZ) cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs1, RadResizeCore_Kernel<false, true>, 0, nx);
-	if (bs0 > 16)
-	{
-		int bs0_rem = bs0 / 16;
-		blocks0.y = (nz + bs0_rem - 1) / bs0_rem;
-		threads0.y = bs0_rem;
-		bs0 = 16;
-	}
-    blocks0.x = (nx + bs0 - 1) / bs0;
-    threads0.x = bs0;
-	if (bs1 > 16)
-	{
-		int bs1_rem = bs1 / 16;
-		blocks1.y = (nz + bs1_rem - 1) / bs1_rem;
-		threads1.y = bs1_rem;
-		bs1 = 16;
-	}
-	blocks1.x = (nx + bs1 - 1) / bs1;
-	threads1.x = bs1;
-
 	long long stream1 = CAuxGPU::GetComputeStream(pGPU, 0);
 	CAuxGPU::SyncComputeStream(pGPU, 0, stream1);
 
-	if (TreatPolCompX) RadResizeCore_Kernel<true, false> << <blocks0, threads0, 0 >> > (pOldRadAccessData_dev, pNewRadAccessData_dev);
-	if (TreatPolCompZ) RadResizeCore_Kernel<false, true> << <blocks1, threads1, 0, (cudaStream_t)stream1 >> > (pOldRadAccessData_dev, pNewRadAccessData_dev);
+	if (TreatPolCompX) RadResizeCore_Kernel<true, false> <<<blocks0, threads0, 0 >>> (pOldRadAccessData_dev, pNewRadAccessData_dev);
+	if (TreatPolCompZ) RadResizeCore_Kernel<false, true> <<<blocks1, threads1, 0, (cudaStream_t)stream1 >>> (pOldRadAccessData_dev, pNewRadAccessData_dev);
 
 	CAuxGPU::SyncComputeStream(pGPU, stream1, 0);
 	CAuxGPU::ToHostAndFree(pGPU, pOldRadAccessData_dev); //HG27072024
@@ -635,8 +607,8 @@ int srTGenOptElem::RadResizeCore_GPU(srTSRWRadStructAccessData& OldRadAccessData
 	OldRadAccessData.pBaseRadZ = (float*)CAuxGPU::ToHostAndFree(pGPU, OldRadAccessData.pBaseRadZ);
 	//NewRadAccessData.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, NewRadAccessData.pBaseRadX, 2*NewRadAccessData.ne*NewRadAccessData.nx*NewRadAccessData.nz*sizeof(float));
 	//NewRadAccessData.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, NewRadAccessData.pBaseRadZ, 2*NewRadAccessData.ne*NewRadAccessData.nx*NewRadAccessData.nz*sizeof(float));
-	CAuxGPU::MarkUpdated(pGPU, NewRadAccessData.pBaseRadX, true, false);
-	CAuxGPU::MarkUpdated(pGPU, NewRadAccessData.pBaseRadZ, true, false);
+	CAuxGPU::MarkUpdated(pGPU, NewRadAccessData.pBaseRadX, CAuxGPU::DEVICE);
+	CAuxGPU::MarkUpdated(pGPU, NewRadAccessData.pBaseRadZ, CAuxGPU::DEVICE);
 //#ifndef _DEBUG
 	NewRadAccessData.pBaseRadX = (float*)CAuxGPU::GetHostPtr(pGPU, NewRadAccessData.pBaseRadX);
 	NewRadAccessData.pBaseRadZ = (float*)CAuxGPU::GetHostPtr(pGPU, NewRadAccessData.pBaseRadZ);
@@ -731,19 +703,17 @@ int srTGenOptElem::RadResizeCore_OnlyLargerRange_GPU(srTSRWRadStructAccessData& 
 	srTSRWRadStructAccessData* pNewRadAccessData_dev = CAuxGPU::ToDevice(pGPU, &NewRadAccessData, 1);
 	CAuxGPU::EnsureDeviceMemoryReady(pGPU, pOldRadAccessData_dev, pNewRadAccessData_dev);
 
-	int minGridSize;
-	int bs = 32;
 	dim3 blocks(nx, nz, ne);
-	dim3 threads(bs, 1);
-	if (TreatPolCompX && TreatPolCompZ) cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, RadResizeCore_OnlyLargerRange_Kernel<true, true>, 0, nx);
-	else if (TreatPolCompX) cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, RadResizeCore_OnlyLargerRange_Kernel<true, false>, 0, nx);
-	else if (TreatPolCompZ) cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, RadResizeCore_OnlyLargerRange_Kernel<false, true>, 0, nx);
-    blocks.x = (nx + bs - 1) / bs;
-    threads.x = bs;
+	dim3 threads(32, 1);
 
-	if (TreatPolCompX && TreatPolCompZ) RadResizeCore_OnlyLargerRange_Kernel<true, true> << <blocks, threads >> > (pOldRadAccessData_dev, pNewRadAccessData_dev);
-	else if (TreatPolCompX) RadResizeCore_OnlyLargerRange_Kernel<true, false> << <blocks, threads >> > (pOldRadAccessData_dev, pNewRadAccessData_dev);
-	else if (TreatPolCompZ) RadResizeCore_OnlyLargerRange_Kernel<false, true> << <blocks, threads >> > (pOldRadAccessData_dev, pNewRadAccessData_dev);
+	//Select the right kernel
+	decltype(RadResizeCore_OnlyLargerRange_Kernel<true, true>) *kern = NULL;
+	if (TreatPolCompX && TreatPolCompZ) kern = RadResizeCore_OnlyLargerRange_Kernel<true, true>;
+	else if (TreatPolCompX) kern = RadResizeCore_OnlyLargerRange_Kernel<true, false>;
+	else if (TreatPolCompZ) kern = RadResizeCore_OnlyLargerRange_Kernel<false, true>;
+	
+	CAuxGPU::CalcLaunchDims(kern, blocks, blocks, threads);
+	kern<<<blocks, threads>>> (pOldRadAccessData_dev, pNewRadAccessData_dev);
 
 	CAuxGPU::ToHostAndFree(pGPU, pOldRadAccessData_dev);
 	CAuxGPU::ToHostAndFree(pGPU, pNewRadAccessData_dev);
@@ -825,20 +795,18 @@ int srTGenOptElem::RadResizeCore_OnlyLargerRangeE_GPU(srTSRWRadStructAccessData&
 	srTSRWRadStructAccessData* pNewRadAccessData_dev = CAuxGPU::ToDevice(pGPU, &NewRadAccessData, 1); //HG27072024
 	CAuxGPU::EnsureDeviceMemoryReady(pGPU, pOldRadAccessData_dev, pNewRadAccessData_dev);
 
-	int minGridSize;
-	int bs = 32;
 	dim3 blocks(NewRadAccessData.nx, NewRadAccessData.nz, ne);
-	dim3 threads(bs, 1);
-	if (TreatPolCompX && TreatPolCompZ) cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, RadResizeCore_OnlyLargerRangeE_Kernel<true, true>, 0, NewRadAccessData.nx);
-	else if (TreatPolCompX) cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, RadResizeCore_OnlyLargerRangeE_Kernel<true, false>, 0, NewRadAccessData.nx);
-	else if (TreatPolCompZ) cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, RadResizeCore_OnlyLargerRangeE_Kernel<false, true>, 0, NewRadAccessData.nx);
-    blocks.x = (NewRadAccessData.nx + bs - 1) / bs;
-    threads.x = bs;
-
-	if (TreatPolCompX && TreatPolCompZ) RadResizeCore_OnlyLargerRangeE_Kernel<true, true> << <blocks, threads >> > (pOldRadAccessData_dev, pNewRadAccessData_dev);
-	else if (TreatPolCompX) RadResizeCore_OnlyLargerRangeE_Kernel<true, false> << <blocks, threads >> > (pOldRadAccessData_dev, pNewRadAccessData_dev);
-	else if (TreatPolCompZ) RadResizeCore_OnlyLargerRangeE_Kernel<false, true> << <blocks, threads >> > (pOldRadAccessData_dev, pNewRadAccessData_dev);
-
+	dim3 threads(32, 1);
+	
+	//Select the right kernel
+	decltype(RadResizeCore_OnlyLargerRangeE_Kernel<true, true>) *kern = NULL;
+	if (TreatPolCompX && TreatPolCompZ) kern = RadResizeCore_OnlyLargerRangeE_Kernel<true, true>;
+	else if (TreatPolCompX) kern = RadResizeCore_OnlyLargerRangeE_Kernel<true, false>;
+	else if (TreatPolCompZ) kern = RadResizeCore_OnlyLargerRangeE_Kernel<false, true>;
+	
+	CAuxGPU::CalcLaunchDims(kern, blocks, blocks, threads);
+	kern<<<blocks, threads>>> (pOldRadAccessData_dev, pNewRadAccessData_dev);
+	
 	CAuxGPU::ToHostAndFree(pGPU, pOldRadAccessData_dev); //HG27072024
 	CAuxGPU::ToHostAndFree(pGPU, pNewRadAccessData_dev); //HG27072024
 
@@ -850,6 +818,437 @@ int srTGenOptElem::RadResizeCore_OnlyLargerRangeE_GPU(srTSRWRadStructAccessData&
 	NewRadAccessData.pBaseRadZ = (float*)CAuxGPU::GetHostPtr(pGPU, NewRadAccessData.pBaseRadZ);
 
 	return 0;
+}
+
+
+//KernelMode:
+//0 - Init
+//1 - Common
+//2 - X
+//4 - Z
+template<int KernelMode, bool ExIsOK, bool EzIsOK>
+__global__ void ComputeRadMoments_Kernel(const srTSRWRadStructAccessData* pSRWRadStructAccessData, int4 IndLims, double* SumsZ, int ie, double TwoPi_d_Lamb_d_Rx_xStep, double TwoPi_d_Lamb_d_Rz_zStep)
+{
+	int ix = (blockIdx.x * blockDim.x + threadIdx.x); //nx range
+	int iz = (blockIdx.y * blockDim.y + threadIdx.y); //nz range
+
+	if (KernelMode == 0)
+	{
+		if (ix >= pSRWRadStructAccessData->nx) return;
+		if (iz >= pSRWRadStructAccessData->nz) return;
+	}
+	else
+	{
+		if (ix > IndLims.y) return;
+		if (iz > IndLims.w) return;
+	}
+
+	float* __restrict__ fpX0 = pSRWRadStructAccessData->pBaseRadX;
+	float* __restrict__ fpZ0 = pSRWRadStructAccessData->pBaseRadZ;
+	
+	long PerX = pSRWRadStructAccessData->ne << 1;
+	long long PerZ = PerX*pSRWRadStructAccessData->nx;
+	
+	int nx_mi_1 = pSRWRadStructAccessData->nx - 1;
+	int nz_mi_1 = pSRWRadStructAccessData->nz - 1;
+	
+	long long izPerZ = iz*PerZ;
+	float *fpX_StartForX = fpX0 + izPerZ;
+	float *fpZ_StartForX = fpZ0 + izPerZ;
+	
+
+	long Two_ie = ie << 1;
+	long long ixPerX_p_Two_ie = ix*PerX + Two_ie;
+	float *fpX = fpX_StartForX + ixPerX_p_Two_ie;
+	float *fpZ = fpZ_StartForX + ixPerX_p_Two_ie;
+
+	double ExRe = 0., ExIm = 0., EzRe = 0., EzIm = 0.;
+	if(ExIsOK)
+	{
+		ExRe = *fpX;
+		ExIm = *(fpX+1);
+	}
+	if(EzIsOK)
+	{
+		EzRe = *fpZ;
+		EzIm = *(fpZ+1);
+	}
+
+	double TwoPi_d_Lamb_d_Rx_xStepE2 = TwoPi_d_Lamb_d_Rx_xStep*TwoPi_d_Lamb_d_Rx_xStep;
+	double TwoPi_d_Lamb_d_Rz_zStepE2 = TwoPi_d_Lamb_d_Rz_zStep*TwoPi_d_Lamb_d_Rz_zStep;
+
+	double ff[22] = {0.};
+	
+	double z = pSRWRadStructAccessData->zStart + iz*pSRWRadStructAccessData->zStep;
+	double x = pSRWRadStructAccessData->xStart + ix*pSRWRadStructAccessData->xStep;
+	ff[0] = ExRe*ExRe + ExIm*ExIm; // NormX
+	ff[11] = EzRe*EzRe + EzIm*EzIm; // NormZ
+
+	ff[1] = x* ff[0]; // <x>
+	ff[3] = z* ff[0]; // <z>
+	ff[12] = x*ff[11]; // <x>
+	ff[14] = z*ff[11]; // <z>
+
+	ff[5] = x*ff[1]; // <xx>
+	ff[8] = z*ff[3]; // <zz>
+	ff[16] = x*ff[12]; // <xx>
+	ff[19] = z*ff[14]; // <zz>
+
+	if(ix > 0)
+	{
+		float *fpX_Prev = fpX - PerX;
+		float *fpZ_Prev = fpZ - PerX;
+
+		double ExReM = 0., ExImM = 0., EzReM = 0., EzImM = 0.;
+		if(ExIsOK)
+		{
+			ExReM = *fpX_Prev; ExImM = *(fpX_Prev+1);
+		}
+		if(EzIsOK)
+		{
+			EzReM = *fpZ_Prev; EzImM = *(fpZ_Prev+1);
+		}
+
+		double ExReP_mi_ExReM = ExRe - ExReM;
+		double ExImP_mi_ExImM = ExIm - ExImM;
+		double EzReP_mi_EzReM = EzRe - EzReM;
+		double EzImP_mi_EzImM = EzIm - EzImM;
+
+		double ExImP_mi_ExImM_ExRe_mi_ExReP_mi_ExReM_ExIm = ExImP_mi_ExImM*ExRe - ExReP_mi_ExReM*ExIm;
+		ff[2] = ExImP_mi_ExImM_ExRe_mi_ExReP_mi_ExReM_ExIm + TwoPi_d_Lamb_d_Rx_xStep*x*ff[0]; // <x'>
+
+		double EzImP_mi_EzImM_EzRe_mi_EzReP_mi_EzReM_EzIm = EzImP_mi_EzImM*EzRe - EzReP_mi_EzReM*EzIm;
+		ff[13] = EzImP_mi_EzImM_EzRe_mi_EzReP_mi_EzReM_EzIm + TwoPi_d_Lamb_d_Rx_xStep*x*ff[11]; // <x'>
+
+		ff[6] = x*ff[2]; // <xx'>
+		ff[7] = (ExReP_mi_ExReM*ExReP_mi_ExReM + ExImP_mi_ExImM*ExImP_mi_ExImM) 
+				+ ExImP_mi_ExImM_ExRe_mi_ExReP_mi_ExReM_ExIm*TwoPi_d_Lamb_d_Rx_xStep*x
+				+ TwoPi_d_Lamb_d_Rx_xStepE2*x*x*ff[0]; // <x'x'>
+		ff[17] = x*ff[13]; // <xx'>
+		ff[18] = EzReP_mi_EzReM*EzReP_mi_EzReM + EzImP_mi_EzImM*EzImP_mi_EzImM
+				+ EzImP_mi_EzImM_EzRe_mi_EzReP_mi_EzReM_EzIm*TwoPi_d_Lamb_d_Rx_xStep*x
+				+ TwoPi_d_Lamb_d_Rx_xStepE2*x*x*ff[11]; // <x'x'>
+	}
+	else
+	{
+		ff[2] = 0.; // <x'>
+		ff[6] = 0.; // <xx'>
+		ff[7] = 0.; // <x'x'>
+		ff[13] = 0.; // <x'>
+		ff[17] = 0.; // <xx'>
+		ff[18] = 0.; // <x'x'>
+	}
+
+	if(iz > 0)
+	{
+		float *fpX_Prev = fpX - PerZ;
+		float *fpZ_Prev = fpZ - PerZ;
+
+		double ExReM = 0., ExImM = 0, EzReM = 0., EzImM = 0.;
+		if(ExIsOK)
+		{
+			ExReM = *fpX_Prev; ExImM = *(fpX_Prev+1);
+		}
+		if(EzIsOK)
+		{
+			EzReM = *fpZ_Prev; EzImM = *(fpZ_Prev+1);
+		}
+
+		double ExReP_mi_ExReM = ExRe - ExReM;
+		double ExImP_mi_ExImM = ExIm - ExImM;
+		double EzReP_mi_EzReM = EzRe - EzReM;
+		double EzImP_mi_EzImM = EzIm - EzImM;
+
+		double ExImP_mi_ExImM_ExRe_mi_ExReP_mi_ExReM_ExIm = ExImP_mi_ExImM*ExRe - ExReP_mi_ExReM*ExIm;
+		ff[4] = ExImP_mi_ExImM_ExRe_mi_ExReP_mi_ExReM_ExIm + TwoPi_d_Lamb_d_Rz_zStep*z*ff[0]; // <z'>
+
+		double EzImP_mi_EzImM_EzRe_mi_EzReP_mi_EzReM_EzIm = EzImP_mi_EzImM*EzRe - EzReP_mi_EzReM*EzIm;
+		ff[15] = EzImP_mi_EzImM_EzRe_mi_EzReP_mi_EzReM_EzIm + TwoPi_d_Lamb_d_Rz_zStep*z*ff[11]; // <z'>
+
+		ff[9] = z*ff[4]; // <zz'>
+		ff[10] = ExReP_mi_ExReM*ExReP_mi_ExReM + ExImP_mi_ExImM*ExImP_mi_ExImM
+				+ ExImP_mi_ExImM_ExRe_mi_ExReP_mi_ExReM_ExIm*TwoPi_d_Lamb_d_Rz_zStep*z
+				+ TwoPi_d_Lamb_d_Rz_zStepE2*z*z*ff[0]; // <z'z'>
+		ff[20] = z*ff[15]; // <zz'>
+		ff[21] = EzReP_mi_EzReM*EzReP_mi_EzReM + EzImP_mi_EzImM*EzImP_mi_EzImM
+				+ EzImP_mi_EzImM_EzRe_mi_EzReP_mi_EzReM_EzIm*TwoPi_d_Lamb_d_Rz_zStep*z
+				+ TwoPi_d_Lamb_d_Rz_zStepE2*z*z*ff[11]; // <z'z'>
+	}
+	else
+	{
+		ff[4] = 0.; // <z'>
+		ff[9] = 0.; // <zz'>
+		ff[10] = 0.; // <z'z'>
+		ff[15] = 0.; // <z'>
+		ff[20] = 0.; // <zz'>
+		ff[21] = 0.; // <z'z'>
+	}
+
+	if((ix == 0) || (ix == nx_mi_1))
+	{
+		ff[0] *= 0.5;
+		ff[1] *= 0.5;
+		ff[2] *= 0.5;
+		ff[3] *= 0.5;
+		ff[4] *= 0.5;
+		ff[5] *= 0.5;
+		ff[6] *= 0.5;
+		ff[7] *= 0.5;
+		ff[8] *= 0.5;
+		ff[9] *= 0.5;
+		ff[10] *= 0.5;
+		ff[11] *= 0.5;
+		ff[12] *= 0.5;
+		ff[13] *= 0.5;
+		ff[14] *= 0.5;
+		ff[15] *= 0.5;
+		ff[16] *= 0.5;
+		ff[17] *= 0.5;
+		ff[18] *= 0.5;
+		ff[19] *= 0.5;
+		ff[20] *= 0.5;
+		ff[21] *= 0.5;
+	}
+	if(ix == 1)
+	{
+		ff[2] *= 0.5; // <x'>>
+		ff[6] *= 0.5; // <xx'>
+		ff[7] *= 0.5; // <x'x'>
+		ff[13] *= 0.5; // <x'>
+		ff[17] *= 0.5; // <xx'>
+		ff[18] *= 0.5; // <x'x'>
+	}
+
+	if((iz == 0) || (iz == nz_mi_1))
+	{
+		ff[0] *= 0.5;
+		ff[1] *= 0.5;
+		ff[2] *= 0.5;
+		ff[3] *= 0.5;
+		ff[4] *= 0.5;
+		ff[5] *= 0.5;
+		ff[6] *= 0.5;
+		ff[7] *= 0.5;
+		ff[8] *= 0.5;
+		ff[9] *= 0.5;
+		ff[10] *= 0.5;
+		ff[11] *= 0.5;
+		ff[12] *= 0.5;
+		ff[13] *= 0.5;
+		ff[14] *= 0.5;
+		ff[15] *= 0.5;
+		ff[16] *= 0.5;
+		ff[17] *= 0.5;
+		ff[18] *= 0.5;
+		ff[19] *= 0.5;
+		ff[20] *= 0.5;
+		ff[21] *= 0.5;
+	}
+	if(iz == 1)
+	{
+		ff[4] *= 0.5; // <z'>
+		ff[9] *= 0.5; // <zz'>
+		ff[10] *= 0.5; // <z'z'>
+		ff[15] *= 0.5; // <z'>
+		ff[20] *= 0.5; // <zz'>
+		ff[21] *= 0.5; // <z'z'>
+	}
+
+	cg::coalesced_group g = cg::coalesced_threads();
+	if (KernelMode == 0)
+	{
+		ff[0] = cg::reduce(g, ff[0], cg::plus<double>());
+		ff[11] = cg::reduce(g, ff[11], cg::plus<double>());
+		ff[1] = cg::reduce(g, ff[1], cg::plus<double>());
+		ff[3] = cg::reduce(g, ff[3], cg::plus<double>());
+		ff[12] = cg::reduce(g, ff[12], cg::plus<double>());
+		ff[14] = cg::reduce(g, ff[14], cg::plus<double>());
+		ff[2] = cg::reduce(g, ff[2], cg::plus<double>());
+		ff[13] = cg::reduce(g, ff[13], cg::plus<double>());
+		ff[4] = cg::reduce(g, ff[4], cg::plus<double>());
+		ff[15] = cg::reduce(g, ff[15], cg::plus<double>());
+	}
+	else
+	{
+		if (KernelMode & 1)
+		{
+			ff[5] = cg::reduce(g, ff[5], cg::plus<double>());
+			ff[8] = cg::reduce(g, ff[8], cg::plus<double>());
+			ff[16] = cg::reduce(g, ff[16], cg::plus<double>());
+			ff[19] = cg::reduce(g, ff[19], cg::plus<double>());
+		}
+		if (KernelMode & 2)
+		{
+			ff[6] = cg::reduce(g, ff[6], cg::plus<double>());
+			ff[7] = cg::reduce(g, ff[7], cg::plus<double>());
+			ff[17] = cg::reduce(g, ff[17], cg::plus<double>());
+			ff[18] = cg::reduce(g, ff[18], cg::plus<double>());
+		}
+		if (KernelMode & 4)
+		{
+			ff[9] = cg::reduce(g, ff[9], cg::plus<double>());
+			ff[10] = cg::reduce(g, ff[10], cg::plus<double>());
+			ff[20] = cg::reduce(g, ff[20], cg::plus<double>());
+			ff[21] = cg::reduce(g, ff[21], cg::plus<double>());
+		}
+	}
+
+	if(g.thread_rank() == 0)
+	{
+		if (KernelMode == 0)
+		{
+			atomicAdd(SumsZ, ff[0]);
+			atomicAdd(SumsZ + 11, ff[11]);
+			atomicAdd(SumsZ + 1, ff[1]);
+			atomicAdd(SumsZ + 3, ff[3]);
+			atomicAdd(SumsZ + 12, ff[12]);
+			atomicAdd(SumsZ + 14, ff[14]);
+			atomicAdd(SumsZ + 2, ff[2]);
+			atomicAdd(SumsZ + 13, ff[13]);
+			atomicAdd(SumsZ + 4, ff[4]);
+			atomicAdd(SumsZ + 15, ff[15]);
+		}
+		else
+		{
+			if (KernelMode & 1)
+			{
+				atomicAdd(SumsZ + 5, ff[5]);
+				atomicAdd(SumsZ + 8, ff[8]);
+				atomicAdd(SumsZ + 16, ff[16]);
+				atomicAdd(SumsZ + 19, ff[19]);
+			}
+			if (KernelMode & 2)
+			{
+				atomicAdd(SumsZ + 6, ff[6]);
+				atomicAdd(SumsZ + 7, ff[7]);
+				atomicAdd(SumsZ + 17, ff[17]);
+				atomicAdd(SumsZ + 18, ff[18]);
+			}
+			if (KernelMode & 4)
+			{
+				atomicAdd(SumsZ + 9, ff[9]);
+				atomicAdd(SumsZ + 10, ff[10]);
+				atomicAdd(SumsZ + 20, ff[20]);
+				atomicAdd(SumsZ + 21, ff[21]);
+			}
+		}
+	}
+}
+
+void srTGenOptElem::ComputeRadMoments_GPU(srTSRWRadStructAccessData* pSRWRadStructAccessData, int ie, double* SumsZ, int* IndLims, TGPUUsageArg* pGPU) //HG26072024
+{
+
+#define GEN_MEMBERS(i) \
+		ComputeRadMoments_Kernel <i, false, false>, \
+		ComputeRadMoments_Kernel <i, false, true>, \
+		ComputeRadMoments_Kernel <i, true, false>, \
+		ComputeRadMoments_Kernel <i, true, true>,
+
+	decltype(ComputeRadMoments_Kernel <0, false, false>) *ComputeRadMoments_tbl[] = {
+		GEN_MEMBERS(0)
+		GEN_MEMBERS(1)
+		GEN_MEMBERS(2)
+		GEN_MEMBERS(4)
+	};
+#undef GEN_MEMBERS
+
+	bool ExIsOK = pSRWRadStructAccessData->pBaseRadX != 0;
+	bool EzIsOK = pSRWRadStructAccessData->pBaseRadZ != 0;
+	bool IsFreqRepres = (pSRWRadStructAccessData->PresT == 0);
+	bool IsCoordRepres = (pSRWRadStructAccessData->Pres == 0);
+	const double TwoPi = 3.141592653590*2.;
+	const double FourPi = TwoPi*2.;
+	const double Inv_eV_In_m = 1.239842E-06;
+	double ePh = pSRWRadStructAccessData->eStart + pSRWRadStructAccessData->eStep*ie; //This assumes wavefront in Time domain; Photon Energy in eV !
+	if(!IsFreqRepres)
+	{
+		ePh = pSRWRadStructAccessData->avgPhotEn; //?? OC041108
+	}
+	double Lamb_d_FourPi = Inv_eV_In_m/(FourPi*ePh);
+	double Lamb_m = Lamb_d_FourPi*FourPi;
+	double FourPi_d_Lamb = 1./Lamb_d_FourPi;
+	double LocRobsX = pSRWRadStructAccessData->RobsX; //OC030409
+	if(LocRobsX == 0.) LocRobsX = 100.*Lamb_m;
+	double LocRobsZ = pSRWRadStructAccessData->RobsZ;
+	if(LocRobsZ == 0.) LocRobsZ = 100.*Lamb_m;
+	double FourPi_d_Lamb_d_Rz = FourPi_d_Lamb/LocRobsZ;
+	double FourPi_d_Lamb_d_Rz_zStep = pSRWRadStructAccessData->zStep*FourPi_d_Lamb_d_Rz;
+	double TwoPi_d_Lamb_d_Rz_zStep = 0.5*FourPi_d_Lamb_d_Rz_zStep;
+	double FourPi_d_Lamb_d_Rx = FourPi_d_Lamb/LocRobsX;
+	double FourPi_d_Lamb_d_Rx_xStep = pSRWRadStructAccessData->xStep*FourPi_d_Lamb_d_Rx;
+	double TwoPi_d_Lamb_d_Rx_xStep = 0.5*FourPi_d_Lamb_d_Rx_xStep;
+
+	dim3 blocks0(IndLims[1] - IndLims[0] + 1, IndLims[3] - IndLims[2] + 1, 1);
+	dim3 blocks1(IndLims[1] - IndLims[0] + 1, IndLims[3] - IndLims[2] + 1, 1);
+	dim3 blocks2(IndLims[1] - IndLims[0] + 1, IndLims[3] - IndLims[2] + 1, 1);
+	dim3 blocks3(pSRWRadStructAccessData->nx, pSRWRadStructAccessData->nz, 1);
+	dim3 threads0(1);
+	dim3 threads1(1);
+	dim3 threads2(1);
+	dim3 threads3(1);
+	CAuxGPU::CalcLaunchDims(ComputeRadMoments_tbl[(1 << 2) | ((ExIsOK & 1) << 1) | (EzIsOK & 1)], blocks0, blocks0, threads0, 16);
+	CAuxGPU::CalcLaunchDims(ComputeRadMoments_tbl[(2 << 2) | ((ExIsOK & 1) << 1) | (EzIsOK & 1)], blocks1, blocks1, threads1, 16);
+	CAuxGPU::CalcLaunchDims(ComputeRadMoments_tbl[(4 << 2) | ((ExIsOK & 1) << 1) | (EzIsOK & 1)], blocks2, blocks2, threads2, 16);
+	CAuxGPU::CalcLaunchDims(ComputeRadMoments_tbl[(0 << 2) | ((ExIsOK & 1) << 1) | (EzIsOK & 1)], blocks3, blocks3, threads3, 16);
+	
+	pSRWRadStructAccessData->pBaseRadX = CAuxGPU::ToDevice(pGPU, pSRWRadStructAccessData->pBaseRadX, 2 * pSRWRadStructAccessData->ne * pSRWRadStructAccessData->nx * pSRWRadStructAccessData->nz);
+	pSRWRadStructAccessData->pBaseRadZ = CAuxGPU::ToDevice(pGPU, pSRWRadStructAccessData->pBaseRadZ, 2 * pSRWRadStructAccessData->ne * pSRWRadStructAccessData->nx * pSRWRadStructAccessData->nz);
+	SumsZ = CAuxGPU::ToDevice(pGPU, SumsZ, 22, CAuxGPU::DONT_COPY);
+	CAuxGPU::Memset(pGPU, SumsZ, 0.0, 22);
+	srTSRWRadStructAccessData* pSRWRadStructAccessData_dev = CAuxGPU::ToDevice(pGPU, pSRWRadStructAccessData, 1);
+	
+	CAuxGPU::EnsureDeviceMemoryReady(pGPU, 
+		pSRWRadStructAccessData->pBaseRadX,
+		pSRWRadStructAccessData->pBaseRadZ,
+		SumsZ,
+		pSRWRadStructAccessData_dev
+	);
+	
+	int4 IndLims_dev = { IndLims[0], IndLims[1], IndLims[2], IndLims[3] };
+	
+	cudaEvent_t start, stop1, stop2, stop3;
+	cudaEventCreateWithFlags(&start, cudaEventDisableTiming);
+	cudaEventCreateWithFlags(&stop1, cudaEventDisableTiming);
+	cudaEventCreateWithFlags(&stop2, cudaEventDisableTiming);
+	cudaEventCreateWithFlags(&stop3, cudaEventDisableTiming);
+
+	cudaStream_t stream1 = (cudaStream_t)CAuxGPU::GetComputeStream(pGPU, 0);
+	cudaStream_t stream2 = (cudaStream_t)CAuxGPU::GetComputeStream(pGPU, 1);
+	cudaStream_t stream3 = (cudaStream_t)CAuxGPU::GetComputeStream(pGPU, 2);
+
+	cudaEventRecord(start, 0); //Wait for main stream kernel execution to start
+	cudaStreamWaitEvent(stream1, start);
+	cudaStreamWaitEvent(stream2, start);
+	cudaStreamWaitEvent(stream3, start);
+
+	ComputeRadMoments_tbl[(1 << 2) | ((ExIsOK & 1) << 1) | (EzIsOK & 1)] <<<blocks0, threads0 >>>(pSRWRadStructAccessData_dev, IndLims_dev, SumsZ, ie, TwoPi_d_Lamb_d_Rx_xStep, TwoPi_d_Lamb_d_Rz_zStep);
+	if(IsCoordRepres) 
+	{
+		ComputeRadMoments_tbl[(2 << 2) | ((ExIsOK & 1) << 1) | (EzIsOK & 1)] <<<blocks1, threads1, 0, stream1 >>>(pSRWRadStructAccessData_dev, IndLims_dev, SumsZ, ie, TwoPi_d_Lamb_d_Rx_xStep, TwoPi_d_Lamb_d_Rz_zStep);
+		ComputeRadMoments_tbl[(3 << 2) | ((ExIsOK & 1) << 1) | (EzIsOK & 1)] <<<blocks2, threads2, 0, stream2 >>>(pSRWRadStructAccessData_dev, IndLims_dev, SumsZ, ie, TwoPi_d_Lamb_d_Rx_xStep, TwoPi_d_Lamb_d_Rz_zStep);
+	}
+	ComputeRadMoments_tbl[(0 << 2) | ((ExIsOK & 1) << 1) | (EzIsOK & 1)] <<<blocks3, threads3, 0, stream3>>>(pSRWRadStructAccessData_dev, IndLims_dev, SumsZ, ie, TwoPi_d_Lamb_d_Rx_xStep, TwoPi_d_Lamb_d_Rz_zStep);
+
+	cudaEventRecord(stop1, stream1);
+	cudaEventRecord(stop2, stream2);
+	cudaEventRecord(stop3, stream3);
+	cudaStreamWaitEvent(0, stop1);
+	cudaStreamWaitEvent(0, stop2); //Wait for all streams to finish
+	cudaStreamWaitEvent(0, stop3);
+	cudaEventDestroy(start);
+	cudaEventDestroy(stop1);
+	cudaEventDestroy(stop2);
+	cudaEventDestroy(stop3);
+
+	CAuxGPU::ToHostAndFree(pGPU, pSRWRadStructAccessData_dev);
+	
+	pSRWRadStructAccessData->pBaseRadX = (float*)CAuxGPU::GetHostPtr(pGPU, pSRWRadStructAccessData->pBaseRadX);
+	pSRWRadStructAccessData->pBaseRadZ = (float*)CAuxGPU::GetHostPtr(pGPU, pSRWRadStructAccessData->pBaseRadZ);
+	
+	CAuxGPU::MarkUpdated(pGPU, SumsZ, CAuxGPU::DEVICE);
+
+	//CAuxGPU::ToHostAndFree(pGPU, IndLims, 4 * sizeof(int), true);
+	CAuxGPU::ToHostAndFree(pGPU, SumsZ, 0, 22);
 }
 
 #endif
