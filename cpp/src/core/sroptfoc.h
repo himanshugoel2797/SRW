@@ -27,7 +27,8 @@ public:
 	double FocDistX, FocDistZ;
 	srTFocusingElem() {}
 
-	int PropagateRadMoments(srTSRWRadStructAccessData* pRadAccessData, srTMomentsRatios* MomRatArray)
+	//int PropagateRadMoments(srTSRWRadStructAccessData* pRadAccessData, srTMomentsRatios* MomRatArray)
+	int PropagateRadMoments(srTSRWRadStructAccessData* pRadAccessData, srTMomentsRatios* MomRatArray, void* pvGPU=0) //HG27072024
 	{
 		//float aStr0[] = { 1., 0. };
 		//float axStr1[] = { (float)(-1./FocDistX), 1. };
@@ -122,13 +123,14 @@ public:
 		//if(result = Propagate4x4PropMatr(pRadAccessData)) return result;
 		//if(result = PropagateRadiationSimple(pRadAccessData)) return result; //in first place because previous wavefront radius may be required for some derived classes
 		if(result = PropagateRadiationSimple(pRadAccessData, pvGPU)) return result; //OC17022024 //in first place because previous wavefront radius may be required for some derived classes
-		if(result = PropagateRadMoments(pRadAccessData, 0)) return result;
+		//if(result = PropagateRadMoments(pRadAccessData, 0)) return result;
+		if(result = PropagateRadMoments(pRadAccessData, 0, pvGPU)) return result; //HG27072024
 		if(result = PropagateWaveFrontRadius(pRadAccessData)) return result;
 		if(result = Propagate4x4PropMatr(pRadAccessData)) return result;
 		return 0;
 	}
 
-	int TuneRadForPropMeth_1(srTSRWRadStructAccessData*, srTRadResize&);
+	int TuneRadForPropMeth_1(srTSRWRadStructAccessData*, srTRadResize&, void* pvGPU=0); //HG12082025
 };
 
 //*************************************************************************
@@ -153,6 +155,8 @@ public:
 		TransvCenPoint.x = InCx; TransvCenPoint.y = InCz;
 	}
 	srTThinLens() {}
+	
+	int GPUImplFeatures() override { return 1; } //HG12082025
 
 	//int PropagateRadiation(srTSRWRadStructAccessData* pRadAccessData, int MethNo, srTRadResizeVect& ResBeforeAndAfterVect)
 	//int PropagateRadiation(srTSRWRadStructAccessData* pRadAccessData, srTParPrecWfrPropag& ParPrecWfrPropag, srTRadResizeVect& ResBeforeAndAfterVect)
@@ -160,40 +164,45 @@ public:
 	{
 		//if(ParPrecWfrPropag.AnalTreatment == 1)
 		//{// Treating linear terms analytically
-			pRadAccessData->CheckAndSubtractPhaseTermsLin(TransvCenPoint.x, TransvCenPoint.y);
+			//pRadAccessData->CheckAndSubtractPhaseTermsLin(TransvCenPoint.x, TransvCenPoint.y);
+			pRadAccessData->CheckAndSubtractPhaseTermsLin(TransvCenPoint.x, TransvCenPoint.y, pvGPU); //HG07082025
 		//}
 
 		char &MethNo = ParPrecWfrPropag.MethNo;
 		int result = 0;
 
-		if(MethNo == 0) result = PropagateRadiationMeth_0(pRadAccessData);
-		else if(MethNo == 1) result = PropagateRadiationMeth_1(pRadAccessData);
+		//if(MethNo == 0) result = PropagateRadiationMeth_0(pRadAccessData);
+		if(MethNo == 0) result = PropagateRadiationMeth_0(pRadAccessData, pvGPU); //HG07082025
+		//else if(MethNo == 1) result = PropagateRadiationMeth_1(pRadAccessData);
+		else if(MethNo == 1) result = PropagateRadiationMeth_1(pRadAccessData, pvGPU); //HG07082025
 		else if(MethNo == 2) result = PropagateRadiationMeth_2(pRadAccessData, ParPrecWfrPropag, ResBeforeAndAfterVect);
 
 		//if(ParPrecWfrPropag.AnalTreatment == 1)
 		//{// Treating linear terms analytically
-			if(!ParPrecWfrPropag.DoNotResetAnalTreatTermsAfterProp) pRadAccessData->CheckAndResetPhaseTermsLin();
+			//if(!ParPrecWfrPropag.DoNotResetAnalTreatTermsAfterProp) pRadAccessData->CheckAndResetPhaseTermsLin();
+			if(!ParPrecWfrPropag.DoNotResetAnalTreatTermsAfterProp) pRadAccessData->CheckAndResetPhaseTermsLin(pvGPU); //HG07082025
 		//}
 
 		return result;
 	}
-	int PropagateRadiationMeth_1(srTSRWRadStructAccessData* pRadAccessData)
+	//int PropagateRadiationMeth_1(srTSRWRadStructAccessData* pRadAccessData)
+	int PropagateRadiationMeth_1(srTSRWRadStructAccessData* pRadAccessData, void* pvGPU=0) //HG07082025
 	{
 		int result;
 		srTRadResize PostResize;
 		PostResize.pxm = PostResize.pzm = PostResize.pxd = PostResize.pzd = 1.;
 
-		if(result = TuneRadForPropMeth_1(pRadAccessData, PostResize)) return result;
+		if(result = TuneRadForPropMeth_1(pRadAccessData, PostResize, pvGPU)) return result; //HG07082025 TODO: Check if implementing GPU acceleration for this would be as straightforward as it looks
 		if(result = PropagateWaveFrontRadius(pRadAccessData)) return result;
 
-		if(pRadAccessData->Pres != 0) if(result = SetRadRepres(pRadAccessData, 0)) return result;
-		if(result = TraverseRadZXE(pRadAccessData)) return result;
+		if(pRadAccessData->Pres != 0) if(result = SetRadRepres(pRadAccessData, 0, 0, 0, pvGPU)) return result;
+		if(result = TraverseRadZXE(pRadAccessData, 0, 0, pvGPU)) return result;
 
 		//const double ResizeTol = 0.15;
 		char PostResizeNeeded = (::fabs(PostResize.pxm - 1.) || ::fabs(PostResize.pzm - 1.) || ::fabs(PostResize.pxd - 1.) || ::fabs(PostResize.pzd - 1.));
-		if(PostResizeNeeded) if(result = RadResizeGen(*pRadAccessData, PostResize)) return result;
+		if(PostResizeNeeded) if(result = RadResizeGen(*pRadAccessData, PostResize, pvGPU)) return result;
 
-		if(result = ComputeRadMoments(pRadAccessData)) return result;
+		if(result = ComputeRadMoments(pRadAccessData, pvGPU)) return result;
 		if(result = Propagate4x4PropMatr(pRadAccessData)) return result;
 		return 0;
 	}
@@ -218,7 +227,14 @@ public:
 		return 0;
 	}
 
+#ifdef _OFFLOAD_GPU
+	int RadPointModifierParallel(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars = 0, long pBufVarsSz = 0, TGPUUsageArg* pGPU=0) override; //HG12082025
+#endif
+#ifdef __CUDA_ARCH__
+	GPU_PORTABLE void RadPointModifierPortable(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf = 0)
+#else
 	void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBufVars=0) //OC29082019
+#endif
 	//void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs)
 	{// e in eV; Length in m !!!
 	 // Operates on Coord. side !!!
