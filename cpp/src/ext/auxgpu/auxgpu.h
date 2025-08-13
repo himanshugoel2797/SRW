@@ -90,12 +90,14 @@ private:
 	static cudaStream_t memcpy_stream;
 #endif
 
-	
 	//static void* ToDevice(TGPUUsageArg* arg, void* hostPtr, size_t size, bool dontCopy = false); //HG26072024
 	static void* _ToDevice(TGPUUsageArg* arg, void* hostPtr, size_t size, int flags=0); //HG26072024 Make private
 
 	static void* _ToHostAndFree(TGPUUsageArg* arg, void* devicePtr, int flags=0, size_t size=0); //HG26072024
 	//static void* ToHostAndFree(TGPUUsageArg* arg, void* devicePtr, size_t size, bool dontCopy = false);
+	
+	static void* _GetHostPtr(TGPUUsageArg* arg, void* devicePtr); //HG26072024
+	//static void* GetHostPtr(TGPUUsageArg* arg, void* devicePtr);
 public:
 	/**
 	 * Flags used by this class
@@ -177,14 +179,18 @@ public:
 		}
 #endif
 	}
-
+	
 	/**
 	* Retrieve the host memory address for a given device or host pointer
 	* @param [in] arg pointer to a GPU usage argument structure
 	* @param [in] devicePtr pointer for which the host pointer is desired
 	* @return the corresponding host pointer, NULL on errror
 	*/
-	static void* GetHostPtr(TGPUUsageArg* arg, void* devicePtr);
+	template<typename T>
+	static T* GetHostPtr(TGPUUsageArg* arg, T* devicePtr)
+	{
+		return (T*)_GetHostPtr(arg, devicePtr);
+	}
 
 	/**
 	* Transfer memory back to the host if necessary and free the associated device memory. Does not return until the latest copy of the data is on the host.

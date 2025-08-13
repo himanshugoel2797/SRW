@@ -248,7 +248,7 @@ void CAuxGPU::EnsureDeviceMemoryReady(TGPUUsageArg* arg, void* hostPtr)
 #endif
 }
 
-void* CAuxGPU::GetHostPtr(TGPUUsageArg* arg, void* devicePtr)
+void* CAuxGPU::_GetHostPtr(TGPUUsageArg* arg, void* devicePtr)
 {
 #ifdef _OFFLOAD_GPU
 	if (arg == NULL)
