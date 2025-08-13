@@ -87,9 +87,9 @@ private:
 	static std::map<void*, memAllocInfo_t> gpuMap;
 	//static bool memcpy_stream_initialized = false; //HG02082024 (commented-out)
 	static std::map<int, cudaStream_t*> streams; //HG02082024
+	static cudaStream_t memcpy_stream;
 #endif
 
-	static cudaStream_t memcpy_stream;
 	
 	//static void* ToDevice(TGPUUsageArg* arg, void* hostPtr, size_t size, bool dontCopy = false); //HG26072024
 	static void* _ToDevice(TGPUUsageArg* arg, void* hostPtr, size_t size, int flags=0); //HG26072024 Make private

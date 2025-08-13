@@ -30,6 +30,9 @@ static int deviceCount = 0;
 
 #ifdef _OFFLOAD_GPU
 static int current_device = -1;
+std::map<void*, CAuxGPU::memAllocInfo_t> CAuxGPU::gpuMap;
+std::map<int, cudaStream_t*> CAuxGPU::streams; //HG02082024
+cudaStream_t CAuxGPU::memcpy_stream;
 #endif
 
 static void CheckGPUAvailability() 
