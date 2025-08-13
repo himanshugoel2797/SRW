@@ -179,8 +179,7 @@ void* CAuxGPU::_ToDevice(TGPUUsageArg* arg, void* hostPtr, size_t size, int flag
 	}
 	if (hostPtr != NULL && pinOnHost) //Fallback to pinning host memory directly
 	{
-		err = cudaHostRegister(hostPtr, size, cudaHostRegisterMapped);
-		//err = cudaHostAlloc(&devicePtr, size, cudaHostAllocMapped);
+		err = cudaHostRegister(hostPtr, size, cudaHostRegisterDefault | cudaHostRegisterMapped);
 		cudaHostGetDevicePointer(&devicePtr, hostPtr, 0);
 	}
 	if (err != cudaSuccess)
@@ -325,10 +324,16 @@ void* CAuxGPU::_ToHostAndFree(TGPUUsageArg* arg, void* devicePtr, int flags, siz
 	}
 	else //HG26072024
 	{
-		if(!info.pinned) cudaStreamWaitEvent(0, info.h2d_event); //HG26072024 H2D events are meaningless when the memory is on host
-		cudaStreamWaitEvent(0, info.d2h_event);
-		if(!info.pinned) cudaFreeAsync(devicePtr, 0);
-		else cudaHostUnregister(devicePtr);
+		if(!info.pinned)
+		{
+			cudaStreamWaitEvent(0, info.h2d_event); //HG26072024 H2D events are meaningless when the memory is on host
+			cudaFreeAsync(devicePtr, 0);
+		} 
+		else
+		{
+			cudaEventSynchronize(info.d2h_event);
+			cudaHostUnregister(devicePtr);
+		} 
 	}
     cudaEventDestroy(info.h2d_event);
 	cudaEventDestroy(info.d2h_event);
