@@ -21,53 +21,74 @@
 #include <srstraux.h>
 
 #ifdef __CUDACC__
-template<class T> __global__ void RadPointModifierParallel_Kernel(srTSRWRadStructAccessData RadAccessData, void* pBufVars, T* tgt_obj)
+template<class T, bool combinedE> 
+__global__ void RadPointModifierParallel_Kernel(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars, T* tgt_obj, int xStart, int xFin, int zStart, int zFin) //HG27072024 Redesigned entire function
 {
-	int ix = (blockIdx.x * blockDim.x + threadIdx.x); //nx range
-	int iz = (blockIdx.y * blockDim.y + threadIdx.y); //nz range
+	int ie = (blockIdx.x * blockDim.x + threadIdx.x); //ne range
+	int ix = (blockIdx.y * blockDim.y + threadIdx.y) + xStart; //nx range
+	int iz = (blockIdx.z * blockDim.z + threadIdx.z) + zStart; //nz range
+	
+	int ne = 1;
+	if (combinedE)
+	{
+		ne = pRadAccessData->ne;
+		ie = 0;
+	} 
 
-	if (ix < RadAccessData.nx && iz < RadAccessData.nz)
+	if (ix < xFin && iz < zFin && ie < pRadAccessData->ne) //HG27072024 changed RadAccessData to pRadAccessData
 	{
 		srTEFieldPtrs EPtrs;
 		srTEXZ EXZ;
-		EXZ.z = RadAccessData.zStart + iz * RadAccessData.zStep;
-		EXZ.x = RadAccessData.xStart + ix * RadAccessData.xStep;
+		EXZ.z = pRadAccessData->zStart + iz * pRadAccessData->zStep;
+		EXZ.x = pRadAccessData->xStart + ix * pRadAccessData->xStep;
+		EXZ.e = pRadAccessData->eStart + ie * pRadAccessData->eStep;
+		EXZ.aux_offset = pRadAccessData->ne * pRadAccessData->nx * 2 * iz + pRadAccessData->ne * 2 * ix + ie * 2;
+		if (pRadAccessData->pBaseRadX != 0)
+		{
+			EPtrs.pExRe = pRadAccessData->pBaseRadX + EXZ.aux_offset;
+			EPtrs.pExIm = EPtrs.pExRe + 1;
+		}
+		else
+		{
+			EPtrs.pExRe = 0;
+			EPtrs.pExIm = 0;
+		}
+		if (pRadAccessData->pBaseRadZ != 0)
+		{
+			EPtrs.pEzRe = pRadAccessData->pBaseRadZ + EXZ.aux_offset;
+			EPtrs.pEzIm = EPtrs.pEzRe + 1;
+		}
+		else
+		{
+			EPtrs.pEzRe = 0;
+			EPtrs.pEzIm = 0;
+		}
 
-		for (int ie = 0; ie < RadAccessData.ne; ie++) {
-			EXZ.e = RadAccessData.eStart + ie * RadAccessData.eStep;
-			EXZ.aux_offset = RadAccessData.ne * RadAccessData.nx * 2 * iz + RadAccessData.ne * 2 * ix + ie * 2;
-			if (RadAccessData.pBaseRadX != 0)
-			{
-				EPtrs.pExRe = RadAccessData.pBaseRadX + EXZ.aux_offset;
-				EPtrs.pExIm = EPtrs.pExRe + 1;
-			}
-			else
-			{
-				EPtrs.pExRe = 0;
-				EPtrs.pExIm = 0;
-			}
-			if (RadAccessData.pBaseRadZ != 0)
-			{
-				EPtrs.pEzRe = RadAccessData.pBaseRadZ + EXZ.aux_offset;
-				EPtrs.pEzIm = EPtrs.pEzRe + 1;
-			}
-			else
-			{
-				EPtrs.pEzRe = 0;
-				EPtrs.pEzIm = 0;
-			}
+		tgt_obj->RadPointModifierPortable(EXZ, EPtrs, pBufVars);
 
+		for (ie=1; ie < ne; ie++)
+		{
+			EXZ.e += pRadAccessData->eStep;
+			EXZ.aux_offset += 2;
+			if (pRadAccessData->pBaseRadX != 0)
+			{
+				EPtrs.pExRe += 2;
+				EPtrs.pExIm += 2;
+			}
+			if (pRadAccessData->pBaseRadZ != 0)
+			{
+				EPtrs.pEzRe += 2;
+				EPtrs.pEzIm += 2;
+			}
 			tgt_obj->RadPointModifierPortable(EXZ, EPtrs, pBufVars);
 		}
 	}
 }
 
-template<class T> int RadPointModifierParallelImpl(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars, long pBufVarsSz, T* tgt_obj, TGPUUsageArg* pGPU)
+//template<class T> int RadPointModifierParallelImpl(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars, long pBufVarsSz, T* tgt_obj, TGPUUsageArg* pGPU)
+template<class T> 
+int RadPointModifierParallelImpl(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars, long pBufVarsSz, T* tgt_obj, TGPUUsageArg* pGPU, int *pRegion=0, bool combinedE=false) //HG29072024
 {
-	dim3 blocks(pRadAccessData->nx, pRadAccessData->nz);
-	dim3 threads(1);
-	CAuxGPU::CalcLaunchDims(RadPointModifierParallel_Kernel<T>, blocks, blocks, threads);
-	
 	if (pRadAccessData->pBaseRadX != NULL)
 	{
 		pRadAccessData->pBaseRadX = CAuxGPU::ToDevice(pGPU, pRadAccessData->pBaseRadX, 2*pRadAccessData->ne*pRadAccessData->nx*pRadAccessData->nz);
@@ -78,11 +99,10 @@ template<class T> int RadPointModifierParallelImpl(srTSRWRadStructAccessData* pR
 		pRadAccessData->pBaseRadZ = CAuxGPU::ToDevice(pGPU, pRadAccessData->pBaseRadZ, 2*pRadAccessData->ne*pRadAccessData->nx*pRadAccessData->nz);
 		CAuxGPU::EnsureDeviceMemoryReady(pGPU, pRadAccessData->pBaseRadZ);
 	}
-
+	
+	srTSRWRadStructAccessData* pRadAccessData_dev = (srTSRWRadStructAccessData*)CAuxGPU::ToDevice(pGPU, pRadAccessData, sizeof(srTSRWRadStructAccessData));
     T* local_copy = CAuxGPU::ToDevice(pGPU, tgt_obj, 1);
-	CAuxGPU::EnsureDeviceMemoryReady(pGPU, local_copy);
-    //cudaMalloc(&local_copy, sizeof(T));
-    //cudaMemcpy(local_copy, tgt_obj, sizeof(T), cudaMemcpyHostToDevice);
+	CAuxGPU::EnsureDeviceMemoryReady(pGPU, pRadAccessData_dev, local_copy);
 	
 	void* pBufVars_dev = NULL;
 	if (pBufVarsSz > 0)
@@ -90,15 +110,103 @@ template<class T> int RadPointModifierParallelImpl(srTSRWRadStructAccessData* pR
 		pBufVars_dev = CAuxGPU::ToDevice(pGPU, (char*)pBufVars, pBufVarsSz);
 		CAuxGPU::EnsureDeviceMemoryReady(pGPU, pBufVars_dev);
 	}
-	RadPointModifierParallel_Kernel<T> <<<blocks, threads >>> (*pRadAccessData, pBufVars_dev, local_copy);
-    //cudaDeviceSynchronize();
-    //cudaFreeAsync(local_copy, 0);
-	if (pBufVarsSz > 0) CAuxGPU::ToHostAndFree(pGPU, (char*)pBufVars_dev);
-	CAuxGPU::ToHostAndFree(pGPU, local_copy);
+	
+	int xStart = 0;
+	int xFin = pRadAccessData->nx;
+	int zStart = 0;
+	int zFin = pRadAccessData->nz;
+	
+	//HG30072024 Allow for specifying a region to skip or to only process within the region, reduces extra operations for propagators like apertures and obstacles
+	bool HandleInSingleLaunch = (pRegion == 0);
+	if (!HandleInSingleLaunch)
+	{
+		if (pRegion[4] == 0)
+		{
+			xStart = pRegion[0];
+			xFin = pRegion[1];
+			zStart = pRegion[2];
+			zFin = pRegion[3];
+			HandleInSingleLaunch = true;
+		}
+	}
+	
+	void (*kern)(srTSRWRadStructAccessData*, void*, T*, int, int, int, int) = NULL;
+	if (combinedE) kern = RadPointModifierParallel_Kernel<T, true>;
+	else kern = RadPointModifierParallel_Kernel<T, false>;
+	if (HandleInSingleLaunch)
+	{
+		dim3 blocks(combinedE ? 1 : pRadAccessData->ne, xFin - xStart, zFin - zStart);
+		dim3 threads(1);
+		CAuxGPU::CalcLaunchDims(kern, blocks, blocks, threads);
+		kern<<<blocks, threads >>> (pRadAccessData_dev, pBufVars_dev, local_copy, xStart, xFin, zStart, zFin);
+	}
+	else
+	{
+		//Have to split into 4 kernel launches to skip the specified region, run them in parallel
+		cudaEvent_t start, stop1, stop2, stop3;
+		cudaEventCreateWithFlags(&start, cudaEventDisableTiming);
+		cudaEventCreateWithFlags(&stop1, cudaEventDisableTiming);
+		cudaEventCreateWithFlags(&stop2, cudaEventDisableTiming);
+		cudaEventCreateWithFlags(&stop3, cudaEventDisableTiming);
+		
+		cudaStream_t stream1 = (cudaStream_t)CAuxGPU::GetComputeStream(pGPU, 0);
+		cudaStream_t stream2 = (cudaStream_t)CAuxGPU::GetComputeStream(pGPU, 1);
+		cudaStream_t stream3 = (cudaStream_t)CAuxGPU::GetComputeStream(pGPU, 2);
 
+		cudaEventRecord(start, 0); //Wait for main stream kernel execution to start
+		cudaStreamWaitEvent(stream1, start);
+		cudaStreamWaitEvent(stream2, start);
+		cudaStreamWaitEvent(stream3, start);
+
+		dim3 blocks0(combinedE ? 1 : pRadAccessData->ne, pRegion[0], pRadAccessData->nx);
+		dim3 blocks1(combinedE ? 1 : pRadAccessData->ne, pRadAccessData->nx - pRegion[1], pRadAccessData->nx);
+		dim3 blocks2(combinedE ? 1 : pRadAccessData->ne, pRegion[1] - pRegion[0], pRadAccessData->nz - pRegion[3]);
+		dim3 blocks3(combinedE ? 1 : pRadAccessData->ne, pRegion[1] - pRegion[0], pRegion[2]);
+		dim3 threads0(1);
+		dim3 threads1(1);
+		dim3 threads2(1);
+		dim3 threads3(1);
+
+		if (blocks0.y > 0 && blocks0.z > 0)
+		{
+			CAuxGPU::CalcLaunchDims(kern, blocks0, blocks0, threads0);
+			kern<<<blocks0, threads0 >>> (pRadAccessData_dev, pBufVars_dev, local_copy, 0, pRegion[0], 0, pRadAccessData->nx);
+		}
+		if (blocks1.y > 0 && blocks1.z > 0)
+		{
+			CAuxGPU::CalcLaunchDims(kern, blocks1, blocks1, threads1);
+			kern<<<blocks1, threads1 >>> (pRadAccessData_dev, pBufVars_dev, local_copy, pRegion[1], pRadAccessData->nx, 0, pRadAccessData->nx);
+		}
+		if (blocks2.y > 0 && blocks2.z > 0)
+		{
+			CAuxGPU::CalcLaunchDims(kern, blocks2, blocks2, threads2);
+			kern<<<blocks2, threads2 >>> (pRadAccessData_dev, pBufVars_dev, local_copy, pRegion[0], pRegion[1], pRegion[3], pRadAccessData->nz);
+		}
+		if (blocks3.y > 0 && blocks3.z > 0)
+		{
+			CAuxGPU::CalcLaunchDims(kern, blocks3, blocks3, threads3);
+			kern<<<blocks3, threads3 >>> (pRadAccessData_dev, pBufVars_dev, local_copy, pRegion[0], pRegion[1], 0, pRegion[2]);
+		}
+		
+		cudaEventRecord(stop1, stream1);
+		cudaEventRecord(stop2, stream2);
+		cudaEventRecord(stop3, stream3);
+		cudaStreamWaitEvent(0, stop1);
+		cudaStreamWaitEvent(0, stop2); //Wait for all streams to finish
+		cudaStreamWaitEvent(0, stop3);
+		cudaEventDestroy(start);
+		cudaEventDestroy(stop1);
+		cudaEventDestroy(stop2);
+		cudaEventDestroy(stop3);
+	}
+
+	if (pBufVarsSz > 0) CAuxGPU::ToHostAndFree(pGPU, (char*)pBufVars_dev);
+	CAuxGPU::ToHostAndFree(pGPU, pRadAccessData_dev); //HG27072024
+	CAuxGPU::ToHostAndFree(pGPU, local_copy);
+	
 	CAuxGPU::MarkUpdated(pGPU, pRadAccessData->pBaseRadX, CAuxGPU::DEVICE);
 	CAuxGPU::MarkUpdated(pGPU, pRadAccessData->pBaseRadZ, CAuxGPU::DEVICE);
-
+	
 //#ifndef _DEBUG //HG26022024 (commented-out)
 	if (pRadAccessData->pBaseRadX != NULL)
 		pRadAccessData->pBaseRadX = (float*)CAuxGPU::GetHostPtr(pGPU, pRadAccessData->pBaseRadX);
