@@ -179,8 +179,8 @@ public:
 			TGPUUsageArg parGPU(pvGPU);
 			if(CAuxGPU::GPUEnabled(&parGPU))
 			{
-				RadAccessData.pBaseRadX = CAuxGPU::ToHostAndFree(&parGPU, RadAccessData.pBaseRadX, 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz);
-				RadAccessData.pBaseRadZ = CAuxGPU::ToHostAndFree(&parGPU, RadAccessData.pBaseRadZ, 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz);
+				RadAccessData.pBaseRadX = CAuxGPU::ToHostAndFree(&parGPU, RadAccessData.pBaseRadX, 0, 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz);
+				RadAccessData.pBaseRadZ = CAuxGPU::ToHostAndFree(&parGPU, RadAccessData.pBaseRadZ, 0, 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz);
 			}
 #endif
 

@@ -1691,8 +1691,8 @@ int srTGenOptElem::ComputeRadMoments(srTSRWRadStructAccessData* pSRWRadStructAcc
 		if (CAuxGPU::GPUEnabled(&parGPU))
 		{
 			//TODO: Make proper GPU port for this part, transferring data back to CPU is a temporary solution
-			pSRWRadStructAccessData->pBaseRadX = (float*)CAuxGPU::ToHostAndFree(&parGPU, pSRWRadStructAccessData->pBaseRadX, 2*pSRWRadStructAccessData->ne*pSRWRadStructAccessData->nx*pSRWRadStructAccessData->nz*sizeof(float));
-			pSRWRadStructAccessData->pBaseRadZ = (float*)CAuxGPU::ToHostAndFree(&parGPU, pSRWRadStructAccessData->pBaseRadZ, 2*pSRWRadStructAccessData->ne*pSRWRadStructAccessData->nx*pSRWRadStructAccessData->nz*sizeof(float));
+			pSRWRadStructAccessData->pBaseRadX = (float*)CAuxGPU::ToHostAndFree(&parGPU, pSRWRadStructAccessData->pBaseRadX, 0, 2*pSRWRadStructAccessData->ne*pSRWRadStructAccessData->nx*pSRWRadStructAccessData->nz*sizeof(float));
+			pSRWRadStructAccessData->pBaseRadZ = (float*)CAuxGPU::ToHostAndFree(&parGPU, pSRWRadStructAccessData->pBaseRadZ, 0, 2*pSRWRadStructAccessData->ne*pSRWRadStructAccessData->nx*pSRWRadStructAccessData->nz*sizeof(float));
 		}
 #endif
 

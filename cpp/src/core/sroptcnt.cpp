@@ -351,9 +351,9 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 				//				printf("Element does not support GPU, transferring to CPU.\r\n");
 				//#endif
 				if(wfr.pBaseRadX != NULL)
-					wfr.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadX, 2 * wfr.ne * wfr.nx * wfr.nz);
+					wfr.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadX, 0, 2 * wfr.ne * wfr.nx * wfr.nz);
 				if(wfr.pBaseRadZ != NULL)
-					wfr.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadZ, 2 * wfr.ne * wfr.nx * wfr.nz);
+					wfr.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadZ, 0, 2 * wfr.ne * wfr.nx * wfr.nz);
 				dataOnDevice = false;
 			}
 			//else if(!dataOnDevice && (((srTGenOptElem*)it->rep)->SupportedFeatures() & 1) == 1)
@@ -369,7 +369,8 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 
 		srTRadResizeVect auxResizeVect;
 		//if(res = ((srTGenOptElem*)(it->rep))->PropagateRadiation(&wfr, precParWfrPropag, auxResizeVect)) return res;
-		if(res = ((srTGenOptElem*)(it->rep))->PropagateRadiation(&wfr, precParWfrPropag, auxResizeVect, pvGPU)) return res; //HG30112023
+		//if(res = ((srTGenOptElem*)(it->rep))->PropagateRadiation(&wfr, precParWfrPropag, auxResizeVect, pvGPU)) return res; //HG30112023
+		if(res = ((srTGenOptElem*)(it->rep))->PropagateRadiation(&wfr, precParWfrPropag, auxResizeVect, (((srTGenOptElem*)it->rep)->GPUImplFeatures() & 1) == 0 ? 0 : pvGPU )) return res; //HG26072024 Don't pass pvGPU to propagators that don't support it
 		//maybe to use "PropagateRadiationGuided" for srTCompositeOptElem?
 
 		//OC_DEBUG
@@ -388,9 +389,9 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 				if(dataOnDevice)
 				{
 					if(wfr.pBaseRadX != NULL)
-						wfr.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadX, 2 * wfr.ne * wfr.nx * wfr.nz);
+						wfr.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadX, 0, 2 * wfr.ne * wfr.nx * wfr.nz);
 					if(wfr.pBaseRadZ != NULL)
-						wfr.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadZ, 2 * wfr.ne * wfr.nx * wfr.nz);
+						wfr.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadZ, 0, 2 * wfr.ne * wfr.nx * wfr.nz);
 					dataOnDevice = false;
 				}
 			}
@@ -414,13 +415,47 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 		//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
 		//srwlPrintTime("PropagateRadiationGuided: GenOptElemPropResizeVect",&start);
 
+		//if((::fabs(postResize.pxd - 1.) > tolRes) || (::fabs(postResize.pxm - 1.) > tolRes) ||
+		//   (::fabs(postResize.pzd - 1.) > tolRes) || (::fabs(postResize.pzm - 1.) > tolRes))
+		//	if(res = RadResizeGen(wfr, postResize)) return res;
 		if((::fabs(postResize.pxd - 1.) > tolRes) || (::fabs(postResize.pxm - 1.) > tolRes) ||
 		   (::fabs(postResize.pzd - 1.) > tolRes) || (::fabs(postResize.pzm - 1.) > tolRes))
-			if(res = RadResizeGen(wfr, postResize)) return res;
+		{
+					if(res = RadResizeGen(wfr, postResize, pvGPU)) return res; //HG26072024 make this resize able to use GPU
+#ifdef _OFFLOAD_GPU
+			if(CAuxGPU::GPUEnabled(pGPU)) dataOnDevice = true;
+#endif
+		}
+
+#ifdef _OFFLOAD_GPU //HG26072024 Make sure the data is returned to CPU
+		if (CAuxGPU::GPUEnabled(pGPU)) {
+			if (dataOnDevice)
+			{
+				if (wfr.pBaseRadX != NULL)
+					wfr.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadX, 0, 2 * wfr.ne * wfr.nx * wfr.nz);
+				if (wfr.pBaseRadZ != NULL)
+					wfr.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadZ, 0, 2 * wfr.ne * wfr.nx * wfr.nz);
+				dataOnDevice = false;
+			}
+		}
+#endif
 
 		if(propIntIsNeeded) ExtractPropagatedIntensity(wfr, nInt, arID, arIM, arI, elemCount); //OC29082018
 		//if(propIntIsNeeded) ExtractPropagatedIntensity(wfr, nInt, arID, arIM, arI, elemCount, nInt - 1);
 	}
+
+#ifdef _OFFLOAD_GPU //HG26072024 Make sure the data is returned to CPU
+	if (CAuxGPU::GPUEnabled(pGPU)) {
+		if (dataOnDevice)
+		{
+			if (wfr.pBaseRadX != NULL)
+				wfr.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadX, 0, 2 * wfr.ne * wfr.nx * wfr.nz);
+			if (wfr.pBaseRadZ != NULL)
+				wfr.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadZ, 0, 2 * wfr.ne * wfr.nx * wfr.nz);
+			dataOnDevice = false;
+		}
+	}
+#endif
 	return 0;
 }
 
