@@ -26,6 +26,9 @@ set(CMAKE_BUILD_TYPE Release)
 # Option for OpenMP build, OFF by default.
 option(USE_OPENMP "Activate OpenMP build" OFF)
 
+# Option for CUDA build, OFF by default.
+option(USE_CUDA "Activate CUDA build" OFF)
+
 # Option for C client library to be built or not - See cpp/env/cmake/CMakeLists.txt
 option(BUILD_CLIENT_C "Activate C Client library build" OFF)
 

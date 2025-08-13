@@ -24,6 +24,9 @@ if(USE_OPENMP)
     link_libraries(OpenMP::OpenMP_CXX)
     # Setup OpenMP include dir for all targets
     include_directories(${OpenMP_CXX_INCLUDE_DIRS})
+elseif(USE_CUDA)
+    enable_language(CUDA)
+    set(SRW_DEFINITIONS -D_GNU_SOURCE -D__USE_XOPEN2K8 -DFFTW_ENABLE_FLOAT -D_GM_WITHOUT_BASE -DSRWLIB_STATIC -DNO_TIMER -DANSI_DECLARATORS -DTRILIBRARY -D_FFTW3 -D_OFFLOAD_GPU -DUSE_CUDA)
 else()
     set(SRW_DEFINITIONS -D_GNU_SOURCE -D__USE_XOPEN2K8 -DFFTW_ENABLE_FLOAT -D_GM_WITHOUT_BASE -DSRWLIB_STATIC -DNO_TIMER -DANSI_DECLARATORS -DTRILIBRARY -D_FFTW3)
 endif()
@@ -32,6 +35,18 @@ endif()
 add_definitions(${SRW_DEFINITIONS})
 
 #ext
+#auxgpu
+if(USE_CUDA)
+    set(auxgpu_source_files
+        ../src/ext/auxgpu/auxgpu.cpp
+        ../src/ext/auxgpu/auxgpu.h
+    )
+
+    add_library(auxgpu OBJECT ${auxgpu_source_files})
+    target_include_directories(auxgpu PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../src/ext/auxgpu)
+    target_compile_definitions(auxgpu PRIVATE ${SRW_DEFINITIONS})
+endif()
+
 #auxparse
 set(auxparse_source_files
     ../src/ext/auxparse/auxparse.cpp
@@ -97,6 +112,15 @@ set(genmath_source_files
     ../src/ext/genmath/gmtrans.h
 )
 
+if(USE_CUDA)
+    set(genmath_source_files
+        ${genmath_source_files}
+        ../src/ext/genmath/gmfft_gpu.cu
+    )
+    target_include_directories(genmath PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../src/ext/auxgpu/)
+    set_target_properties(genmath PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+endif()
+
 add_library(genmath OBJECT ${genmath_source_files})
 target_link_libraries(genmath PUBLIC auxparse)
 target_include_directories(genmath PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../src/ext/genmath/ ${CMAKE_CURRENT_SOURCE_DIR}/../src/lib)
@@ -159,6 +183,15 @@ set(core_source_files
     ../src/core/srtrjdat3d.cpp
 )
 
+if(USE_CUDA)
+    set(core_source_files
+        ${genmath_source_files}
+        ../src/ext/genmath/gmfft_gpu.cu
+    )
+    target_include_directories(core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../src/ext/auxgpu/)
+    set_target_properties(core PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+endif()
+
 add_library(core OBJECT ${core_source_files})
 target_link_libraries(core genesis)
 target_compile_definitions(core PRIVATE ${SRW_DEFINITIONS})
@@ -168,24 +201,33 @@ target_include_directories(core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../src/lib>
 )
 
+
 #lib
 set(srw_lib_source_files
     ../src/lib/srwlib.cpp
     ../src/lib/srwlib.h
-#    ../src/lib/auxgpu.h
-#    ../src/lib/auxgpu.cpp
     ../src/lib/srerror.cpp
     ../src/lib/srerror.h
 )
 
-add_library(srw STATIC
-    ${srw_lib_source_files}
-    $<TARGET_OBJECTS:core>
-    $<TARGET_OBJECTS:genesis>
-    $<TARGET_OBJECTS:genmath>
-    $<TARGET_OBJECTS:auxparse>
-)
-
+if (USE_CUDA)
+    add_library(srw STATIC
+        ${srw_lib_source_files}
+        $<TARGET_OBJECTS:core>
+        $<TARGET_OBJECTS:genesis>
+        $<TARGET_OBJECTS:genmath>
+        $<TARGET_OBJECTS:auxparse>
+        $<TARGET_OBJECTS:auxgpu>
+    )
+else()
+    add_library(srw STATIC
+        ${srw_lib_source_files}
+        $<TARGET_OBJECTS:core>
+        $<TARGET_OBJECTS:genesis>
+        $<TARGET_OBJECTS:genmath>
+        $<TARGET_OBJECTS:auxparse>
+    )
+endif()
 
 # Add definitions needed to build SRW
 target_compile_definitions(srw PUBLIC ${SRW_DEFINITIONS})
@@ -196,6 +238,13 @@ target_link_libraries(srw core ${FFTW_DOUBLE_LIB} ${FFTW_FLOAT_LIB})
 if (UNIX)
     # Math library is only needed by unix. When using Windows, VS does it for you.
     target_link_libraries(srw m)
+endif()
+
+if(USE_CUDA)
+    target_link_libraries(srw auxgpu cudart_static cudadevrt cufft rt)
+    target_include_directories(srw PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../src/ext/auxgpu>
+    )
 endif()
 
 target_include_directories(srw PUBLIC
