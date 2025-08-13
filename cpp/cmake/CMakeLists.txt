@@ -195,6 +195,7 @@ if(USE_CUDA)
         ../src/core/sroptdrf_gpu.cu
         ../src/core/sroptfoc_gpu.cu
         ../src/core/sroptgtr_gpu.cu
+        ../src/core/sroptzp_gpu.cu
         ../src/core/srradmnp_gpu.cu
         ../src/core/srmatsta_gpu.cu
     )
