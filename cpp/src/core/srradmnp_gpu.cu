@@ -347,12 +347,12 @@ int srTRadGenManip::ExtractSingleElecIntensity2DvsXZ_GPU(srTRadExtract& RadExtra
 	if(Int_or_ReE != 2)
 	{
 		if (RadExtract.pExtractedData != NULL)
-			RadExtract.pExtractedData = (float*)CAuxGPU::GetHostPtr(pGPU, RadExtract.pExtractedData);
+			RadExtract.pExtractedData = CAuxGPU::GetHostPtr(pGPU, RadExtract.pExtractedData);
 	}
 	else
 	{
 		if (RadExtract.pExtractedDataD != NULL)
-			RadExtract.pExtractedDataD = (double*)CAuxGPU::GetHostPtr(pGPU, RadExtract.pExtractedDataD);
+			RadExtract.pExtractedDataD = CAuxGPU::GetHostPtr(pGPU, RadExtract.pExtractedDataD);
 	}
 //#endif
 
@@ -383,9 +383,9 @@ int srTRadGenManip::ExtractSingleElecIntensity2DvsXZ_GPU(srTRadExtract& RadExtra
 	//	RadAccessData.pBaseRadZ = (float*)CAuxGPU::ToHostAndFree(pGPU, RadAccessData.pBaseRadZ, 2 * RadAccessData.ne * RadAccessData.nx * RadAccessData.nz * sizeof(float), true); //HG13012024 Original wavefront data does not need to be copied back to CPU
 
 	if (RadAccessData.pBaseRadX != NULL)
-		RadAccessData.pBaseRadX = (float*)CAuxGPU::GetHostPtr(pGPU, RadAccessData.pBaseRadX); //HG13012024 Original wavefront data does not need to be copied back to CPU
+		RadAccessData.pBaseRadX = CAuxGPU::GetHostPtr(pGPU, RadAccessData.pBaseRadX); //HG13012024 Original wavefront data does not need to be copied back to CPU
 	if (RadAccessData.pBaseRadZ != NULL)
-		RadAccessData.pBaseRadZ = (float*)CAuxGPU::GetHostPtr(pGPU, RadAccessData.pBaseRadZ); //HG13012024 Original wavefront data does not need to be copied back to CPU
+		RadAccessData.pBaseRadZ = CAuxGPU::GetHostPtr(pGPU, RadAccessData.pBaseRadZ); //HG13012024 Original wavefront data does not need to be copied back to CPU
 
 //HG26022024 (commented out)
 //#ifdef _DEBUG

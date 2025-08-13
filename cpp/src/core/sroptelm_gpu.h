@@ -209,9 +209,9 @@ int RadPointModifierParallelImpl(srTSRWRadStructAccessData* pRadAccessData, void
 	
 //#ifndef _DEBUG //HG26022024 (commented-out)
 	if (pRadAccessData->pBaseRadX != NULL)
-		pRadAccessData->pBaseRadX = (float*)CAuxGPU::GetHostPtr(pGPU, pRadAccessData->pBaseRadX);
+		pRadAccessData->pBaseRadX = CAuxGPU::GetHostPtr(pGPU, pRadAccessData->pBaseRadX);
 	if (pRadAccessData->pBaseRadZ != NULL)
-		pRadAccessData->pBaseRadZ = (float*)CAuxGPU::GetHostPtr(pGPU, pRadAccessData->pBaseRadZ);
+		pRadAccessData->pBaseRadZ = CAuxGPU::GetHostPtr(pGPU, pRadAccessData->pBaseRadZ);
 //#endif
 
 //HG26022024 (commented-out)

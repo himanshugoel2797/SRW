@@ -346,7 +346,8 @@ int srTGenOptElem::TraverseRad1D(srTRadSect1D* pSect1D, void* pBufVars) //OC0609
 
 //*************************************************************************
 
-int srTGenOptElem::ExtractRadSliceConstE(srTSRWRadStructAccessData* pRadAccessData, long ie, float*& pOutEx, float*& pOutEz, bool forceCopyField)
+//int srTGenOptElem::ExtractRadSliceConstE(srTSRWRadStructAccessData* pRadAccessData, long ie, float*& pOutEx, float*& pOutEz, bool forceCopyField)
+int srTGenOptElem::ExtractRadSliceConstE(srTSRWRadStructAccessData* pRadAccessData, long ie, float*& pOutEx, float*& pOutEz, bool forceCopyField, void* pvGPU) //HG26072024
 {// ATTENTION: In the case of single energy, it may simply return pointers from pRadAccessData!!!
 
 	float *pEx0 = pRadAccessData->pBaseRadX;
@@ -372,6 +373,14 @@ int srTGenOptElem::ExtractRadSliceConstE(srTSRWRadStructAccessData* pRadAccessDa
 	long long PerZ = PerX*pRadAccessData->nx;
 	long long izPerZ = 0;
 	long long iePerE = ie << 1;
+
+#ifdef _OFFLOAD_GPU //HG26072024
+	TGPUUsageArg parGPU(pvGPU);
+	if(CAuxGPU::GPUEnabled(&parGPU))
+	{
+		if(ExtractRadSliceConstE_GPU(pRadAccessData, ie, pOutEx, pOutEz, &parGPU) == 0) return 0; //If GPU version is successful, return, otherwise continue with CPU
+	}
+#endif
 
 	float *tOutEx = pOutEx, *tOutEz = pOutEz;
 	for(int iz=0; iz<pRadAccessData->nz; iz++)
@@ -403,8 +412,17 @@ int srTGenOptElem::ExtractRadSliceConstE(srTSRWRadStructAccessData* pRadAccessDa
 
 //*************************************************************************
 
-int srTGenOptElem::SetupRadSliceConstE(srTSRWRadStructAccessData* pRadAccessData, long ie, float* pInEx, float* pInEz)
+//int srTGenOptElem::SetupRadSliceConstE(srTSRWRadStructAccessData* pRadAccessData, long ie, float* pInEx, float* pInEz)
+int srTGenOptElem::SetupRadSliceConstE(srTSRWRadStructAccessData* pRadAccessData, long ie, float* pInEx, float* pInEz, void* pvGPU) //HG27072024 
 {
+#ifdef _OFFLOAD_GPU //HG27072024
+	TGPUUsageArg parGPU(pvGPU);
+	if(CAuxGPU::GPUEnabled(&parGPU))
+	{
+		return SetupRadSliceConstE_GPU(pRadAccessData, ie, pInEx, pInEz, &parGPU);
+	}
+#endif
+
 	float *pEx0 = pRadAccessData->pBaseRadX;
 	float *pEz0 = pRadAccessData->pBaseRadZ;
 	//long PerX = pRadAccessData->ne << 1;
@@ -513,7 +531,8 @@ int srTGenOptElem::SetupSectionArraysVsXandZ(srTSRWRadStructAccessData* pRadAcce
 
 //*************************************************************************
 
-int srTGenOptElem::SetupNewRadStructFromSliceConstE(srTSRWRadStructAccessData* pRadAccessData, long ie, srTSRWRadStructAccessData*& pRadDataSingleE)
+//int srTGenOptElem::SetupNewRadStructFromSliceConstE(srTSRWRadStructAccessData* pRadAccessData, long ie, srTSRWRadStructAccessData*& pRadDataSingleE)
+int srTGenOptElem::SetupNewRadStructFromSliceConstE(srTSRWRadStructAccessData* pRadAccessData, long ie, srTSRWRadStructAccessData*& pRadDataSingleE, void* pvGPU) //HG26072024
 {// Only new Electric Field may be allocated (all the rest just points to old data !!!)
 	//if(pRadAccessData->ne == 1)
 	//{
@@ -541,8 +560,9 @@ int srTGenOptElem::SetupNewRadStructFromSliceConstE(srTSRWRadStructAccessData* p
 
 	int result;
 	if((ie >= 0) && (ie < pRadAccessData->ne))
-	{
-		if(result = ExtractRadSliceConstE(pRadAccessData, ie, pRadDataSingleE->pBaseRadX, pRadDataSingleE->pBaseRadZ)) return result;
+	{	
+		//if(result = ExtractRadSliceConstE(pRadAccessData, ie, pRadDataSingleE->pBaseRadX, pRadDataSingleE->pBaseRadZ)) return result;
+		if(result = ExtractRadSliceConstE(pRadAccessData, ie, pRadDataSingleE->pBaseRadX, pRadDataSingleE->pBaseRadZ, false, pvGPU)) return result; //HG26072024
 		OffsetPhotEn = ie*pRadAccessData->eStep;
 		//pRadDataSingleE->eStart = pRadAccessData->eStart + ie*pRadAccessData->eStep;
 		OffsetMom = AmOfMoments*ie;
@@ -618,7 +638,8 @@ int srTGenOptElem::UpdateGenRadStructFromSlicesConstE_Meth_0(srTSRWRadStructAcce
 
 //int srTGenOptElem::UpdateGenRadStructSliceConstE_Meth_0(srTSRWRadStructAccessData* pRadDataSliceConstE, int ie, srTSRWRadStructAccessData* pRadAccessData)
 //OC28102018: modified by S.Yakubov to prepare the code for OpenMP parallelization
-int srTGenOptElem::UpdateGenRadStructSliceConstE_Meth_0(srTSRWRadStructAccessData* pRadDataSliceConstE, int ie, srTSRWRadStructAccessData* pRadAccessData, int update_mode)
+//int srTGenOptElem::UpdateGenRadStructSliceConstE_Meth_0(srTSRWRadStructAccessData* pRadDataSliceConstE, int ie, srTSRWRadStructAccessData* pRadAccessData, int update_mode)
+int srTGenOptElem::UpdateGenRadStructSliceConstE_Meth_0(srTSRWRadStructAccessData* pRadDataSliceConstE, int ie, srTSRWRadStructAccessData* pRadAccessData, int update_mode, void* pvGPU) //HG26072024
 {//Compose the Electric Field of the pRadAccessData from the slices ConstE.
  //The slices are assumed to have same dimensions over nx and nz. 
 
@@ -638,6 +659,14 @@ int srTGenOptElem::UpdateGenRadStructSliceConstE_Meth_0(srTSRWRadStructAccessDat
 		int nxCom = pRadAccessData->nx;
 		int nzCom = pRadAccessData->nz;
 		if(neCom <= 0) return 0;
+
+#ifdef _OFFLOAD_GPU //HG26072024
+		TGPUUsageArg parGPU(pvGPU);
+		if (CAuxGPU::GPUEnabled(&parGPU))
+		{
+			if (UpdateGenRadStructSliceConstE_Meth_0_GPU(pRadDataSliceConstE, ie, pRadAccessData, &parGPU) == 0) return 0; //If GPU version is successful, return, otherwise continue with CPU
+		}
+#endif
 
 		//long PerX = neCom << 1;
 		//long PerZ = PerX*nxCom;
@@ -4078,7 +4107,8 @@ int srTGenOptElem::RadResizeCoreE(srTSRWRadStructAccessData& OldRadAccessData, s
 
 //*************************************************************************
 
-int srTGenOptElem::ReInterpolateWfrSliceSingleE(srTSRWRadStructAccessData& oldRadSingleE, srTSRWRadStructAccessData& newRadMultiE, int ie)
+//int srTGenOptElem::ReInterpolateWfrSliceSingleE(srTSRWRadStructAccessData& oldRadSingleE, srTSRWRadStructAccessData& newRadMultiE, int ie)
+int srTGenOptElem::ReInterpolateWfrSliceSingleE(srTSRWRadStructAccessData& oldRadSingleE, srTSRWRadStructAccessData& newRadMultiE, int ie, void* pvGPU) //HG26072024
 {//similar to "RadResizeCore"; eventually used for propagation at different photon energies
 	const double DistAbsTol = 1.E-10;
 	bool TreatPolCompX=true, TreatPolCompZ=true;
@@ -4097,7 +4127,8 @@ int srTGenOptElem::ReInterpolateWfrSliceSingleE(srTSRWRadStructAccessData& oldRa
 	{
 		newRadMultiE.WfrQuadTermCanBeTreatedAtResizeX = oldRadSingleE.WfrQuadTermCanBeTreatedAtResizeX;
 		newRadMultiE.WfrQuadTermCanBeTreatedAtResizeZ = oldRadSingleE.WfrQuadTermCanBeTreatedAtResizeZ;
-		TreatStronglyOscillatingTerm(oldRadSingleE, 'r', 0);
+		//TreatStronglyOscillatingTerm(oldRadSingleE, 'r', 0);
+		TreatStronglyOscillatingTerm(oldRadSingleE, 'r', 0, -1, pvGPU); //HG27072024
 		WaveFrontTermWasTreated = true;
 	}
 
@@ -4117,201 +4148,212 @@ int srTGenOptElem::ReInterpolateWfrSliceSingleE(srTSRWRadStructAccessData& oldRa
 	if(TreatPolCompX) pEX0_New = newRadMultiE.pBaseRadX;
 	if(TreatPolCompZ) pEZ0_New = newRadMultiE.pBaseRadZ;
 
-	//long PerX_New = newRadMultiE.ne << 1;
-	//long PerZ_New = PerX_New*newRadMultiE.nx;
-	long long PerX_New = newRadMultiE.ne << 1;
-	long long PerZ_New = PerX_New*newRadMultiE.nx;
-
-	//long PerX_Old = 2; //PerX_New;
-	//long PerZ_Old = PerX_Old*oldRadSingleE.nx;
-	long long PerX_Old = 2; //PerX_New;
-	long long PerZ_Old = PerX_Old*oldRadSingleE.nx;
-
-	float BufF[4], BufFI[2];
-	int UseLowOrderInterp_PolCompX, UseLowOrderInterp_PolCompZ;
-	int result = 0;
-
-	//for(int ie=0; ie<NewRadAccessData.ne; ie++)
-	//{
-	//ixStOldPrev = -1000; izStOldPrev = -1000;
-
-	//long Two_ie = ie << 1;
-	long long Two_ie = ie << 1;
-	for(int iz=izStart; iz<=izEnd; iz++)
+	#ifdef _OFFLOAD_GPU //HG27072024
+	TGPUUsageArg parGPU(pvGPU);
+	if(CAuxGPU::GPUEnabled(&parGPU))
 	{
-		if(result = srYield.Check()) return result;
+		ReInterpolateWfrSliceSingleE_GPU(oldRadSingleE, newRadMultiE, ie, &parGPU);
+	}
+	else
+#endif
+	{
+		//long PerX_New = newRadMultiE.ne << 1;
+		//long PerZ_New = PerX_New*newRadMultiE.nx;
+		long long PerX_New = newRadMultiE.ne << 1;
+		long long PerZ_New = PerX_New*newRadMultiE.nx;
 
-		double zAbs = newRadMultiE.zStart + iz*newRadMultiE.zStep;
-		char FieldShouldBeZeroedDueToZ = 0;
-		if(newRadMultiE.WfrEdgeCorrShouldBeDone)
+		//long PerX_Old = 2; //PerX_New;
+		//long PerZ_Old = PerX_Old*oldRadSingleE.nx;
+		long long PerX_Old = 2; //PerX_New;
+		long long PerZ_Old = PerX_Old*oldRadSingleE.nx;
+
+		float BufF[4], BufFI[2];
+		int UseLowOrderInterp_PolCompX, UseLowOrderInterp_PolCompZ;
+		int result = 0;
+
+		//for(int ie=0; ie<NewRadAccessData.ne; ie++)
+		//{
+		//ixStOldPrev = -1000; izStOldPrev = -1000;
+
+		//long Two_ie = ie << 1;
+		long long Two_ie = ie << 1;
+		for(int iz=izStart; iz<=izEnd; iz++)
 		{
-			if((zAbs < newRadMultiE.zWfrMin - DistAbsTol) || (zAbs > newRadMultiE.zWfrMax + DistAbsTol)) FieldShouldBeZeroedDueToZ = 1;
-		}
-		int izcOld = int((zAbs - oldRadSingleE.zStart)*zStepInvOld + 1.E-06);
-		if((izcOld < 0) || (izcOld > nz_mi_1Old))
-		{
-			//set El. field to 0 for all ix
-			FieldShouldBeZeroedDueToZ = 1;
-		}
+			if(result = srYield.Check()) return result;
 
-		double zRel = zAbs - (oldRadSingleE.zStart + izcOld*oldRadSingleE.zStep);
-
-		if(izcOld == nz_mi_1Old) { izStOld = izcOld - 3; zRel += 2.*oldRadSingleE.zStep;}
-		else if(izcOld == nz_mi_2Old) { izStOld = izcOld - 2; zRel += oldRadSingleE.zStep;}
-		else if(izcOld == 0) { izStOld = izcOld; zRel -= oldRadSingleE.zStep;}
-		else izStOld = izcOld - 1;
-
-		zRel *= zStepInvOld;
-		int izcOld_mi_izStOld = izcOld - izStOld;
-		//long izPerZ_New = iz*PerZ_New;
-		long long izPerZ_New = iz*PerZ_New;
-
-		float *pEX_StartForX_New = 0, *pEZ_StartForX_New = 0;
-		if(TreatPolCompX) pEX_StartForX_New = pEX0_New + izPerZ_New;
-		if(TreatPolCompZ) pEZ_StartForX_New = pEZ0_New + izPerZ_New;
-
-		for(int ix=ixStart; ix<=ixEnd; ix++)
-		{
-			//long ixPerX_New_p_Two_ie = ix*PerX_New + Two_ie;
-			long long ixPerX_New_p_Two_ie = ix*PerX_New + Two_ie;
-			float *pEX_New = 0, *pEZ_New = 0;
-			if(TreatPolCompX) pEX_New = pEX_StartForX_New + ixPerX_New_p_Two_ie;
-			if(TreatPolCompZ) pEZ_New = pEZ_StartForX_New + ixPerX_New_p_Two_ie;
-
-			double xAbs = newRadMultiE.xStart + ix*newRadMultiE.xStep;
-			char FieldShouldBeZeroedDueToX = 0;
+			double zAbs = newRadMultiE.zStart + iz*newRadMultiE.zStep;
+			char FieldShouldBeZeroedDueToZ = 0;
 			if(newRadMultiE.WfrEdgeCorrShouldBeDone)
 			{
-				if((xAbs < newRadMultiE.xWfrMin - DistAbsTol) || (xAbs > newRadMultiE.xWfrMax + DistAbsTol)) FieldShouldBeZeroedDueToX = 1;
+				if((zAbs < newRadMultiE.zWfrMin - DistAbsTol) || (zAbs > newRadMultiE.zWfrMax + DistAbsTol)) FieldShouldBeZeroedDueToZ = 1;
+			}
+			int izcOld = int((zAbs - oldRadSingleE.zStart)*zStepInvOld + 1.E-06);
+			if((izcOld < 0) || (izcOld > nz_mi_1Old))
+			{
+				//set El. field to 0 for all ix
+				FieldShouldBeZeroedDueToZ = 1;
 			}
 
-			int ixcOld = int((xAbs - oldRadSingleE.xStart)*xStepInvOld + 1.E-06);
-			if((ixcOld < 0) || (ixcOld > nx_mi_1Old))
-			{
-				FieldShouldBeZeroedDueToX = 1;
-			}
-			char FieldShouldBeZeroed = (FieldShouldBeZeroedDueToX || FieldShouldBeZeroedDueToZ);
+			double zRel = zAbs - (oldRadSingleE.zStart + izcOld*oldRadSingleE.zStep);
 
-			if(FieldShouldBeZeroed)
+			if(izcOld == nz_mi_1Old) { izStOld = izcOld - 3; zRel += 2.*oldRadSingleE.zStep;}
+			else if(izcOld == nz_mi_2Old) { izStOld = izcOld - 2; zRel += oldRadSingleE.zStep;}
+			else if(izcOld == 0) { izStOld = izcOld; zRel -= oldRadSingleE.zStep;}
+			else izStOld = izcOld - 1;
+
+			zRel *= zStepInvOld;
+			int izcOld_mi_izStOld = izcOld - izStOld;
+			//long izPerZ_New = iz*PerZ_New;
+			long long izPerZ_New = iz*PerZ_New;
+
+			float *pEX_StartForX_New = 0, *pEZ_StartForX_New = 0;
+			if(TreatPolCompX) pEX_StartForX_New = pEX0_New + izPerZ_New;
+			if(TreatPolCompZ) pEZ_StartForX_New = pEZ0_New + izPerZ_New;
+
+			for(int ix=ixStart; ix<=ixEnd; ix++)
 			{
-				//*BufF = 0.; *(BufF+1) = 0.;
+				//long ixPerX_New_p_Two_ie = ix*PerX_New + Two_ie;
+				long long ixPerX_New_p_Two_ie = ix*PerX_New + Two_ie;
+				float *pEX_New = 0, *pEZ_New = 0;
+				if(TreatPolCompX) pEX_New = pEX_StartForX_New + ixPerX_New_p_Two_ie;
+				if(TreatPolCompZ) pEZ_New = pEZ_StartForX_New + ixPerX_New_p_Two_ie;
+
+				double xAbs = newRadMultiE.xStart + ix*newRadMultiE.xStep;
+				char FieldShouldBeZeroedDueToX = 0;
+				if(newRadMultiE.WfrEdgeCorrShouldBeDone)
+				{
+					if((xAbs < newRadMultiE.xWfrMin - DistAbsTol) || (xAbs > newRadMultiE.xWfrMax + DistAbsTol)) FieldShouldBeZeroedDueToX = 1;
+				}
+
+				int ixcOld = int((xAbs - oldRadSingleE.xStart)*xStepInvOld + 1.E-06);
+				if((ixcOld < 0) || (ixcOld > nx_mi_1Old))
+				{
+					FieldShouldBeZeroedDueToX = 1;
+				}
+				char FieldShouldBeZeroed = (FieldShouldBeZeroedDueToX || FieldShouldBeZeroedDueToZ);
+
+				if(FieldShouldBeZeroed)
+				{
+					//*BufF = 0.; *(BufF+1) = 0.;
+					if(TreatPolCompX)
+					{
+						*pEX_New = 0.;
+						*(pEX_New+1) = 0.;
+					}
+					if(TreatPolCompZ)
+					{
+						*pEZ_New = 0.;
+						*(pEZ_New+1) = 0.;
+					}
+					continue;
+				}
+
+				double xRel = xAbs - (oldRadSingleE.xStart + ixcOld*oldRadSingleE.xStep);
+
+				if(ixcOld == nx_mi_1Old) { ixStOld = ixcOld - 3; xRel += 2.*oldRadSingleE.xStep;}
+				else if(ixcOld == nx_mi_2Old) { ixStOld = ixcOld - 2; xRel += oldRadSingleE.xStep;}
+				else if(ixcOld == 0) { ixStOld = ixcOld; xRel -= oldRadSingleE.xStep;}
+				else ixStOld = ixcOld - 1;
+
+				xRel *= xStepInvOld;
+				int ixcOld_mi_ixStOld = ixcOld - ixStOld;
+
+				if((izStOld != izStOldPrev) || (ixStOld != ixStOldPrev))
+				{
+					UseLowOrderInterp_PolCompX = 0, UseLowOrderInterp_PolCompZ = 0;
+					//long TotOffsetOld = izStOld*PerZ_Old + ixStOld*PerX_Old + Two_ie;
+					//long TotOffsetOld = izStOld*PerZ_Old + ixStOld*PerX_Old; //old is single slice
+					long long TotOffsetOld = izStOld*PerZ_Old + ixStOld*PerX_Old; //old is single slice
+
+					if(TreatPolCompX)
+					{
+						float* pExSt_Old = oldRadSingleE.pBaseRadX + TotOffsetOld;
+						GetCellDataForInterpol(pExSt_Old, PerX_Old, PerZ_Old, AuxF);
+						SetupCellDataI(AuxF, AuxFI);
+						UseLowOrderInterp_PolCompX = CheckForLowOrderInterp(AuxF, AuxFI, ixcOld_mi_ixStOld, izcOld_mi_izStOld, &InterpolAux01, InterpolAux02, InterpolAux02I);
+
+						if(!UseLowOrderInterp_PolCompX)
+						{
+							for(int i=0; i<2; i++) 
+							{
+								SetupInterpolAux02(AuxF + i, &InterpolAux01, InterpolAux02 + i);
+							}
+							SetupInterpolAux02(AuxFI, &InterpolAux01, InterpolAux02I);
+						}
+					}
+					if(TreatPolCompZ)
+					{
+						float* pEzSt_Old = oldRadSingleE.pBaseRadZ + TotOffsetOld;
+						GetCellDataForInterpol(pEzSt_Old, PerX_Old, PerZ_Old, AuxF+2);
+						SetupCellDataI(AuxF+2, AuxFI+1);
+						UseLowOrderInterp_PolCompZ = CheckForLowOrderInterp(AuxF+2, AuxFI+1, ixcOld_mi_ixStOld, izcOld_mi_izStOld, &InterpolAux01, InterpolAux02+2, InterpolAux02I+1);
+
+						if(!UseLowOrderInterp_PolCompZ)
+						{
+							for(int i=0; i<2; i++) 
+							{
+								SetupInterpolAux02(AuxF+2+i, &InterpolAux01, InterpolAux02+2+i);
+							}
+							SetupInterpolAux02(AuxFI+1, &InterpolAux01, InterpolAux02I+1);
+						}
+					}
+					ixStOldPrev = ixStOld; izStOldPrev = izStOld;
+				}
+
 				if(TreatPolCompX)
 				{
-					*pEX_New = 0.;
-					*(pEX_New+1) = 0.;
+					if(UseLowOrderInterp_PolCompX) 
+					{
+						InterpolF_LowOrder(InterpolAux02, xRel, zRel, BufF, 0);
+						InterpolFI_LowOrder(InterpolAux02I, xRel, zRel, BufFI, 0);
+					}
+					else
+					{
+						InterpolF(InterpolAux02, xRel, zRel, BufF, 0);
+						InterpolFI(InterpolAux02I, xRel, zRel, BufFI, 0);
+					}
+
+					(*BufFI) *= AuxFI->fNorm;
+					ImproveReAndIm(BufF, BufFI);
+
+					//if(FieldShouldBeZeroed)
+					//{
+					//	*BufF = 0.; *(BufF+1) = 0.;
+					//}
+
+					*pEX_New = *BufF;
+					*(pEX_New+1) = *(BufF+1);
 				}
 				if(TreatPolCompZ)
 				{
-					*pEZ_New = 0.;
-					*(pEZ_New+1) = 0.;
-				}
-				continue;
-			}
-
-			double xRel = xAbs - (oldRadSingleE.xStart + ixcOld*oldRadSingleE.xStep);
-
-			if(ixcOld == nx_mi_1Old) { ixStOld = ixcOld - 3; xRel += 2.*oldRadSingleE.xStep;}
-			else if(ixcOld == nx_mi_2Old) { ixStOld = ixcOld - 2; xRel += oldRadSingleE.xStep;}
-			else if(ixcOld == 0) { ixStOld = ixcOld; xRel -= oldRadSingleE.xStep;}
-			else ixStOld = ixcOld - 1;
-
-			xRel *= xStepInvOld;
-			int ixcOld_mi_ixStOld = ixcOld - ixStOld;
-
-			if((izStOld != izStOldPrev) || (ixStOld != ixStOldPrev))
-			{
-				UseLowOrderInterp_PolCompX = 0, UseLowOrderInterp_PolCompZ = 0;
-				//long TotOffsetOld = izStOld*PerZ_Old + ixStOld*PerX_Old + Two_ie;
-				//long TotOffsetOld = izStOld*PerZ_Old + ixStOld*PerX_Old; //old is single slice
-				long long TotOffsetOld = izStOld*PerZ_Old + ixStOld*PerX_Old; //old is single slice
-
-				if(TreatPolCompX)
-				{
-					float* pExSt_Old = oldRadSingleE.pBaseRadX + TotOffsetOld;
-					GetCellDataForInterpol(pExSt_Old, PerX_Old, PerZ_Old, AuxF);
-					SetupCellDataI(AuxF, AuxFI);
-					UseLowOrderInterp_PolCompX = CheckForLowOrderInterp(AuxF, AuxFI, ixcOld_mi_ixStOld, izcOld_mi_izStOld, &InterpolAux01, InterpolAux02, InterpolAux02I);
-
-					if(!UseLowOrderInterp_PolCompX)
+					if(UseLowOrderInterp_PolCompZ) 
 					{
-						for(int i=0; i<2; i++) 
-						{
-							SetupInterpolAux02(AuxF + i, &InterpolAux01, InterpolAux02 + i);
-						}
-						SetupInterpolAux02(AuxFI, &InterpolAux01, InterpolAux02I);
+						InterpolF_LowOrder(InterpolAux02, xRel, zRel, BufF, 2);
+						InterpolFI_LowOrder(InterpolAux02I, xRel, zRel, BufFI, 1);
 					}
-				}
-				if(TreatPolCompZ)
-				{
-					float* pEzSt_Old = oldRadSingleE.pBaseRadZ + TotOffsetOld;
-					GetCellDataForInterpol(pEzSt_Old, PerX_Old, PerZ_Old, AuxF+2);
-					SetupCellDataI(AuxF+2, AuxFI+1);
-					UseLowOrderInterp_PolCompZ = CheckForLowOrderInterp(AuxF+2, AuxFI+1, ixcOld_mi_ixStOld, izcOld_mi_izStOld, &InterpolAux01, InterpolAux02+2, InterpolAux02I+1);
-
-					if(!UseLowOrderInterp_PolCompZ)
+					else
 					{
-						for(int i=0; i<2; i++) 
-						{
-							SetupInterpolAux02(AuxF+2+i, &InterpolAux01, InterpolAux02+2+i);
-						}
-						SetupInterpolAux02(AuxFI+1, &InterpolAux01, InterpolAux02I+1);
+						InterpolF(InterpolAux02, xRel, zRel, BufF, 2);
+						InterpolFI(InterpolAux02I, xRel, zRel, BufFI, 1);
 					}
+
+					(*(BufFI+1)) *= (AuxFI+1)->fNorm;
+					ImproveReAndIm(BufF+2, BufFI+1);
+
+					//if(FieldShouldBeZeroed)
+					//{
+					//	*(BufF+2) = 0.; *(BufF+3) = 0.;
+					//}
+
+					*pEZ_New = *(BufF+2);
+					*(pEZ_New+1) = *(BufF+3);
 				}
-				ixStOldPrev = ixStOld; izStOldPrev = izStOld;
-			}
-
-			if(TreatPolCompX)
-			{
-				if(UseLowOrderInterp_PolCompX) 
-				{
-					InterpolF_LowOrder(InterpolAux02, xRel, zRel, BufF, 0);
-					InterpolFI_LowOrder(InterpolAux02I, xRel, zRel, BufFI, 0);
-				}
-				else
-				{
-					InterpolF(InterpolAux02, xRel, zRel, BufF, 0);
-					InterpolFI(InterpolAux02I, xRel, zRel, BufFI, 0);
-				}
-
-				(*BufFI) *= AuxFI->fNorm;
-				ImproveReAndIm(BufF, BufFI);
-
-				//if(FieldShouldBeZeroed)
-				//{
-				//	*BufF = 0.; *(BufF+1) = 0.;
-				//}
-
-				*pEX_New = *BufF;
-				*(pEX_New+1) = *(BufF+1);
-			}
-			if(TreatPolCompZ)
-			{
-				if(UseLowOrderInterp_PolCompZ) 
-				{
-					InterpolF_LowOrder(InterpolAux02, xRel, zRel, BufF, 2);
-					InterpolFI_LowOrder(InterpolAux02I, xRel, zRel, BufFI, 1);
-				}
-				else
-				{
-					InterpolF(InterpolAux02, xRel, zRel, BufF, 2);
-					InterpolFI(InterpolAux02I, xRel, zRel, BufFI, 1);
-				}
-
-				(*(BufFI+1)) *= (AuxFI+1)->fNorm;
-				ImproveReAndIm(BufF+2, BufFI+1);
-
-				//if(FieldShouldBeZeroed)
-				//{
-				//	*(BufF+2) = 0.; *(BufF+3) = 0.;
-				//}
-
-				*pEZ_New = *(BufF+2);
-				*(pEZ_New+1) = *(BufF+3);
 			}
 		}
 	}
 	//}
-	if(WaveFrontTermWasTreated) TreatStronglyOscillatingTerm(newRadMultiE, 'a', 0, ie);
+	//if(WaveFrontTermWasTreated) TreatStronglyOscillatingTerm(newRadMultiE, 'a', 0, ie);
+	if(WaveFrontTermWasTreated) TreatStronglyOscillatingTerm(newRadMultiE, 'a', 0, ie, pvGPU); //HG27072024
 
 	oldRadSingleE.WfrQuadTermCanBeTreatedAtResizeX = OrigWfrQuadTermCanBeTreatedAtResizeX;
 	oldRadSingleE.WfrQuadTermCanBeTreatedAtResizeZ = OrigWfrQuadTermCanBeTreatedAtResizeZ;

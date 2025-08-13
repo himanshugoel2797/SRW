@@ -201,8 +201,13 @@ public:
 	virtual int PropagateRadiationMeth_0(srTSRWRadStructAccessData* pRadAccessData, void* pvGPU=0); //moved from derived classes: loops over E, calls derived PropagateRadiationSingleE_Meth_0 //HG01122023
 
 	void FindWidestWfrMeshParam(vector<srTSRWRadStructAccessData>& vRadSlices, srTSRWRadStructAccessData* pRad, bool keepConstNumPoints);
-	int ReInterpolateWfrDataOnNewTransvMesh(vector<srTSRWRadStructAccessData>& vRadSlices, srTSRWRadStructAccessData* pAuxRadSingleE, srTSRWRadStructAccessData* pRadRes);
-	int ReInterpolateWfrSliceSingleE(srTSRWRadStructAccessData& oldRadSingleE, srTSRWRadStructAccessData& newRadMultiE, int ie);
+	//int ReInterpolateWfrDataOnNewTransvMesh(vector<srTSRWRadStructAccessData>& vRadSlices, srTSRWRadStructAccessData* pAuxRadSingleE, srTSRWRadStructAccessData* pRadRes);
+	int ReInterpolateWfrDataOnNewTransvMesh(vector<srTSRWRadStructAccessData>& vRadSlices, srTSRWRadStructAccessData* pAuxRadSingleE, srTSRWRadStructAccessData* pRadRes, void* pvGPU=0); //HG26072024
+	//int ReInterpolateWfrSliceSingleE(srTSRWRadStructAccessData& oldRadSingleE, srTSRWRadStructAccessData& newRadMultiE, int ie);
+	int ReInterpolateWfrSliceSingleE(srTSRWRadStructAccessData& oldRadSingleE, srTSRWRadStructAccessData& newRadMultiE, int ie, void* pvGPU=0); //HG26072024
+#ifdef _OFFLOAD_GPU //HG27072024
+	int ReInterpolateWfrSliceSingleE_GPU(srTSRWRadStructAccessData& oldRadSingleE, srTSRWRadStructAccessData& newRadMultiE, int ie, TGPUUsageArg* parGPU=0);
+#endif
 	
 	int SetupCharacteristicSections1D(srTSRWRadStructAccessData*, srTRadSect1D*);
 	//int DefinePropagScenario(srTSRWRadStructAccessData*, srTPredictedPropagData1D*, srTPropagScenario1D*);
@@ -258,18 +263,30 @@ public:
 	int TraverseRad1D(srTRadSect1D*, void* pBufVars=0); //OC29082019
 	//int TraverseRad1D(srTRadSect1D*);
 
-	int ExtractRadSliceConstE(srTSRWRadStructAccessData*, long, float*&, float*&, bool forceCopyField=false); //OC120908
-	int SetupRadSliceConstE(srTSRWRadStructAccessData*, long, float*, float*);
+	//int ExtractRadSliceConstE(srTSRWRadStructAccessData*, long, float*&, float*&, bool forceCopyField=false); //OC120908
+	int ExtractRadSliceConstE(srTSRWRadStructAccessData*, long, float*&, float*&, bool forceCopyField=false, void* pvGPU=0); //OC120908 //HG26072024
+	//int SetupRadSliceConstE(srTSRWRadStructAccessData*, long, float*, float*);
+	int SetupRadSliceConstE(srTSRWRadStructAccessData*, long, float*, float*, void* =0); //HG27072024
+#ifdef _OFFLOAD_GPU //HG27072024
+	int SetupRadSliceConstE_GPU(srTSRWRadStructAccessData*, long, float*, float*, TGPUUsageArg* =0);
+#endif
 	inline void SetupRadXorZSectFromSliceConstE(float*, float*, long, long, char, long, float*, float*);
+
+#ifdef _OFFLOAD_GPU //HG26072024
+	int ExtractRadSliceConstE_GPU(srTSRWRadStructAccessData*, long, float*, float*, TGPUUsageArg* pGPU=0);
+	int UpdateGenRadStructSliceConstE_Meth_0_GPU(srTSRWRadStructAccessData*, int, srTSRWRadStructAccessData*, TGPUUsageArg* pGPU=0);
+#endif
 
 	int ExtractRadSectVsXorZ(srTSRWRadStructAccessData*, long, long, char, float*, float*);
 	int SetupSectionArraysVsXandZ(srTSRWRadStructAccessData*, srTRadSect1D&, srTRadSect1D&);
 
-	int SetupNewRadStructFromSliceConstE(srTSRWRadStructAccessData* pRadAccessData, long, srTSRWRadStructAccessData*& pRadDataSingleE);
+	//int SetupNewRadStructFromSliceConstE(srTSRWRadStructAccessData* pRadAccessData, long, srTSRWRadStructAccessData*& pRadDataSingleE);
+	int SetupNewRadStructFromSliceConstE(srTSRWRadStructAccessData* pRadAccessData, long, srTSRWRadStructAccessData*& pRadDataSingleE, void* pvGPU=0); //HG26072024
 	//int UpdateGenRadStructFromSlicesConstE(srTSRWRadStructAccessData*, srTSRWRadStructAccessData*);
 	//int UpdateGenRadStructSliceConstE_Meth_0(srTSRWRadStructAccessData*, int, srTSRWRadStructAccessData*);
 	//OC28102018: modified by S.Yakubov to adopt the code for OpenMP parallelization
-	int UpdateGenRadStructSliceConstE_Meth_0(srTSRWRadStructAccessData*, int, srTSRWRadStructAccessData*, int update_mode=0);
+	//int UpdateGenRadStructSliceConstE_Meth_0(srTSRWRadStructAccessData*, int, srTSRWRadStructAccessData*, int update_mode=0);
+	int UpdateGenRadStructSliceConstE_Meth_0(srTSRWRadStructAccessData*, int, srTSRWRadStructAccessData*, int update_mode=0, void* pvGPU=0); //HG26072024
 
 	int UpdateGenRadStructSliceConstE_Meth_2(srTSRWRadStructAccessData*, int, srTSRWRadStructAccessData*);
 	int RemoveSliceConstE_FromGenRadStruct(srTSRWRadStructAccessData*, long);

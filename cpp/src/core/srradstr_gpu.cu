@@ -96,12 +96,12 @@ void srTSRWRadStructAccessData::MultiplyElFieldByPhaseLin_GPU(double xMult, doub
 	if (pBaseRadX != NULL) //HG27072024
 	{
 		CAuxGPU::MarkUpdated(pGPU, pBaseRadX, CAuxGPU::DEVICE);
-		pBaseRadX = (float*)CAuxGPU::GetHostPtr(pGPU, pBaseRadX);
+		pBaseRadX = CAuxGPU::GetHostPtr(pGPU, pBaseRadX);
 	}
 	if (pBaseRadZ != NULL)
 	{
 		CAuxGPU::MarkUpdated(pGPU, pBaseRadZ, CAuxGPU::DEVICE);
-		pBaseRadZ = (float*)CAuxGPU::GetHostPtr(pGPU, pBaseRadZ);
+		pBaseRadZ = CAuxGPU::GetHostPtr(pGPU, pBaseRadZ);
 	}
 
 //HG26022024 (commented out)

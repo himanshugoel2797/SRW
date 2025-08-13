@@ -270,7 +270,6 @@ public:
 	*/
 	static void SyncComputeStream(TGPUUsageArg* arg, long long targetStreamIdx, long long streamIdx); //HG24042025
 
-#ifdef __CUDACC__
 	/**
 	* Determine a good distribution of threads within a block
 	* @param [in] func The kernel to calculate for.
@@ -311,7 +310,6 @@ public:
 			}
 		}
 	}
-#endif
 };
 
 //*************************************************************************
