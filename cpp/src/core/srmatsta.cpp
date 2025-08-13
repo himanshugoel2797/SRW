@@ -640,7 +640,7 @@ int srTAuxMatStat::FindIntensityLimitsInds(CHGenObj& hRad, int ie, double RelPow
 #ifdef _OFFLOAD_GPU //HG30072024
 			TGPUUsageArg parGPU(pvGPU);
 			if(CAuxGPU::GPUEnabled(&parGPU))
-				CAuxGPU::ToHostAndFree(&parGPU, RadExtract.pExtractedData, 0, Rad.nx*Rad.nz*sizeof(float), true);
+				CAuxGPU::ToHostAndFree(&parGPU, RadExtract.pExtractedData);
 #endif
 			delete[] RadExtract.pExtractedData; return res;
 		}
@@ -664,7 +664,7 @@ int srTAuxMatStat::FindIntensityLimitsInds(CHGenObj& hRad, int ie, double RelPow
 #ifdef _OFFLOAD_GPU //HG30072024
 			TGPUUsageArg parGPU(pvGPU);
 			if(CAuxGPU::GPUEnabled(&parGPU))
-				CAuxGPU::ToHostAndFree(&parGPU, RadExtract.pExtractedData, 0, Rad.nx*Rad.nz*sizeof(float), true);
+				CAuxGPU::ToHostAndFree(&parGPU, RadExtract.pExtractedData);
 #endif
 			delete[] RadExtract.pExtractedData; return res;
 		}
@@ -681,7 +681,7 @@ int srTAuxMatStat::FindIntensityLimitsInds(CHGenObj& hRad, int ie, double RelPow
 #ifdef _OFFLOAD_GPU //HG30072024
 			TGPUUsageArg parGPU(pvGPU);
 			if(CAuxGPU::GPUEnabled(&parGPU))
-				CAuxGPU::ToHostAndFree(&parGPU, RadExtract.pExtractedData, 0, Rad.nx*Rad.nz*sizeof(float), true);
+				CAuxGPU::ToHostAndFree(&parGPU, RadExtract.pExtractedData);
 #endif
 		delete[] RadExtract.pExtractedData;
 	}
