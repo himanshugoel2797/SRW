@@ -136,7 +136,7 @@ void* CAuxGPU::_ToDevice(TGPUUsageArg* arg, void* hostPtr, size_t size, int flag
 	//if (gpuMap.find(hostPtr) != gpuMap.end()){
 	if (hostPtr != NULL) //HG21042025
 	{
-		auto close_l = gpuMap.lower_bound(hostPtr);
+		auto close_l = gpuMap.upper_bound(hostPtr);
 		if (close_l != gpuMap.end())
 		{
 			memAllocInfo_t info = std::prev(close_l)->second;

@@ -96,7 +96,6 @@ public:
 		char &MethNo = ParPrecWfrPropag.MethNo;
 		
 		int result = 0;
-
 		//if(MethNo == 0) result = PropagateRadiationMeth_0(pRadAccessData);
 		if(MethNo == 0) result = PropagateRadiationMeth_0(pRadAccessData, pvGPU); //HG01122023
 		else result = PropagateRadiationMeth_2(pRadAccessData, ParPrecWfrPropag, ResBeforeAndAfterArr);
@@ -137,6 +136,7 @@ public:
 		//if(pRadAccessData->Pres != 0) if(result = SetRadRepres(pRadAccessData, 0)) return result;
 		if(pRadAccessData->Pres != 0) if(result = SetRadRepres(pRadAccessData, 0, 0, 0, pvGPU)) return result; //HG01122023
 		//return TraverseRadZXE(pRadAccessData);
+		
 		return TraverseRadZXE(pRadAccessData, 0, 0, pvGPU); //HG01122023
 	}
   	int PropagateRadiationSimple1D(srTRadSect1D* pSect1D)

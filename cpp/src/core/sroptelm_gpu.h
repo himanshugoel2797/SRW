@@ -100,7 +100,7 @@ int RadPointModifierParallelImpl(srTSRWRadStructAccessData* pRadAccessData, void
 		CAuxGPU::EnsureDeviceMemoryReady(pGPU, pRadAccessData->pBaseRadZ);
 	}
 	
-	srTSRWRadStructAccessData* pRadAccessData_dev = (srTSRWRadStructAccessData*)CAuxGPU::ToDevice(pGPU, pRadAccessData, sizeof(srTSRWRadStructAccessData));
+	srTSRWRadStructAccessData* pRadAccessData_dev = CAuxGPU::ToDevice(pGPU, pRadAccessData, 1);
     T* local_copy = CAuxGPU::ToDevice(pGPU, tgt_obj, 1);
 	CAuxGPU::EnsureDeviceMemoryReady(pGPU, pRadAccessData_dev, local_copy);
 	

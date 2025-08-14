@@ -291,7 +291,7 @@ public:
 		threads.y = 1;
 		threads.z = 1;
 
-		blocks.x = grid.x / threads.x + !!(grid.x & (threads.x - 1)); //round up the division result
+		blocks.x = grid.x / threads.x + !!(grid.x % threads.x); //round up the division result
 		blocks.y = grid.y;
 		blocks.z = grid.z;
 
@@ -300,13 +300,13 @@ public:
 		{
 			//Calculate y grid
 			threads.y = (y_v > grid.y) ? grid.y : y_v;
-			blocks.y = grid.y / threads.y + !!(grid.y & (threads.y - 1)); //round up the division result
+			blocks.y = grid.y / threads.y + !!(grid.y % threads.y); //round up the division result
 
 			int z_v = y_v / threads.y;
 			if (z_v > 1 && grid.z > 1)
 			{
 				threads.z = (z_v > grid.z) ? grid.z : z_v;
-				blocks.z = grid.z / threads.z + !!(grid.z & (threads.z - 1)); //round up the division result
+				blocks.z = grid.z / threads.z + !!(grid.z % threads.z); //round up the division result
 			}
 		}
 	}

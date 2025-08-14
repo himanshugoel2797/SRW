@@ -109,7 +109,7 @@ void srTGenOptElem::TreatStronglyOscillatingTerm_GPU(srTSRWRadStructAccessData& 
 
 	dim3 blocks(ieBefEnd - ieStart, RadAccessData.nx, RadAccessData.nz);
 	dim3 threads(1, 1, 1);
-	CAuxGPU::CalcLaunchDims(TreatStronglyOscillatingTerm_Kernel, blocks, blocks, threads, 0, (ieBefEnd - ieStart) * RadAccessData.nx * RadAccessData.nz);
+	CAuxGPU::CalcLaunchDims(TreatStronglyOscillatingTerm_Kernel, blocks, blocks, threads);//, 0, (ieBefEnd - ieStart) * RadAccessData.nx * RadAccessData.nz);
 
     //TreatStronglyOscillatingTerm_Kernel<< <blocks, threads >> > (RadAccessData, TreatPolCompX, TreatPolCompZ, ConstRx, ConstRz, ieStart);
     TreatStronglyOscillatingTerm_Kernel<<<blocks, threads >>> (pRadAccessData_dev, TreatPolCompX, TreatPolCompZ, ConstRx, ConstRz, ieStart, ieBefEnd); //HG27072024
@@ -575,8 +575,6 @@ int srTGenOptElem::RadResizeCore_GPU(srTSRWRadStructAccessData& OldRadAccessData
 	int ne = NewRadAccessData.ne;
 	OldRadAccessData.pBaseRadX = CAuxGPU::ToDevice(pGPU, OldRadAccessData.pBaseRadX, 2*OldRadAccessData.ne*OldRadAccessData.nx*OldRadAccessData.nz);
 	OldRadAccessData.pBaseRadZ = CAuxGPU::ToDevice(pGPU, OldRadAccessData.pBaseRadZ, 2*OldRadAccessData.ne*OldRadAccessData.nx*OldRadAccessData.nz);
-	//NewRadAccessData.pBaseRadX = (float*)CAuxGPU::ToDevice(pGPU, NewRadAccessData.pBaseRadX, 2*NewRadAccessData.ne*NewRadAccessData.nx*NewRadAccessData.nz*sizeof(float), true);
-	//NewRadAccessData.pBaseRadZ = (float*)CAuxGPU::ToDevice(pGPU, NewRadAccessData.pBaseRadZ, 2*NewRadAccessData.ne*NewRadAccessData.nx*NewRadAccessData.nz*sizeof(float), true);
 	NewRadAccessData.pBaseRadX = CAuxGPU::ToDevice(pGPU, NewRadAccessData.pBaseRadX, 2*NewRadAccessData.ne*NewRadAccessData.nx*NewRadAccessData.nz, CAuxGPU::DONT_COPY);
 	NewRadAccessData.pBaseRadZ = CAuxGPU::ToDevice(pGPU, NewRadAccessData.pBaseRadZ, 2*NewRadAccessData.ne*NewRadAccessData.nx*NewRadAccessData.nz, CAuxGPU::DONT_COPY);
 	
@@ -592,7 +590,6 @@ int srTGenOptElem::RadResizeCore_GPU(srTSRWRadStructAccessData& OldRadAccessData
 	dim3 threads1(1);
 	if (TreatPolCompX) CAuxGPU::CalcLaunchDims(RadResizeCore_Kernel<true, false>, blocks0, blocks0, threads0, 16);
 	if (TreatPolCompZ) CAuxGPU::CalcLaunchDims(RadResizeCore_Kernel<false, true>, blocks1, blocks1, threads1, 16);
-	
 	long long stream1 = CAuxGPU::GetComputeStream(pGPU, 0);
 	CAuxGPU::SyncComputeStream(pGPU, 0, stream1);
 
@@ -603,8 +600,8 @@ int srTGenOptElem::RadResizeCore_GPU(srTSRWRadStructAccessData& OldRadAccessData
 	CAuxGPU::ToHostAndFree(pGPU, pOldRadAccessData_dev); //HG27072024
 	CAuxGPU::ToHostAndFree(pGPU, pNewRadAccessData_dev); //HG27072024
 
-	OldRadAccessData.pBaseRadX = (float*)CAuxGPU::ToHostAndFree(pGPU, OldRadAccessData.pBaseRadX);
-	OldRadAccessData.pBaseRadZ = (float*)CAuxGPU::ToHostAndFree(pGPU, OldRadAccessData.pBaseRadZ);
+	OldRadAccessData.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, OldRadAccessData.pBaseRadX);
+	OldRadAccessData.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, OldRadAccessData.pBaseRadZ);
 	//NewRadAccessData.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, NewRadAccessData.pBaseRadX, 2*NewRadAccessData.ne*NewRadAccessData.nx*NewRadAccessData.nz*sizeof(float));
 	//NewRadAccessData.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, NewRadAccessData.pBaseRadZ, 2*NewRadAccessData.ne*NewRadAccessData.nx*NewRadAccessData.nz*sizeof(float));
 	CAuxGPU::MarkUpdated(pGPU, NewRadAccessData.pBaseRadX, CAuxGPU::DEVICE);
@@ -1137,21 +1134,20 @@ __global__ void ComputeRadMoments_Kernel(const srTSRWRadStructAccessData* pSRWRa
 
 void srTGenOptElem::ComputeRadMoments_GPU(srTSRWRadStructAccessData* pSRWRadStructAccessData, int ie, double* SumsZ, int* IndLims, TGPUUsageArg* pGPU) //HG26072024
 {
-
-#define GEN_MEMBERS(i) \
-		ComputeRadMoments_Kernel <i, false, false>, \
-		ComputeRadMoments_Kernel <i, false, true>, \
-		ComputeRadMoments_Kernel <i, true, false>, \
-		ComputeRadMoments_Kernel <i, true, true>,
-
+	#define GEN_MEMBERS(i) \
+	ComputeRadMoments_Kernel <i, false, false>, \
+	ComputeRadMoments_Kernel <i, false, true>, \
+	ComputeRadMoments_Kernel <i, true, false>, \
+	ComputeRadMoments_Kernel <i, true, true>,
+	
 	decltype(ComputeRadMoments_Kernel <0, false, false>) *ComputeRadMoments_tbl[] = {
 		GEN_MEMBERS(0)
 		GEN_MEMBERS(1)
 		GEN_MEMBERS(2)
 		GEN_MEMBERS(4)
 	};
-#undef GEN_MEMBERS
-
+	#undef GEN_MEMBERS
+	
 	bool ExIsOK = pSRWRadStructAccessData->pBaseRadX != 0;
 	bool EzIsOK = pSRWRadStructAccessData->pBaseRadZ != 0;
 	bool IsFreqRepres = (pSRWRadStructAccessData->PresT == 0);
@@ -1177,7 +1173,7 @@ void srTGenOptElem::ComputeRadMoments_GPU(srTSRWRadStructAccessData* pSRWRadStru
 	double FourPi_d_Lamb_d_Rx = FourPi_d_Lamb/LocRobsX;
 	double FourPi_d_Lamb_d_Rx_xStep = pSRWRadStructAccessData->xStep*FourPi_d_Lamb_d_Rx;
 	double TwoPi_d_Lamb_d_Rx_xStep = 0.5*FourPi_d_Lamb_d_Rx_xStep;
-
+	
 	dim3 blocks0(IndLims[1] - IndLims[0] + 1, IndLims[3] - IndLims[2] + 1, 1);
 	dim3 blocks1(IndLims[1] - IndLims[0] + 1, IndLims[3] - IndLims[2] + 1, 1);
 	dim3 blocks2(IndLims[1] - IndLims[0] + 1, IndLims[3] - IndLims[2] + 1, 1);
@@ -1188,7 +1184,7 @@ void srTGenOptElem::ComputeRadMoments_GPU(srTSRWRadStructAccessData* pSRWRadStru
 	dim3 threads3(1);
 	CAuxGPU::CalcLaunchDims(ComputeRadMoments_tbl[(1 << 2) | ((ExIsOK & 1) << 1) | (EzIsOK & 1)], blocks0, blocks0, threads0, 16);
 	CAuxGPU::CalcLaunchDims(ComputeRadMoments_tbl[(2 << 2) | ((ExIsOK & 1) << 1) | (EzIsOK & 1)], blocks1, blocks1, threads1, 16);
-	CAuxGPU::CalcLaunchDims(ComputeRadMoments_tbl[(4 << 2) | ((ExIsOK & 1) << 1) | (EzIsOK & 1)], blocks2, blocks2, threads2, 16);
+	CAuxGPU::CalcLaunchDims(ComputeRadMoments_tbl[(3 << 2) | ((ExIsOK & 1) << 1) | (EzIsOK & 1)], blocks2, blocks2, threads2, 16);
 	CAuxGPU::CalcLaunchDims(ComputeRadMoments_tbl[(0 << 2) | ((ExIsOK & 1) << 1) | (EzIsOK & 1)], blocks3, blocks3, threads3, 16);
 	
 	pSRWRadStructAccessData->pBaseRadX = CAuxGPU::ToDevice(pGPU, pSRWRadStructAccessData->pBaseRadX, 2 * pSRWRadStructAccessData->ne * pSRWRadStructAccessData->nx * pSRWRadStructAccessData->nz);
@@ -1205,21 +1201,14 @@ void srTGenOptElem::ComputeRadMoments_GPU(srTSRWRadStructAccessData* pSRWRadStru
 	);
 	
 	int4 IndLims_dev = { IndLims[0], IndLims[1], IndLims[2], IndLims[3] };
-	
-	cudaEvent_t start, stop1, stop2, stop3;
-	cudaEventCreateWithFlags(&start, cudaEventDisableTiming);
-	cudaEventCreateWithFlags(&stop1, cudaEventDisableTiming);
-	cudaEventCreateWithFlags(&stop2, cudaEventDisableTiming);
-	cudaEventCreateWithFlags(&stop3, cudaEventDisableTiming);
 
 	cudaStream_t stream1 = (cudaStream_t)CAuxGPU::GetComputeStream(pGPU, 0);
 	cudaStream_t stream2 = (cudaStream_t)CAuxGPU::GetComputeStream(pGPU, 1);
 	cudaStream_t stream3 = (cudaStream_t)CAuxGPU::GetComputeStream(pGPU, 2);
 
-	cudaEventRecord(start, 0); //Wait for main stream kernel execution to start
-	cudaStreamWaitEvent(stream1, start);
-	cudaStreamWaitEvent(stream2, start);
-	cudaStreamWaitEvent(stream3, start);
+	CAuxGPU::SyncComputeStream(pGPU, 0, (long long)stream1);
+	CAuxGPU::SyncComputeStream(pGPU, 0, (long long)stream2);
+	CAuxGPU::SyncComputeStream(pGPU, 0, (long long)stream3);
 
 	ComputeRadMoments_tbl[(1 << 2) | ((ExIsOK & 1) << 1) | (EzIsOK & 1)] <<<blocks0, threads0 >>>(pSRWRadStructAccessData_dev, IndLims_dev, SumsZ, ie, TwoPi_d_Lamb_d_Rx_xStep, TwoPi_d_Lamb_d_Rz_zStep);
 	if(IsCoordRepres) 
@@ -1229,17 +1218,10 @@ void srTGenOptElem::ComputeRadMoments_GPU(srTSRWRadStructAccessData* pSRWRadStru
 	}
 	ComputeRadMoments_tbl[(0 << 2) | ((ExIsOK & 1) << 1) | (EzIsOK & 1)] <<<blocks3, threads3, 0, stream3>>>(pSRWRadStructAccessData_dev, IndLims_dev, SumsZ, ie, TwoPi_d_Lamb_d_Rx_xStep, TwoPi_d_Lamb_d_Rz_zStep);
 
-	cudaEventRecord(stop1, stream1);
-	cudaEventRecord(stop2, stream2);
-	cudaEventRecord(stop3, stream3);
-	cudaStreamWaitEvent(0, stop1);
-	cudaStreamWaitEvent(0, stop2); //Wait for all streams to finish
-	cudaStreamWaitEvent(0, stop3);
-	cudaEventDestroy(start);
-	cudaEventDestroy(stop1);
-	cudaEventDestroy(stop2);
-	cudaEventDestroy(stop3);
-
+	CAuxGPU::SyncComputeStream(pGPU, (long long)stream1, 0);
+	CAuxGPU::SyncComputeStream(pGPU, (long long)stream2, 0);
+	CAuxGPU::SyncComputeStream(pGPU, (long long)stream3, 0);
+	
 	CAuxGPU::ToHostAndFree(pGPU, pSRWRadStructAccessData_dev);
 	
 	pSRWRadStructAccessData->pBaseRadX = CAuxGPU::GetHostPtr(pGPU, pSRWRadStructAccessData->pBaseRadX);
