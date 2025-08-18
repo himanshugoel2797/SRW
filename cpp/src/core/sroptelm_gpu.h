@@ -143,20 +143,13 @@ int RadPointModifierParallelImpl(srTSRWRadStructAccessData* pRadAccessData, void
 	else
 	{
 		//Have to split into 4 kernel launches to skip the specified region, run them in parallel
-		cudaEvent_t start, stop1, stop2, stop3;
-		cudaEventCreateWithFlags(&start, cudaEventDisableTiming);
-		cudaEventCreateWithFlags(&stop1, cudaEventDisableTiming);
-		cudaEventCreateWithFlags(&stop2, cudaEventDisableTiming);
-		cudaEventCreateWithFlags(&stop3, cudaEventDisableTiming);
-		
 		cudaStream_t stream1 = (cudaStream_t)CAuxGPU::GetComputeStream(pGPU, 0);
 		cudaStream_t stream2 = (cudaStream_t)CAuxGPU::GetComputeStream(pGPU, 1);
 		cudaStream_t stream3 = (cudaStream_t)CAuxGPU::GetComputeStream(pGPU, 2);
 
-		cudaEventRecord(start, 0); //Wait for main stream kernel execution to start
-		cudaStreamWaitEvent(stream1, start);
-		cudaStreamWaitEvent(stream2, start);
-		cudaStreamWaitEvent(stream3, start);
+		CAuxGPU::SyncComputeStream(pGPU, 0, (long long)stream1);
+		CAuxGPU::SyncComputeStream(pGPU, 0, (long long)stream2);
+		CAuxGPU::SyncComputeStream(pGPU, 0, (long long)stream3);
 
 		dim3 blocks0(combinedE ? 1 : pRadAccessData->ne, pRegion[0], pRadAccessData->nx);
 		dim3 blocks1(combinedE ? 1 : pRadAccessData->ne, pRadAccessData->nx - pRegion[1], pRadAccessData->nx);
@@ -188,16 +181,9 @@ int RadPointModifierParallelImpl(srTSRWRadStructAccessData* pRadAccessData, void
 			kern<<<blocks3, threads3 >>> (pRadAccessData_dev, pBufVars_dev, local_copy, pRegion[0], pRegion[1], 0, pRegion[2]);
 		}
 		
-		cudaEventRecord(stop1, stream1);
-		cudaEventRecord(stop2, stream2);
-		cudaEventRecord(stop3, stream3);
-		cudaStreamWaitEvent(0, stop1);
-		cudaStreamWaitEvent(0, stop2); //Wait for all streams to finish
-		cudaStreamWaitEvent(0, stop3);
-		cudaEventDestroy(start);
-		cudaEventDestroy(stop1);
-		cudaEventDestroy(stop2);
-		cudaEventDestroy(stop3);
+		CAuxGPU::SyncComputeStream(pGPU, (long long)stream1, 0);
+		CAuxGPU::SyncComputeStream(pGPU, (long long)stream2, 0);
+		CAuxGPU::SyncComputeStream(pGPU, (long long)stream3, 0);
 	}
 
 	if (pBufVarsSz > 0) CAuxGPU::ToHostAndFree(pGPU, (char*)pBufVars_dev);
