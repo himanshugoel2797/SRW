@@ -740,6 +740,7 @@ int srTDriftSpace::PropagateRadiationSimple_AnalytTreatQuadPhaseTerm(srTSRWRadSt
 {// e in eV; Length in m !!!
 	int result = 0;
 
+	printf("%s\r\n", __func__);
 	//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
 	//double start;
 	//get_walltime(&start);

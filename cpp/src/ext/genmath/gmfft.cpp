@@ -464,8 +464,8 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 				//CAuxGPU::EnsureDeviceMemoryReady(pGpuUsage, m_ArrayShiftX);
 				//CAuxGPU::EnsureDeviceMemoryReady(pGpuUsage, m_ArrayShiftY);
 				TreatShifts2D_GPU((float*)DataToFFT, Nx, Ny, NeedsShiftBeforeX, NeedsShiftBeforeY, m_ArrayShiftX, m_ArrayShiftY);
-				m_ArrayShiftX = CAuxGPU::ToHostAndFree(pGPU, m_ArrayShiftX); //OC06092023
-				m_ArrayShiftY = CAuxGPU::ToHostAndFree(pGPU, m_ArrayShiftY);
+				m_ArrayShiftX = CAuxGPU::ToHostAndFree(pGPU, m_ArrayShiftX, CAuxGPU::DONT_COPY); //OC06092023
+				m_ArrayShiftY = CAuxGPU::ToHostAndFree(pGPU, m_ArrayShiftY, CAuxGPU::DONT_COPY);
 				//m_ArrayShiftX = (float*)CAuxGPU::ToHostAndFree(pGpuUsage, m_ArrayShiftX, (Nx << 1) * sizeof(float), true);
 				//m_ArrayShiftY = (float*)CAuxGPU::ToHostAndFree(pGpuUsage, m_ArrayShiftY, (Ny << 1) * sizeof(float), true);
 			}
@@ -478,8 +478,8 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 				//CAuxGPU::EnsureDeviceMemoryReady(pGpuUsage, m_dArrayShiftX);
 				//CAuxGPU::EnsureDeviceMemoryReady(pGpuUsage, m_dArrayShiftY);
 				TreatShifts2D_GPU((double*)dDataToFFT, Nx, Ny, NeedsShiftBeforeX, NeedsShiftBeforeY, m_dArrayShiftX, m_dArrayShiftY);
-				m_dArrayShiftX = CAuxGPU::ToHostAndFree(pGPU, m_dArrayShiftX); //OC06092023
-				m_dArrayShiftY = CAuxGPU::ToHostAndFree(pGPU, m_dArrayShiftY);
+				m_dArrayShiftX = CAuxGPU::ToHostAndFree(pGPU, m_dArrayShiftX, CAuxGPU::DONT_COPY); //OC06092023
+				m_dArrayShiftY = CAuxGPU::ToHostAndFree(pGPU, m_dArrayShiftY, CAuxGPU::DONT_COPY);
 				//m_dArrayShiftX = (double*)CAuxGPU::ToHostAndFree(pGpuUsage, m_dArrayShiftX, (Nx << 1) * sizeof(double), true);
 				//m_dArrayShiftY = (double*)CAuxGPU::ToHostAndFree(pGpuUsage, m_dArrayShiftY, (Ny << 1) * sizeof(double), true);
 			}
@@ -808,8 +808,8 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 				//CAuxGPU::EnsureDeviceMemoryReady(pGpuUsage, m_ArrayShiftY);
 				//TreatShifts2D_GPU((float*)DataToFFT, Nx, Ny, FFT2DInfo.howMany, NeedsShiftAfterX, NeedsShiftAfterY, m_ArrayShiftX, m_ArrayShiftY);
 				TreatShifts2D_GPU((float*)DataToFFT, Nx, Ny, NeedsShiftAfterX, NeedsShiftAfterY, m_ArrayShiftX, m_ArrayShiftY); //HG04122023
-				m_ArrayShiftX = CAuxGPU::ToHostAndFree(pGPU, m_ArrayShiftX); //OC06092023
-				m_ArrayShiftY = CAuxGPU::ToHostAndFree(pGPU, m_ArrayShiftY);
+				m_ArrayShiftX = CAuxGPU::ToHostAndFree(pGPU, m_ArrayShiftX, CAuxGPU::DONT_COPY); //OC06092023
+				m_ArrayShiftY = CAuxGPU::ToHostAndFree(pGPU, m_ArrayShiftY, CAuxGPU::DONT_COPY);
 				//m_ArrayShiftX = (float*)CAuxGPU::ToHostAndFree(pGpuUsage, m_ArrayShiftX, (Nx << 1) * sizeof(float), true);
 				//m_ArrayShiftY = (float*)CAuxGPU::ToHostAndFree(pGpuUsage, m_ArrayShiftY, (Ny << 1) * sizeof(float), true);
 			}
@@ -823,8 +823,8 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 				//CAuxGPU::EnsureDeviceMemoryReady(pGpuUsage, m_dArrayShiftY);
 				//TreatShifts2D_GPU((double*)dDataToFFT, Nx, Ny, FFT2DInfo.howMany, NeedsShiftAfterX, NeedsShiftAfterY, m_dArrayShiftX, m_dArrayShiftY);
 				TreatShifts2D_GPU((double*)dDataToFFT, Nx, Ny, NeedsShiftAfterX, NeedsShiftAfterY, m_dArrayShiftX, m_dArrayShiftY); //HG04122023
-				m_dArrayShiftX = CAuxGPU::ToHostAndFree(pGPU, m_dArrayShiftX); //OC06092023
-				m_dArrayShiftY = CAuxGPU::ToHostAndFree(pGPU, m_dArrayShiftY);
+				m_dArrayShiftX = CAuxGPU::ToHostAndFree(pGPU, m_dArrayShiftX, CAuxGPU::DONT_COPY); //OC06092023
+				m_dArrayShiftY = CAuxGPU::ToHostAndFree(pGPU, m_dArrayShiftY, CAuxGPU::DONT_COPY);
 				//m_dArrayShiftX = (double*)CAuxGPU::ToHostAndFree(pGpuUsage, m_dArrayShiftX, (Nx << 1) * sizeof(double), true);
 				//m_dArrayShiftY = (double*)CAuxGPU::ToHostAndFree(pGpuUsage, m_dArrayShiftY, (Ny << 1) * sizeof(double), true);
 			}
@@ -1460,7 +1460,7 @@ int CGenMathFFT1D::Make1DFFT(CGenMathFFT1DInfo& FFT1DInfo, void* pvGPU) //OC0509
 	if(m_ArrayShiftX != 0)
 	{
 #ifdef _OFFLOAD_GPU //OC06092023 (to avoid #include "auxgpu.h" for CPU)
-		m_ArrayShiftX = (float*)CAuxGPU::ToHostAndFree(pGPU, m_ArrayShiftX); //OC19022024
+		m_ArrayShiftX = (float*)CAuxGPU::ToHostAndFree(pGPU, m_ArrayShiftX, CAuxGPU::DONT_COPY); //OC19022024
 		//m_ArrayShiftX = (float*)CAuxGPU::ToHostAndFree((TGPUUsageArg*)pvGPU, m_ArrayShiftX, (Nx << 1) * sizeof(float), true); //OC06092023
 		//m_ArrayShiftX = (float*)CAuxGPU::ToHostAndFree(pGpuUsage, m_ArrayShiftX, (Nx << 1) * sizeof(float), true);
 #endif
@@ -1469,7 +1469,7 @@ int CGenMathFFT1D::Make1DFFT(CGenMathFFT1DInfo& FFT1DInfo, void* pvGPU) //OC0509
 	if(m_dArrayShiftX != 0)
 	{
 #ifdef _OFFLOAD_GPU //OC06092023 (to avoid #include "auxgpu.h" for CPU)
-		m_dArrayShiftX = (double*)CAuxGPU::ToHostAndFree(pGPU, m_dArrayShiftX); //OC19022024
+		m_dArrayShiftX = (double*)CAuxGPU::ToHostAndFree(pGPU, m_dArrayShiftX, CAuxGPU::DONT_COPY); //OC19022024
 		//m_dArrayShiftX = (double*)CAuxGPU::ToHostAndFree((TGPUUsageArg*)pvGPU, m_dArrayShiftX, (Nx << 1) * sizeof(double), true); //OC06092023
 		//m_dArrayShiftX = (double*)CAuxGPU::ToHostAndFree(pGpuUsage, m_dArrayShiftX, (Nx << 1) * sizeof(double), true);
 #endif

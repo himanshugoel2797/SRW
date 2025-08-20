@@ -243,6 +243,7 @@ __global__ void ExtractSingleElecIntensity2DvsXZ_Kernel(srTRadExtract RadExtract
 //int srTRadGenManip::ExtractSingleElecIntensity2DvsXZ_GPU(srTRadExtract& RadExtract, double* arAuxInt, long long ie0, long long ie1, double InvStepRelArg, TGPUUsageArg* pGPU)
 int srTRadGenManip::ExtractSingleElecIntensity2DvsXZ_GPU(srTRadExtract& RadExtract, long long ie0, long long ie1, double InvStepRelArg, TGPUUsageArg* pGPU) //HG31072024
 {
+	printf("\r\n%s\r\n", __func__);
 #define GEN_MEMBERS(i) \
 	ExtractSingleElecIntensity2DvsXZ_Kernel<false, false, i, false>, \
 	ExtractSingleElecIntensity2DvsXZ_Kernel<false, false, i, true>, \
@@ -254,7 +255,6 @@ int srTRadGenManip::ExtractSingleElecIntensity2DvsXZ_GPU(srTRadExtract& RadExtra
 	ExtractSingleElecIntensity2DvsXZ_Kernel<true,  true,  i, true>,
 
 	decltype(ExtractSingleElecIntensity2DvsXZ_Kernel<false, false, 0, false>) *ExtractSingleElecIntensity2DvsXZ_tbl[] = {
-		GEN_MEMBERS(-5)
 		GEN_MEMBERS(-4)
 		GEN_MEMBERS(-3)
 		GEN_MEMBERS(-2)
@@ -265,14 +265,14 @@ int srTRadGenManip::ExtractSingleElecIntensity2DvsXZ_GPU(srTRadExtract& RadExtra
 		GEN_MEMBERS(3)
 		GEN_MEMBERS(4)
 		GEN_MEMBERS(5)
+		GEN_MEMBERS(-5)
 	};
 #undef GEN_MEMBERS
 
 	srTSRWRadStructAccessData& RadAccessData = *((srTSRWRadStructAccessData*)(hRadAccessData.ptr()));
 
-    const int bs = 256;
-    dim3 blocks(RadAccessData.nx / bs + ((RadAccessData.nx & (bs - 1)) != 0), RadAccessData.nz);
-    dim3 threads(bs, 1);
+    dim3 blocks(RadAccessData.nx, RadAccessData.nz);
+    dim3 threads(1);
 
     if (RadAccessData.pBaseRadX != NULL)
 	{
@@ -303,14 +303,13 @@ int srTRadGenManip::ExtractSingleElecIntensity2DvsXZ_GPU(srTRadExtract& RadExtra
 		{
 			RadExtract.pExtractedData = CAuxGPU::ToDevice(pGPU, RadExtract.pExtractedData, 4*RadAccessData.nx*RadAccessData.nz, CAuxGPU::DONT_COPY);
 			CAuxGPU::Memset(pGPU, RadExtract.pExtractedData, 0.0f, 4*RadAccessData.nx*RadAccessData.nz);
-			CAuxGPU::EnsureDeviceMemoryReady(pGPU, RadExtract.pExtractedData);
 		}
 		else
 		{
 			RadExtract.pExtractedData = CAuxGPU::ToDevice(pGPU, RadExtract.pExtractedData, RadAccessData.nx*RadAccessData.nz, CAuxGPU::DONT_COPY);
 			CAuxGPU::Memset(pGPU, RadExtract.pExtractedData, 0.0f, RadAccessData.nx*RadAccessData.nz);
-			CAuxGPU::EnsureDeviceMemoryReady(pGPU, RadExtract.pExtractedData);
 		}
+		CAuxGPU::EnsureDeviceMemoryReady(pGPU, RadExtract.pExtractedData);
 	}
 	else
 	{
@@ -318,46 +317,56 @@ int srTRadGenManip::ExtractSingleElecIntensity2DvsXZ_GPU(srTRadExtract& RadExtra
 		{
 			RadExtract.pExtractedDataD = CAuxGPU::ToDevice(pGPU, RadExtract.pExtractedDataD, 4*RadAccessData.nx*RadAccessData.nz, CAuxGPU::DONT_COPY);
 			CAuxGPU::Memset(pGPU, RadExtract.pExtractedDataD, 0.0, 4*RadAccessData.nx*RadAccessData.nz);
-			CAuxGPU::EnsureDeviceMemoryReady(pGPU, RadExtract.pExtractedDataD);
 		}
 		else
 		{
 			RadExtract.pExtractedDataD = CAuxGPU::ToDevice(pGPU, RadExtract.pExtractedDataD, RadAccessData.nx*RadAccessData.nz, CAuxGPU::DONT_COPY);
 			CAuxGPU::Memset(pGPU, RadExtract.pExtractedDataD, 0.0, RadAccessData.nx*RadAccessData.nz);
-			CAuxGPU::EnsureDeviceMemoryReady(pGPU, RadExtract.pExtractedDataD);
 		}
+		CAuxGPU::EnsureDeviceMemoryReady(pGPU, RadExtract.pExtractedDataD);
 	}
 
 	bool NpIsEven = ((RadAccessData.ne % 2) == 0);
-	int idx = ((RadExtract.PolarizCompon + 5) << 3) | ((allStokesReq & 1) << 2) | ((intOverEnIsRequired & 1) << 1) | (NpIsEven & 1);
+	int idx = RadExtract.PolarizCompon;
+	idx = (((idx < -4 || idx > 5) ? 10 : (idx + 4)) << 3) | ((allStokesReq & 1) << 2) | ((intOverEnIsRequired & 1) << 1) | (NpIsEven & 1);
+	
+	printf("%s %d %d\r\n", __func__, idx, RadExtract.PolarizCompon);
+	CAuxGPU::CalcLaunchDims(ExtractSingleElecIntensity2DvsXZ_tbl[idx], blocks, blocks, threads);
 	ExtractSingleElecIntensity2DvsXZ_tbl[idx]<<<blocks, threads>>>(RadExtract, pRadAccessData_dev, local_copy, ie0, ie1, InvStepRelArg, Int_or_ReE);
-
+	
 	if(Int_or_ReE != 2) //HG13012024 Fixed bug: Output array was not allocated properly
 	{
 		if(RadExtract.pExtractedData != NULL)
+		{
 			CAuxGPU::MarkUpdated(pGPU, RadExtract.pExtractedData, CAuxGPU::DEVICE);
+			RadExtract.pExtractedData = CAuxGPU::GetHostPtr(pGPU, RadExtract.pExtractedData);
+		}
 	}
 	else
 	{
 		if(RadExtract.pExtractedDataD != NULL)
+		{
 			CAuxGPU::MarkUpdated(pGPU, RadExtract.pExtractedDataD, CAuxGPU::DEVICE);
-	}
-
-//#ifndef _DEBUG //HG26022024 (commented out)
-	if(Int_or_ReE != 2)
-	{
-		if (RadExtract.pExtractedData != NULL)
-			RadExtract.pExtractedData = CAuxGPU::GetHostPtr(pGPU, RadExtract.pExtractedData);
-	}
-	else
-	{
-		if (RadExtract.pExtractedDataD != NULL)
 			RadExtract.pExtractedDataD = CAuxGPU::GetHostPtr(pGPU, RadExtract.pExtractedDataD);
+		}
 	}
-//#endif
 
-	CAuxGPU::ToHostAndFree(pGPU, pRadAccessData_dev); //HG27072024
+	CAuxGPU::ToHostAndFree(pGPU, pRadAccessData_dev, CAuxGPU::DONT_COPY); //HG27072024
 
+	
+	//RadAccessData.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, RadAccessData.pBaseRadX);
+	//RadAccessData.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, RadAccessData.pBaseRadZ);
+	//RadExtract.pExtractedData = CAuxGPU::ToHostAndFree(pGPU, RadExtract.pExtractedData);
+	//cudaDeviceSynchronize();
+	//double sumX=0, sumZ=0, sumEx=0;
+	//for(int i = 0; i < 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz; i++)
+	//{
+	//	sumX += RadAccessData.pBaseRadX[i]*RadAccessData.pBaseRadX[i];
+	//	sumZ += RadAccessData.pBaseRadZ[i];
+	//	sumEx += RadExtract.pExtractedData[i/2];
+	//}
+	//printf("Sum of BaseRadX: %f, BaseRadZ: %f, ExtractedData: %f\n", sumX, sumZ, sumEx);
+	//exit(0);
 //HG26022024 (commented out)
 //#ifdef _DEBUG
 //	if(Int_or_ReE != 2)
@@ -372,7 +381,7 @@ int srTRadGenManip::ExtractSingleElecIntensity2DvsXZ_GPU(srTRadExtract& RadExtra
 //	}
 //#endif
 
-    CAuxGPU::ToHostAndFree(pGPU, local_copy);
+    CAuxGPU::ToHostAndFree(pGPU, local_copy, CAuxGPU::DONT_COPY);
 	//CAuxGPU::ToHostAndFree(pGPU, arAuxInt, RadAccessData.ne*sizeof(double), true); //HG31072024
     //CAuxGPU::MarkUpdated(pGPU, RadAccessData.pBaseRadX, true, false);
 	//CAuxGPU::MarkUpdated(pGPU, RadAccessData.pBaseRadZ, true, false);
@@ -605,8 +614,8 @@ int srTRadGenManip::ExtractSingleElecMutualIntensityVsXZ_GPU(float* pEx, float* 
 
 	ExtractSingleElecMutualIntensityVsXZ_tbl[idx]<<<grid, threads >>> (pEx, pEz, pMI0, (long)nxnz, itStart, itEnd, PerX, iter);
 
-	pEx = CAuxGPU::ToHostAndFree(pGPU, pEx);
-	pEz = CAuxGPU::ToHostAndFree(pGPU, pEz);
+	pEx = CAuxGPU::ToHostAndFree(pGPU, pEx, CAuxGPU::DONT_COPY);
+	pEz = CAuxGPU::ToHostAndFree(pGPU, pEz, CAuxGPU::DONT_COPY);
 	CAuxGPU::MarkUpdated(pGPU, pMI0, CAuxGPU::DEVICE);
 
 //HG26022024 (commented out)

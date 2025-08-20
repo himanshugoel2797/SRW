@@ -137,7 +137,9 @@ int RadPointModifierParallelImpl(srTSRWRadStructAccessData* pRadAccessData, void
 	{
 		dim3 blocks(combinedE ? 1 : pRadAccessData->ne, xFin - xStart, zFin - zStart);
 		dim3 threads(1);
+		printf("%s [%d, %d, %d] %d %d\r\n", __func__, blocks.x, blocks.y, blocks.z, xFin, zFin);
 		CAuxGPU::CalcLaunchDims(kern, blocks, blocks, threads);
+		printf("%s [%d, %d, %d][%d, %d, %d]", __func__, blocks.x, blocks.y, blocks.z, threads.x, threads.y, threads.z);
 		kern<<<blocks, threads >>> (pRadAccessData_dev, pBufVars_dev, local_copy, xStart, xFin, zStart, zFin);
 	}
 	else
@@ -186,9 +188,9 @@ int RadPointModifierParallelImpl(srTSRWRadStructAccessData* pRadAccessData, void
 		CAuxGPU::SyncComputeStream(pGPU, (long long)stream3, 0);
 	}
 
-	if (pBufVarsSz > 0) CAuxGPU::ToHostAndFree(pGPU, (char*)pBufVars_dev);
-	CAuxGPU::ToHostAndFree(pGPU, pRadAccessData_dev); //HG27072024
-	CAuxGPU::ToHostAndFree(pGPU, local_copy);
+	if (pBufVarsSz > 0) CAuxGPU::ToHostAndFree(pGPU, (char*)pBufVars_dev, CAuxGPU::DONT_COPY);
+	CAuxGPU::ToHostAndFree(pGPU, pRadAccessData_dev, CAuxGPU::DONT_COPY); //HG27072024
+	CAuxGPU::ToHostAndFree(pGPU, local_copy, CAuxGPU::DONT_COPY);
 	
 	CAuxGPU::MarkUpdated(pGPU, pRadAccessData->pBaseRadX, CAuxGPU::DEVICE);
 	CAuxGPU::MarkUpdated(pGPU, pRadAccessData->pBaseRadZ, CAuxGPU::DEVICE);

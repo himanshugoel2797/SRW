@@ -56,14 +56,23 @@ struct TGPUUsageArg //OC18022024
 #endif
 
 #ifdef __CUDACC__
-	const int PerThread = 16;
+	const int PerThread = 1;
 	template<typename T> __global__ void Memset_Kernel(T* p, T val, long long n)
 	{
+		//Memset kernel, uses coalesced loads across warps
 		long long offset = blockIdx.x * blockDim.x + threadIdx.x;
-		offset *= PerThread;
-		long long dst = min(offset + PerThread, n);
-		for (; offset < dst; offset++)
-			p[offset] = val;
+
+		long long warpBase = offset & ~31;
+		long long warpIdx = offset & 31;
+
+		long long perWarp = 32 * PerThread;
+
+		for (int i = 0; i < PerThread; i++)
+		{
+			long long idx = warpBase * PerThread + warpIdx + i * 32;
+			if (idx < n)
+				p[idx] = val;
+		}
 	}
 #endif
 
@@ -162,21 +171,27 @@ public:
 			return;
 		if (elemCount == 0)
 			return;
-		if (gpuMap.find(devicePtr) != gpuMap.end()){
-			void* devPtr = devicePtr;
-			if (gpuMap[devPtr].DevToHostUpdated){
-				cudaStreamWaitEvent(memcpy_stream, gpuMap[devPtr].d2h_event);
-				gpuMap[devPtr].DevToHostUpdated = false;
-				if (gpuMap[devPtr].hostPtr != NULL) gpuMap[gpuMap[devPtr].hostPtr].DevToHostUpdated = false;
-			}
-
-			int minGridSize = 0;
-			int bs = 256;
-			size_t elemCount_orig = elemCount;
-			cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, Memset_Kernel<T>, 0, (elemCount + PerThread - 1) / PerThread);
-			elemCount = ((elemCount + PerThread - 1) / PerThread + bs - 1) / bs;
-			Memset_Kernel<T> <<<elemCount, bs, 0, memcpy_stream>>> ((T*)devPtr, value, elemCount_orig);
-		}
+		//if (gpuMap.find(devicePtr) != gpuMap.end()){
+		//	void* devPtr = devicePtr;
+		//	if (gpuMap[devPtr].DevToHostUpdated){
+		//		cudaStreamWaitEvent(memcpy_stream, gpuMap[devPtr].d2h_event);
+		//		gpuMap[devPtr].DevToHostUpdated = false;
+		//		if (gpuMap[devPtr].hostPtr != NULL) gpuMap[gpuMap[devPtr].hostPtr].DevToHostUpdated = false;
+		//	}
+//
+		//	int minGridSize = 0;
+		//	int bs = 256;
+		//	size_t elemCount_orig = elemCount;
+		//	cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, Memset_Kernel<T>, 0, (elemCount + PerThread - 1) / PerThread);
+		//	elemCount = ((elemCount + PerThread - 1) / PerThread + bs - 1) / bs;
+		//	Memset_Kernel<T> <<<elemCount, bs, 0, memcpy_stream>>> ((T*)devPtr, value, elemCount_orig);
+		//}
+		T* ptr = CAuxGPU::ToDevice(arg, devicePtr, elemCount);
+		CAuxGPU::EnsureDeviceMemoryReady(arg, ptr);
+		dim3 blocks(elemCount / PerThread + !!(elemCount % PerThread), 1, 1), threads(1);
+		CAuxGPU::CalcLaunchDims(Memset_Kernel<T>, blocks, blocks, threads);
+		Memset_Kernel<T> <<<blocks, threads>>> (ptr, value, elemCount - 1);
+		CAuxGPU::MarkUpdated(arg, ptr, CAuxGPU::DEVICE);
 #endif
 	}
 	
@@ -278,14 +293,17 @@ public:
 	* @param [out] threads The resulting thread count.
 	* @param [in] max_x_bs The maximum block size in the X dimension.
 	* @param [in] max_bs_total The maximum block size the kernel is designed to work with.
+	* @param [in] warpMultiple Whether the block size should be a multiple of the warp size (32).
 	*/
 	template<typename T>
-	static void CalcLaunchDims(T* kern, dim3 grid, dim3& blocks, dim3& threads, int max_x_bs = 0, int max_bs_total = 0)
+	static void CalcLaunchDims(T* kern, dim3 grid, dim3& blocks, dim3& threads, int max_x_bs = 0, int max_bs_total = 0, bool warpMultiple = false)
 	{
 		int minGridSize = 0; //HG05082024
     	int bs = 256;
 		cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bs, (void*)kern, 0, max_bs_total);
+		if (warpMultiple && (bs % 32 != 0)) bs -= (bs % 32);
 		if ((max_x_bs == 0) || (grid.x < bs && grid.x < max_x_bs)) max_x_bs = grid.x;
+		if (warpMultiple && (max_x_bs % 32 != 0)) max_x_bs -= (max_x_bs % 32);
 
 		threads.x = (max_x_bs < bs) ? max_x_bs : bs;
 		threads.y = 1;

@@ -207,7 +207,7 @@ int srTGenOptElem::PropagateRadiationMeth_0(srTSRWRadStructAccessData* pRadAcces
 	if((pRadDataSingleE != 0) && (pRadDataSingleE != pRadAccessData)) delete pRadDataSingleE;
 	if((pPrevRadDataSingleE != 0) && (pPrevRadDataSingleE != pRadAccessData)) delete pPrevRadDataSingleE;
 
-	#ifdef _OFFLOAD_GPU //HG31072024
+#ifdef _OFFLOAD_GPU //HG31072024
 	if (CAuxGPU::GPUEnabled(&parGPU) && large_memory)
 	{
 		pRadAccessData->pBaseRadX = CAuxGPU::ToHostAndFree(&parGPU, pRadAccessData->pBaseRadX, 2*pRadAccessData->ne*pRadAccessData->nx*pRadAccessData->nz);

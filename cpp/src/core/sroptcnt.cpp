@@ -351,9 +351,9 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 				//				printf("Element does not support GPU, transferring to CPU.\r\n");
 				//#endif
 				if(wfr.pBaseRadX != NULL)
-					wfr.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadX, 0, 2 * wfr.ne * wfr.nx * wfr.nz);
+					wfr.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadX, 0, 2*wfr.ne*wfr.nx*wfr.nz);
 				if(wfr.pBaseRadZ != NULL)
-					wfr.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadZ, 0, 2 * wfr.ne * wfr.nx * wfr.nz);
+					wfr.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadZ, 0, 2*wfr.ne*wfr.nx*wfr.nz);
 				dataOnDevice = false;
 			}
 			//else if(!dataOnDevice && (((srTGenOptElem*)it->rep)->SupportedFeatures() & 1) == 1)
@@ -367,6 +367,7 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 		}
 #endif
 
+		printf("[%d] \r\n", elemCount);
 		srTRadResizeVect auxResizeVect;
 		//if(res = ((srTGenOptElem*)(it->rep))->PropagateRadiation(&wfr, precParWfrPropag, auxResizeVect)) return res;
 		//if(res = ((srTGenOptElem*)(it->rep))->PropagateRadiation(&wfr, precParWfrPropag, auxResizeVect, pvGPU)) return res; //HG30112023
@@ -389,9 +390,9 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 				if(dataOnDevice)
 				{
 					if(wfr.pBaseRadX != NULL)
-						wfr.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadX, 0, 2 * wfr.ne * wfr.nx * wfr.nz);
+						wfr.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadX, 0, 2*wfr.ne*wfr.nx*wfr.nz);
 					if(wfr.pBaseRadZ != NULL)
-						wfr.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadZ, 0, 2 * wfr.ne * wfr.nx * wfr.nz);
+						wfr.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadZ, 0, 2*wfr.ne*wfr.nx*wfr.nz);
 					dataOnDevice = false;
 				}
 			}
@@ -432,9 +433,9 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 			if (dataOnDevice)
 			{
 				if (wfr.pBaseRadX != NULL)
-					wfr.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadX, 0, 2 * wfr.ne * wfr.nx * wfr.nz);
+					wfr.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadX, 0, 2*wfr.ne*wfr.nx*wfr.nz);
 				if (wfr.pBaseRadZ != NULL)
-					wfr.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadZ, 0, 2 * wfr.ne * wfr.nx * wfr.nz);
+					wfr.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadZ, 0, 2*wfr.ne*wfr.nx*wfr.nz);
 				dataOnDevice = false;
 			}
 		}
@@ -449,9 +450,9 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 		if (dataOnDevice)
 		{
 			if (wfr.pBaseRadX != NULL)
-				wfr.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadX, 0, 2 * wfr.ne * wfr.nx * wfr.nz);
+				wfr.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadX, 0, 2*wfr.ne*wfr.nx*wfr.nz);
 			if (wfr.pBaseRadZ != NULL)
-				wfr.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadZ, 0, 2 * wfr.ne * wfr.nx * wfr.nz);
+				wfr.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadZ, 0, 2*wfr.ne*wfr.nx*wfr.nz);
 			dataOnDevice = false;
 		}
 	}

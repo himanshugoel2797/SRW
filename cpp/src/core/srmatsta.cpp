@@ -612,6 +612,14 @@ template <class T> int srTAuxMatStat::IntegrateOverY(T* p0, long long iyStart, l
 //int srTAuxMatStat::FindIntensityLimitsInds(CHGenObj& hRad, int ie, double RelPow, int* IndLims)
 int srTAuxMatStat::FindIntensityLimitsInds(CHGenObj& hRad, int ie, double RelPow, int* IndLims, void* pvGPU) //HG30072024
 {
+#ifdef _OFFLOAD_GPU
+	TGPUUsageArg parGPU(pvGPU);
+	if(CAuxGPU::GPUEnabled(&parGPU))
+	{
+		return FindIntensityLimitsInds_GPU(hRad, ie, RelPow, IndLims, pvGPU);
+	}
+#endif
+
 	srTSRWRadStructAccessData& Rad = *((srTSRWRadStructAccessData*)(hRad.ptr()));
 
 	IndLims[0] = 0;
@@ -636,15 +644,7 @@ int srTAuxMatStat::FindIntensityLimitsInds(CHGenObj& hRad, int ie, double RelPow
 		int res = 0;
 		//if(res = RadGenManip.ExtractRadiation(RadExtract, ExtractedWaveData))
 		if(res = RadGenManip.ExtractRadiation(RadExtract, ExtractedWaveData)) //HG30072024
-		{
-#ifdef _OFFLOAD_GPU //HG30072024
-			TGPUUsageArg parGPU(pvGPU);
-			if(CAuxGPU::GPUEnabled(&parGPU))
-				CAuxGPU::ToHostAndFree(&parGPU, RadExtract.pExtractedData);
-#endif
 			delete[] RadExtract.pExtractedData; return res;
-		}
-
 		float AuxArrF[5];
 		srTWaveAccessData OutInfoData;
 		//char InfoSuf[] = "_inf"; // To steer //OC030110
@@ -657,18 +657,11 @@ int srTAuxMatStat::FindIntensityLimitsInds(CHGenObj& hRad, int ie, double RelPow
 		OutInfoData.pWaveData = (char*)AuxArrF;
 		for(int i=0; i<5; i++) AuxArrF[i] = 0.;
 		//AuxArrF[0] = (float)IntegrateSimple(ExtractedWaveData);
-		AuxArrF[0] = (float)IntegrateSimple(ExtractedWaveData, pvGPU); //HG30072024
+		AuxArrF[0] = (float)IntegrateSimple(ExtractedWaveData); //HG30072024
 		//if(res = FindIntensityLimits2D(ExtractedWaveData, RelPow, OutInfoData))
-		if(res = FindIntensityLimits2D(ExtractedWaveData, RelPow, OutInfoData, pvGPU)) //HG30072024
-		{
-#ifdef _OFFLOAD_GPU //HG30072024
-			TGPUUsageArg parGPU(pvGPU);
-			if(CAuxGPU::GPUEnabled(&parGPU))
-				CAuxGPU::ToHostAndFree(&parGPU, RadExtract.pExtractedData);
-#endif
+		if(res = FindIntensityLimits2D(ExtractedWaveData, RelPow, OutInfoData)) //HG30072024
 			delete[] RadExtract.pExtractedData; return res;
-		}
-
+		
 		IndLims[0] = (int)((AuxArrF[1] - Rad.xStart)*1.0000001/Rad.xStep);
 		if(IndLims[0] < 0) IndLims[0] = 0;
 		IndLims[1] = (int)((AuxArrF[2] - Rad.xStart)*1.0000001/Rad.xStep);
@@ -678,11 +671,6 @@ int srTAuxMatStat::FindIntensityLimitsInds(CHGenObj& hRad, int ie, double RelPow
 		IndLims[3] = (int)((AuxArrF[4] - Rad.zStart)*1.0000001/Rad.zStep);
 		if(IndLims[3] >= Rad.nz) IndLims[3] = Rad.nz - 1;
 
-#ifdef _OFFLOAD_GPU //HG30072024
-			TGPUUsageArg parGPU(pvGPU);
-			if(CAuxGPU::GPUEnabled(&parGPU))
-				CAuxGPU::ToHostAndFree(&parGPU, RadExtract.pExtractedData);
-#endif
 		delete[] RadExtract.pExtractedData;
 	}
 	catch(...)

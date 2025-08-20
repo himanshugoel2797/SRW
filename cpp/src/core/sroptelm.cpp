@@ -1720,8 +1720,8 @@ int srTGenOptElem::ComputeRadMoments(srTSRWRadStructAccessData* pSRWRadStructAcc
 		if (CAuxGPU::GPUEnabled(&parGPU))
 		{
 			//TODO: Make proper GPU port for this part, transferring data back to CPU is a temporary solution
-			pSRWRadStructAccessData->pBaseRadX = (float*)CAuxGPU::ToHostAndFree(&parGPU, pSRWRadStructAccessData->pBaseRadX, 0, 2*pSRWRadStructAccessData->ne*pSRWRadStructAccessData->nx*pSRWRadStructAccessData->nz*sizeof(float));
-			pSRWRadStructAccessData->pBaseRadZ = (float*)CAuxGPU::ToHostAndFree(&parGPU, pSRWRadStructAccessData->pBaseRadZ, 0, 2*pSRWRadStructAccessData->ne*pSRWRadStructAccessData->nx*pSRWRadStructAccessData->nz*sizeof(float));
+			pSRWRadStructAccessData->pBaseRadX = CAuxGPU::ToHostAndFree(&parGPU, pSRWRadStructAccessData->pBaseRadX);
+			pSRWRadStructAccessData->pBaseRadZ = CAuxGPU::ToHostAndFree(&parGPU, pSRWRadStructAccessData->pBaseRadZ);
 		}
 #endif
 
@@ -1778,7 +1778,10 @@ int srTGenOptElem::ComputeRadMoments(srTSRWRadStructAccessData* pSRWRadStructAcc
 
 		srTMomentsPtrs MomXPtrs(fpMomX), MomZPtrs(fpMomZ);
 
-		AuxMatStat.FindIntensityLimitsInds(hRad, ie, RelPowForLimits, IndLims);
+		printf("%s %llx %llx\r\n", __func__, pSRWRadStructAccessData->pBaseRadX, pSRWRadStructAccessData->pBaseRadZ); //HG26072024
+		AuxMatStat.FindIntensityLimitsInds(hRad, ie, RelPowForLimits, IndLims, pvGPU);
+		printf("%s %llx %llx\r\n", __func__, pSRWRadStructAccessData->pBaseRadX, pSRWRadStructAccessData->pBaseRadZ); //HG26072024
+		printf("%s %d %d %d %d\r\n", __func__, IndLims[0], IndLims[1], IndLims[2], IndLims[3]); //HG26072024
 
 		#ifdef _OFFLOAD_GPU //HG31072024
 		TGPUUsageArg parGPU(pvGPU);

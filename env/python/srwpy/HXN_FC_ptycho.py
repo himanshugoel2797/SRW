@@ -1256,11 +1256,20 @@ def main():
 
             #names = ['WB_Slits','WB_Slits_M1_HFM','M1_HFM','After_M1_Before_DCM','DCM_C1','DCM_C2','After_DCM_M2_VFM','M2_VFM','After_M2_Before_SSA1','SSA1']#,'After_SSA1_Before_ZP']#,'Ap_ZP','ZP','Beam_Stop','After_ZP_Before_OSA','OSA','After_OSA_At_Sample']
             #names = ['WB_Slits','WB_Slits_M1_HFM','M1_HFM','After_M1_Before_DCM','After_DCM_M2_VFM','M2_VFM','After_M2_Before_SSA1','SSA1','After_SSA1_Before_ZP','Ap_ZP','ZP','Beam_Stop','After_ZP_Before_OSA','OSA','After_OSA_At_Sample']
-            names = ['S1', 'S1_HCM', 'HCM', 'HCM_Before_DCM', 'DCM_C1', 'DCM_C2', 'After_DCM_HFM', 'HFM', 'HFM_VFM', 'VFM', 'VFM_VPM', 'VPM', 'After_VPM_Before_SSA', 'SSA']#, 'After_SSA_Before_VKB']#, 'VKB', 'After_VKB_Before_HKB', 'HKB', 'After_HKB_Focus']
+            names = ['S1', 'S1_HCM']#, 'HCM', 'HCM_Before_DCM', 'DCM_C1', 'DCM_C2', 'After_DCM_HFM', 'HFM', 'HFM_VFM', 'VFM', 'VFM_VPM', 'VPM', 'After_VPM_Before_SSA', 'SSA']#, 'After_SSA_Before_VKB']#, 'VKB', 'After_VKB_Before_HKB', 'HKB', 'After_HKB_Focus']
             op = set_optics(v, names, want_final_propagation=False)
             #op = set_optics(v, names, want_final_propagation=True)
 
             srwl.PropagElecField(curWfr, op, None, gpu_idx)
+
+            mesh1 = deepcopy(curWfr.mesh)
+            arI1 = array('f', [0]*mesh1.nx*mesh1.ny) #"flat" array to take 2D intensity data
+            srwl.CalcIntFromElecField(arI1, curWfr, 6, 0, 3, mesh1.eStart, 0, 0) #extracts intensity
+            plotMesh1x = [mesh1.xStart, mesh1.xFin, mesh1.nx]
+            plotMesh1y = [mesh1.yStart, mesh1.yFin, mesh1.ny]
+
+            uti_plot2d1d(arI1, plotMesh1x, plotMesh1y, 0, 0, ['Horizontal Position', 'Vertical Position', 'Intensity'], ['m', 'm', ''])
+            uti_plot_show()
             exit()
             if cmIdx > base_cm:
                 srwl.ResizeElecFieldMesh(curWfr, first_mesh, [0, 0])

@@ -160,7 +160,7 @@ public:
 		//return result; //test
 
 		char &MethNo = ParPrecWfrPropag.MethNo;
-
+		printf("%s %d\r\n", __func__, MethNo);
 		//if(MethNo == 0) result = PropagateRadiationMeth_0(pRadAccessData, &BufVars); //OC06092019
 		//OC01102019 (restored)
 		//if(MethNo == 0) result = PropagateRadiationMeth_0(pRadAccessData);
@@ -205,6 +205,7 @@ public:
 		//OC251214
 		//if((LocalPropMode == 0) || (LocalPropMode == 3) || (pRadAccessData->ne == 1)) return PropagateRadiationSingleE_Meth_0(pRadAccessData, 0);
 
+		printf("%s %d\r\n", __func__, LocalPropMode);
 		//srTDriftPropBufVars* pBufVars = (srTDriftPropBufVars*)pBuf; //OC06092019
 		//if((pBufVars->LocalPropMode == 0) || (pBufVars->LocalPropMode == 3) || (pRadAccessData->ne == 1)) return PropagateRadiationSingleE_Meth_0(pRadAccessData, 0, pBuf); //OC06092019
 		//OC01102019 (restored)
@@ -323,6 +324,7 @@ public:
 		//srTDriftPropBufVars* pBufVars = (srTDriftPropBufVars*)pBuf; //OC06092019
 		//char LocalPropMode = pBufVars->LocalPropMode; //OC06092019
 		//OC01102019 (commented-out / restored)
+		printf("%s %d\r\n", __func__, LocalPropMode);
 
 		//if(LocalPropMode == 0) return PropagateRadiationSimple_AngRepres(pRadAccessData);
 		if(LocalPropMode == 0) return PropagateRadiationSimple_AngRepres(pRadAccessData, pvGPU); //HG01122023

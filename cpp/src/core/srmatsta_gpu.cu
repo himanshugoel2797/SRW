@@ -172,8 +172,10 @@ __global__ void PrefixSum_Kernel(T* data, int* bounds, T* sum_l, T* sum_r, T* re
             cta.sync();
         }
     
+        if (!multiWarp && idx < len)
+            printf("%llx %llx %lld {%d, %d} len=%d value=%f\r\n", bounds, sum_l, idx, bounds[0], bounds[1], len, left_sum);
         // Store the block sum
-        if (sum_l != NULL && idx < len) sum_l[idx] = left_sum;
+        //if (sum_l != NULL && idx < len) sum_l[idx] = left_sum;
         if (sum_r != NULL && r_idx < len) sum_r[r_idx] = right_sum;
         if (residual_sum_l != NULL && threadIdx.x == blockDim.x - 1) residual_sum_l[blockIdx.x + 1] = left_sum;
         if (residual_sum_r != NULL && threadIdx.x == 31 && blockIdx.x > 0) residual_sum_r[blockIdx.x - 1] = right_sum;
@@ -414,7 +416,7 @@ int srTAuxMatStat::IntegrateOverX_GPU(double* p0, int ixStart, int ixEnd, double
 template <class T>
 int IntegrateOverY_GPU_base(T* p0, int* iyBounds, double yStep, long long Nx, long long Ny, double* AuxArrIntOverY, TGPUUsageArg* pGPU)
 {
-    dim3 nblocks(Nx, Ny / PerThreadSum + !!(Ny & (PerThreadSum - 1)));
+    dim3 nblocks(Nx, Ny / PerThreadSum + !!(Ny % PerThreadSum));
     dim3 threads(1);
     CAuxGPU::CalcLaunchDims(IntegrateOverY_Kernel<T>, nblocks, nblocks, threads);
 
@@ -444,9 +446,10 @@ int srTAuxMatStat::IntegrateOverY_GPU(double* p0, int iyStart, int iyEnd, double
 template <class T>
 int IntegrateSimple_GPU_base(T* p0, long long LenArr, double Multiplier, double* OutVal, TGPUUsageArg* pGPU)
 {
-    dim3 nblocks(LenArr / PerThreadSum + !!(LenArr & (PerThreadSum - 1)), 1);
+    dim3 nblocks(LenArr / PerThreadSum + !!(LenArr % PerThreadSum), 1);
     dim3 threads(1);
     CAuxGPU::CalcLaunchDims(SumVector_FixedStride_Kernel<T>, nblocks, nblocks, threads);
+    printf("\r\n%s [%d,%d,%d] [%d,%d,%d]\r\n", __func__, nblocks.x, nblocks.y, nblocks.z, threads.x, threads.y, threads.z);
 
     p0 = CAuxGPU::ToDevice(pGPU, p0, LenArr);
     OutVal = CAuxGPU::ToDevice(pGPU, OutVal, 1);
@@ -470,12 +473,14 @@ int srTAuxMatStat::IntegrateSimple_GPU(double* p0, long long LenArr, double Mult
 template <class T>
 int PrefixSum_GPU(T* data, int len, int* sum_bounds, int* final_bounds, double RelPowLevel, double* IntegratedIntens, TGPUUsageArg* pGPU)
 {
+    cudaError_t err;
+    printf("\r\n%s\r\n", __func__);
     dim3 nblocks0(len, 1);
     dim3 nblocks1(len, 1);
     dim3 threads0(1);
     dim3 threads1(1);
-    CAuxGPU::CalcLaunchDims(PrefixSum_Kernel<T, 0>, nblocks0, nblocks0, threads0);
-    CAuxGPU::CalcLaunchDims(PrefixSum_Kernel<T, 1>, nblocks1, nblocks1, threads1);
+    CAuxGPU::CalcLaunchDims(PrefixSum_Kernel<T, 0>, nblocks0, nblocks0, threads0, 0, 0, true);
+    CAuxGPU::CalcLaunchDims(PrefixSum_Kernel<T, 1>, nblocks1, nblocks1, threads1, 0, 0, true);
 
     data = CAuxGPU::ToDevice(pGPU, data, len);
     sum_bounds = CAuxGPU::ToDevice(pGPU, sum_bounds, 2);
@@ -490,34 +495,66 @@ int PrefixSum_GPU(T* data, int len, int* sum_bounds, int* final_bounds, double R
     int tertiary_sum_bounds[2] { 0, (int)nblocks0.x - 1 };
     int* tertiary_sum_bounds_d = CAuxGPU::ToDevice(pGPU, tertiary_sum_bounds, 2);
 
+    printf("%s %d %d\r\n", __func__, tertiary_sum_bounds[0], tertiary_sum_bounds[1]);
+    printf("%s [%d,%d,%d][%d,%d,%d]\r\n", __func__, nblocks0.x, nblocks0.y, nblocks0.z, threads0.x, threads0.y, threads0.z);
+    printf("%s [%d,%d,%d][%d,%d,%d]\r\n", __func__, nblocks1.x, nblocks1.y, nblocks1.z, threads1.x, threads1.y, threads1.z);
     CAuxGPU::EnsureDeviceMemoryReady(pGPU, data, sum_bounds, final_bounds, residual_sum_l, sum_l, bounds_l, tertiary_sum_bounds_d);
+
+        cudaDeviceSynchronize();
+        err = cudaGetLastError();
+        if (err != cudaSuccess) printf("CUDA Error 0: %s\n", cudaGetErrorString(err));
 
     int residual_thds = (nblocks0.x > 32) ? nblocks0.x : 32;
     PrefixSum_Kernel<T, 0><<<nblocks0, threads0>>>(data, sum_bounds, sum_l, sum_r, residual_sum_l, residual_sum_r);
     if (nblocks0.x > 1)
     {
-        if (residual_thds > 32) PrefixSum_Kernel<T, 0, true><<<1, residual_thds>>>(residual_sum_l, tertiary_sum_bounds_d, residual_sum_l, NULL);
-        else PrefixSum_Kernel<T, 0, false><<<1, residual_thds>>>(residual_sum_l, tertiary_sum_bounds_d, residual_sum_l, NULL);
-        
+        printf("Residual threads: %d %llx %llx\n", residual_thds, (long long)residual_sum_l, (long long)tertiary_sum_bounds_d);
+	cudaDeviceSynchronize();
+	err = cudaGetLastError();
+	if (err != cudaSuccess) printf("CUDA Error 1: %s\n", cudaGetErrorString(err));
+    if (residual_thds > 32) PrefixSum_Kernel<T, 0, true><<<1, residual_thds>>>(residual_sum_l, tertiary_sum_bounds_d, residual_sum_l, NULL);
+    else PrefixSum_Kernel<T, 0, false><<<1, residual_thds>>>(residual_sum_l, tertiary_sum_bounds_d, residual_sum_l, NULL);
+    
+	cudaDeviceSynchronize();
+	err = cudaGetLastError();
+	if (err != cudaSuccess) printf("CUDA Error 2: %s\n", cudaGetErrorString(err));
+    int* tert_sum_bnds_local = CAuxGPU::ToHostAndFree(pGPU, tertiary_sum_bounds_d);
+    printf("%s %d %d\r\n", __func__, tert_sum_bnds_local[0], tert_sum_bnds_local[1]);
+    exit(0);
         if (residual_thds > 32) PrefixSum_Kernel<T, 0, true><<<1, residual_thds>>>(residual_sum_r, tertiary_sum_bounds_d, NULL, residual_sum_r);
         else PrefixSum_Kernel<T, 0, false><<<1, residual_thds>>>(residual_sum_r, tertiary_sum_bounds_d, NULL, residual_sum_r);
     }     
+    
+	cudaDeviceSynchronize();
+	err = cudaGetLastError();
+	if (err != cudaSuccess) printf("CUDA Error 3: %s\n", cudaGetErrorString(err));
+    printf("aaaaa\n");
     PrefixSum_Kernel<T, 1><<<nblocks1, threads1>>>(data, sum_bounds, sum_l, sum_r, residual_sum_l, residual_sum_r, RelPowLevel, IntegratedIntens, bounds_l, bounds_r);
+
+	cudaDeviceSynchronize();
+	err = cudaGetLastError();
+	if (err != cudaSuccess) printf("CUDA Error 4: %s\n", cudaGetErrorString(err));
     PrefixSum_Kernel<T, 2><<<1, residual_thds>>>(NULL, tertiary_sum_bounds_d, NULL, NULL, residual_sum_l, residual_sum_r, RelPowLevel, IntegratedIntens, bounds_l, bounds_r, final_bounds);
+
+	cudaDeviceSynchronize();
+	err = cudaGetLastError();
+	if (err != cudaSuccess) printf("CUDA Error 5: %s\n", cudaGetErrorString(err));
 
     CAuxGPU::MarkUpdated(pGPU, bounds_l, CAuxGPU::DEVICE);
     CAuxGPU::MarkUpdated(pGPU, sum_l, CAuxGPU::DEVICE);
     CAuxGPU::MarkUpdated(pGPU, residual_sum_l, CAuxGPU::DEVICE);
     CAuxGPU::MarkUpdated(pGPU, final_bounds, CAuxGPU::DEVICE);
-    CAuxGPU::ToHostAndFree(pGPU, bounds_l);
-    CAuxGPU::ToHostAndFree(pGPU, sum_l);
-    CAuxGPU::ToHostAndFree(pGPU, residual_sum_l);
-    CAuxGPU::ToHostAndFree(pGPU, tertiary_sum_bounds_d);
+    CAuxGPU::ToHostAndFree(pGPU, bounds_l, CAuxGPU::DONT_COPY);
+    CAuxGPU::ToHostAndFree(pGPU, sum_l, CAuxGPU::DONT_COPY);
+    CAuxGPU::ToHostAndFree(pGPU, residual_sum_l, CAuxGPU::DONT_COPY);
+    CAuxGPU::ToHostAndFree(pGPU, tertiary_sum_bounds_d, CAuxGPU::DONT_COPY);
     return 0;
 }
 
 int FindIntensityLimits2D_GPU(srTWaveAccessData& InWaveData, double RelPowLevel, double* IntegratedIntens, int* IndLims, TGPUUsageArg* pGPU)
 {
+    cudaError_t err;
+    printf("\r\n%s\r\n", __func__);
     long Nx = (long)InWaveData.DimSizes[0];
     long Ny = (long)InWaveData.DimSizes[1];
     double xStep = InWaveData.DimSteps[0];
@@ -536,39 +573,60 @@ int FindIntensityLimits2D_GPU(srTWaveAccessData& InWaveData, double RelPowLevel,
     CAuxGPU::Memset(pGPU, AuxArrIntOverX, 0.0, Ny);
     CAuxGPU::EnsureDeviceMemoryReady(pGPU, ixBounds_d, iyBounds_d);
 
+    
+	cudaDeviceSynchronize();
+	err = cudaGetLastError();
+	if (err != cudaSuccess) printf("CUDA Error 0: %s\n", cudaGetErrorString(err));
     if (pf0 != NULL) IntegrateOverX_GPU_base<float>(pf0, ixBounds_d, xStep, Nx, Ny, AuxArrIntOverX, pGPU);
     else IntegrateOverX_GPU_base<double>(pd0, ixBounds_d, xStep, Nx, Ny, AuxArrIntOverX, pGPU);
     
+	cudaDeviceSynchronize();
+	err = cudaGetLastError();
+	if (err != cudaSuccess) printf("CUDA Error 1: %s\n", cudaGetErrorString(err));
     //Find the limits of integration over X
     PrefixSum_GPU<double>(AuxArrIntOverX, Ny, ixBounds_d, iyBounds_d, RelPowLevel, IntegratedIntens, pGPU);
     
+	cudaDeviceSynchronize();
+	err = cudaGetLastError();
+	if (err != cudaSuccess) printf("CUDA Error 2: %s\n", cudaGetErrorString(err));
     //Integrate Y over the limits of integration over X
     double* AuxArrIntOverY = CAuxGPU::ToDevice<double>(pGPU, NULL, Nx);
     CAuxGPU::Memset(pGPU, AuxArrIntOverY, 0.0, Nx);
+	cudaDeviceSynchronize();
+	err = cudaGetLastError();
+	if (err != cudaSuccess) printf("CUDA Error 3: %s\n", cudaGetErrorString(err));
     if (pf0 != NULL) IntegrateOverY_GPU_base<float>(pf0, iyBounds_d, yStep, Nx, Ny, AuxArrIntOverY, pGPU);
     else IntegrateOverY_GPU_base<double>(pd0, iyBounds_d, yStep, Nx, Ny, AuxArrIntOverY, pGPU);
 
+	cudaDeviceSynchronize();
+	err = cudaGetLastError();
+	if (err != cudaSuccess) printf("CUDA Error 4: %s\n", cudaGetErrorString(err));
     //Find the limits of integration over Y
     PrefixSum_GPU<double>(AuxArrIntOverY, Nx, iyBounds_d, ixBounds_d, RelPowLevel, IntegratedIntens, pGPU);
 
+	cudaDeviceSynchronize();
+	err = cudaGetLastError();
+	if (err != cudaSuccess) printf("CUDA Error 5: %s\n", cudaGetErrorString(err));
     //The integer limits of integration over X and Y are now in ixBounds_d and iyBounds_d respectively
     CAuxGPU::MarkUpdated(pGPU, ixBounds_d, CAuxGPU::DEVICE);
     CAuxGPU::MarkUpdated(pGPU, iyBounds_d, CAuxGPU::DEVICE);
     CAuxGPU::MarkUpdated(pGPU, AuxArrIntOverX, CAuxGPU::DEVICE);
     CAuxGPU::MarkUpdated(pGPU, AuxArrIntOverY, CAuxGPU::DEVICE);
-    CAuxGPU::ToHostAndFree(pGPU, AuxArrIntOverX);
-    CAuxGPU::ToHostAndFree(pGPU, AuxArrIntOverY);
+    CAuxGPU::ToHostAndFree(pGPU, AuxArrIntOverX, CAuxGPU::DONT_COPY);
+    CAuxGPU::ToHostAndFree(pGPU, AuxArrIntOverY, CAuxGPU::DONT_COPY);
     return 0;
 }
 
-int srTAuxMatStat::FindIntensityLimitsInds_GPU(CHGenObj& hRad, int ie, double RelPow, int* IndLims, TGPUUsageArg* pGPU)
+int srTAuxMatStat::FindIntensityLimitsInds_GPU(CHGenObj& hRad, int ie, double RelPow, int* IndLims, void* pvGPU)
 {
-    srTSRWRadStructAccessData& Rad = *((srTSRWRadStructAccessData*)(hRad.ptr()));
+    TGPUUsageArg parGPU(pvGPU);
+    printf("\r\n%s", __func__);
+    srTSRWRadStructAccessData* Rad = ((srTSRWRadStructAccessData*)(hRad.ptr()));
 
 	IndLims[0] = 0;
-	IndLims[1] = Rad.nx - 1;
+	IndLims[1] = Rad->nx - 1;
 	IndLims[2] = 0;
-	IndLims[3] = Rad.nz - 1;
+	IndLims[3] = Rad->nz - 1;
 
 	try //OC21022024: to rewrite, avoiding allocation: new float[Rad.nx*Rad.nz]; !
 	{
@@ -576,20 +634,24 @@ int srTAuxMatStat::FindIntensityLimitsInds_GPU(CHGenObj& hRad, int ie, double Re
 		RadExtract.PolarizCompon = 6;
 		RadExtract.Int_or_Phase = 0;
 		RadExtract.PlotType = 3;
-		RadExtract.TransvPres = Rad.Pres;
+		RadExtract.TransvPres = Rad->Pres;
 
-		RadExtract.ePh = Rad.eStart + ie*Rad.eStep;
-		RadExtract.pExtractedData = new float[Rad.nx*Rad.nz];
+		RadExtract.ePh = Rad->eStart + ie*Rad->eStep;
+		RadExtract.pExtractedData = new float[Rad->nx*Rad->nz];
 
+		printf("%s %llx %llx\r\n", __func__, Rad->pBaseRadX, Rad->pBaseRadZ); //HG26072024
+        
 		//srTRadGenManip RadGenManip(Rad);
 		srTRadGenManip RadGenManip(hRad);
 		srTWaveAccessData ExtractedWaveData;
 		int res = 0;
-        if(res = RadGenManip.ExtractRadiation(RadExtract, ExtractedWaveData, pGPU))
+        if(res = RadGenManip.ExtractRadiation(RadExtract, ExtractedWaveData, pvGPU))
 		{
-            CAuxGPU::ToHostAndFree(pGPU, RadExtract.pExtractedData);
+            CAuxGPU::ToHostAndFree(&parGPU, RadExtract.pExtractedData, CAuxGPU::DONT_COPY);
 			delete[] RadExtract.pExtractedData; return res;
 		}
+        
+		printf("%s %llx %llx\r\n", __func__, Rad->pBaseRadX, Rad->pBaseRadZ); //HG26072024
 
 		float AuxArrF[5];
 		srTWaveAccessData OutInfoData;
@@ -609,12 +671,17 @@ int srTAuxMatStat::FindIntensityLimitsInds_GPU(CHGenObj& hRad, int ie, double Re
         double yStep = ExtractedWaveData.DimSteps[1];
 
         double IntegratedIntens = 0.;
-        if (*(ExtractedWaveData.WaveType) == 'f') IntegrateSimple_GPU((float*)ExtractedWaveData.pWaveData, Nx*Ny, xStep*yStep, &IntegratedIntens, pGPU);
-        else IntegrateSimple_GPU((double*)ExtractedWaveData.pWaveData, Nx*Ny, xStep*yStep, &IntegratedIntens, pGPU);
+        if (*(ExtractedWaveData.WaveType) == 'f') IntegrateSimple_GPU((float*)ExtractedWaveData.pWaveData, Nx*Ny, xStep*yStep, &IntegratedIntens, &parGPU);
+        else IntegrateSimple_GPU((double*)ExtractedWaveData.pWaveData, Nx*Ny, xStep*yStep, &IntegratedIntens, &parGPU);
 		
-        res = FindIntensityLimits2D_GPU(ExtractedWaveData, RelPow, &IntegratedIntens, IndLims, pGPU);
-        CAuxGPU::ToHostAndFree(pGPU, RadExtract.pExtractedData);
-        CAuxGPU::ToHostAndFree(pGPU, &IntegratedIntens);
+        //CAuxGPU::ToHostAndFree(&parGPU, &IntegratedIntens);
+        //printf("\r\nIntegratedIntens: %f %c %llx\r\n", IntegratedIntens, *(ExtractedWaveData.WaveType), (unsigned long long)ExtractedWaveData.pWaveData);
+
+        res = FindIntensityLimits2D_GPU(ExtractedWaveData, RelPow, &IntegratedIntens, IndLims, &parGPU);
+        CAuxGPU::ToHostAndFree(&parGPU, RadExtract.pExtractedData, CAuxGPU::DONT_COPY);
+        CAuxGPU::ToHostAndFree(&parGPU, &IntegratedIntens, CAuxGPU::DONT_COPY);
+        CAuxGPU::ToHostAndFree(&parGPU, IndLims);
+        printf("%s %d %d %d %d\r\n", __func__, IndLims[0], IndLims[1], IndLims[2], IndLims[3]);
         delete[] RadExtract.pExtractedData;
         if(res) return res;
 	}
