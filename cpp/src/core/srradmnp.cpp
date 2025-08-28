@@ -3081,7 +3081,6 @@ int srTRadGenManip::SetupExtractedWaveData(srTRadExtract& RadExtract, srTWaveAcc
 		ExtrWaveData.pWaveData = (char*)(RadExtract.pExtractedDataD);
 		*(ExtrWaveData.WaveType) = 'd';
 	}
-	printf("\r\n%s %c\r\n", __func__, *(ExtrWaveData.WaveType));
 
 	int PT = RadExtract.PlotType;
 	ExtrWaveData.AmOfDims = ((PT >= 0) && (PT < 3))? 1 : ((PT < 6)? 2 : 3);

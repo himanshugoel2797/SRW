@@ -330,7 +330,6 @@ int srTRadGenManip::ExtractSingleElecIntensity2DvsXZ_GPU(srTRadExtract& RadExtra
 	int idx = RadExtract.PolarizCompon;
 	idx = (((idx < -4 || idx > 5) ? 10 : (idx + 4)) << 3) | ((allStokesReq & 1) << 2) | ((intOverEnIsRequired & 1) << 1) | (NpIsEven & 1);
 	
-	printf("%s %d %d\r\n", __func__, idx, RadExtract.PolarizCompon);
 	CAuxGPU::CalcLaunchDims(ExtractSingleElecIntensity2DvsXZ_tbl[idx], blocks, blocks, threads);
 	ExtractSingleElecIntensity2DvsXZ_tbl[idx]<<<blocks, threads>>>(RadExtract, pRadAccessData_dev, local_copy, ie0, ie1, InvStepRelArg, Int_or_ReE);
 	

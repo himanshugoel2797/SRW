@@ -20,6 +20,13 @@
 #include "cooperative_groups/scan.h"
 #include "cooperative_groups/memcpy_async.h"
 
+#include <thrust/scan.h>
+#include <thrust/reduce.h>
+#include <thrust/reverse.h>
+#include <thrust/iterator/reverse_iterator.h>
+#include <thrust/device_ptr.h>
+#include <thrust/execution_policy.h>
+#include <thrust/partition.h>
 
 #include <stdio.h>
 #include <iostream>
@@ -27,42 +34,13 @@
 #include "srmatsta.h"
 #include "srradmnp.h"
 
-
-namespace cg = cooperative_groups;
-const int PerThreadSum = 16; //Number of values a single thread accumulates
+const int PerThreadSum = 16;
 
 template<class T>
-__global__ void SumVector_FixedStride_Kernel(T* data, long long start, long long end, double multiplier, double* sum)
-{
-    cg::thread_block cta = cg::this_thread_block();
-    cg::thread_block_tile<32> tile = cg::tiled_partition<32>(cta); //Split the thread block into warps
-
-    long long idx = blockIdx.x * blockDim.x + threadIdx.x;
-    idx = idx * PerThreadSum + start;
-    double sum_tmp = 0.;
-    if (idx <= end)
-    {
-        for (int i = 0; i < PerThreadSum; i++)
-        {
-            long long pos = (i + idx);
-            if (pos > end) break;
-
-            sum_tmp += data[pos];
-        }
-    }
-
-    sum_tmp = cg::reduce(tile, sum_tmp, cg::plus<double>());
-    if (tile.thread_rank() == 0)
-        atomicAdd(sum, sum_tmp * multiplier);
-}
-
-template<class T>
-__global__ void IntegrateOverX_Kernel(T* data, int* ixBounds, double xStep, int Nx, int Ny, double* AuxArrIntOverX)
+__global__ void IntegrateOverX_Kernel(T* data, int ixStart, int ixEnd, double xStep, int Nx, int Ny, double* AuxArrIntOverX)
 {
     int iy = blockIdx.x * blockDim.x + threadIdx.x;
     int ix = blockIdx.y * blockDim.y + threadIdx.y;
-    int ixStart = ixBounds[0];
-    int ixEnd = ixBounds[1];
     ix = ix * PerThreadSum + ixStart;
     if (ix > ixEnd) return;
     int ixFin = min(ix + PerThreadSum - 1, ixEnd);
@@ -78,12 +56,10 @@ __global__ void IntegrateOverX_Kernel(T* data, int* ixBounds, double xStep, int 
 }
 
 template<class T>
-__global__ void IntegrateOverY_Kernel(T* data, int* iyBounds, double yStep, int Nx, int Ny, double* AuxArrIntOverY)
+__global__ void IntegrateOverY_Kernel(T* data, int iyStart, int iyEnd, double yStep, int Nx, int Ny, double* AuxArrIntOverY)
 {
     int ix = blockIdx.x * blockDim.x + threadIdx.x;
     int iy = blockIdx.y * blockDim.y + threadIdx.y;
-    int iyStart = iyBounds[0];
-    int iyEnd = iyBounds[1];
     iy = iy * PerThreadSum + iyStart;
     if (iy > Ny) return;
     if (iy > iyEnd) return;
@@ -99,322 +75,24 @@ __global__ void IntegrateOverY_Kernel(T* data, int* iyBounds, double yStep, int 
     }
 }
 
-
-template<class T, int KernelMode, bool multiWarp = true>
-__global__ void PrefixSum_Kernel(T* data, int* bounds, T* sum_l, T* sum_r, T* residual_sum_l = NULL, T* residual_sum_r = NULL, double RelPowLevel = 0, double* IntegratedIntens = NULL, int* bounds_l = NULL, int* bounds_r = NULL, int* final_bounds = NULL)
-{
-    //Compute a parallel prefix sum of the array using warp shuffles and store the result in sum
-    cg::thread_block cta = cg::this_thread_block();
-    cg::thread_block_tile<32> tile = cg::tiled_partition<32>(cta); //Split the thread block into war
-    long idx = blockIdx.x * blockDim.x + threadIdx.x;
-    long r_idx = idx + (31 - 2 * tile.thread_rank());
-    int start = bounds[0];
-    int end = bounds[1];
-    long len = end - start + 1;
-    
-    T leftLimit = IntegratedIntens[0]*(1. - RelPowLevel)*0.25;
-    T rightLimit = leftLimit;
-
-    if (KernelMode == 0)
-    {
-        T value = (idx < len) ? data[start + idx] : 0;
-        // Perform the prefix sum within the warp
-        T left_sum = cg::inclusive_scan(tile, value, cg::plus<T>());
-        
-        value = tile.shfl(value, 31 - tile.thread_rank());
-        T right_sum = cg::inclusive_scan(tile, value, cg::plus<T>());
-    
-        if (multiWarp) 
-        {
-            // Initialize shared memory for prefix sums within the block
-            __shared__ T shared_data[33][2];
-            if (tile.meta_group_rank() == 0) 
-            {
-                shared_data[tile.thread_rank()][0] = 0;
-                shared_data[tile.thread_rank()][1] = 0;
-            }
-            
-            // Synchronize threads within the warp
-            cta.sync();
-            
-            // Store the results in shared memory
-            if (tile.thread_rank() == 31) 
-            {
-                shared_data[tile.meta_group_rank() + 1][0] = left_sum;
-                shared_data[tile.meta_group_rank()][1] = right_sum;
-            }
-            
-            // Synchronize threads within the warp
-            cta.sync();
-            
-            // Prefix sum the shared data across the meta group
-            if(tile.meta_group_rank() == 0) 
-            {
-                T l_temp = shared_data[tile.thread_rank()][0];
-                T r_temp = shared_data[31 - tile.thread_rank()][1];
-                
-                l_temp = cg::inclusive_scan(tile, l_temp, cg::plus<T>());
-                r_temp = cg::inclusive_scan(tile, r_temp, cg::plus<T>());
-                
-                // Store the results in shared memory
-                shared_data[tile.thread_rank()][0] = l_temp;
-                shared_data[31 - tile.thread_rank()][1] = r_temp;
-            }
-    
-            // Synchronize threads within the warp
-            cta.sync();
-    
-            // Pull the sum for the current warp from shared memory
-            left_sum += shared_data[tile.meta_group_rank()][0];
-            right_sum += shared_data[tile.meta_group_rank() + 1][1];
-    
-            // Synchronize threads within the warp
-            cta.sync();
-        }
-    
-        if (!multiWarp && idx < len)
-            printf("%llx %llx %lld {%d, %d} len=%d value=%f\r\n", bounds, sum_l, idx, bounds[0], bounds[1], len, left_sum);
-        // Store the block sum
-        //if (sum_l != NULL && idx < len) sum_l[idx] = left_sum;
-        if (sum_r != NULL && r_idx < len) sum_r[r_idx] = right_sum;
-        if (residual_sum_l != NULL && threadIdx.x == blockDim.x - 1) residual_sum_l[blockIdx.x + 1] = left_sum;
-        if (residual_sum_r != NULL && threadIdx.x == 31 && blockIdx.x > 0) residual_sum_r[blockIdx.x - 1] = right_sum;
-    }
-    else if (KernelMode == 1)
-    {
-        T value = (idx < len) ? data[start + idx] : 0;
-        //Read the prefix sum of the other thread blocks
-        T left_sum = residual_sum_l[blockIdx.x];
-        T right_sum = residual_sum_r[blockIdx.x];
-
-        if (idx < len)
-        {
-            float left_sum_tmp = left_sum + sum_l[idx];
-            float right_sum_tmp = right_sum + sum_r[idx];
-
-            //TODO track index closest to leftLimit and rightLimit respectively, via reduction, first within the block, then across blocks
-            T left_sum_min = abs(left_sum_tmp - leftLimit);
-            T right_sum_min = abs(right_sum_tmp - rightLimit);
-            //printf("[%d] left_sum_min: %f, right_sum_min: %f\n", idx, left_sum_min, right_sum_min);
-
-            int l_idx = idx;
-            int r_idx = idx;
-            for (int i = 1; i < 32; i *= 2)
-            {
-                T left_sum_min_r = tile.shfl_down(left_sum_min, i);
-                T right_sum_min_r = tile.shfl_down(right_sum_min, i);
-                T l_idx_tmp = tile.shfl_down(l_idx, i);
-                T r_idx_tmp = tile.shfl_down(r_idx, i);
-
-                if (left_sum_min_r < left_sum_min)
-                {
-                    left_sum_min = left_sum_min_r;
-                    l_idx = l_idx_tmp;
-                }
-                if (right_sum_min_r < right_sum_min)
-                {
-                    right_sum_min = right_sum_min_r;
-                    r_idx = r_idx_tmp;
-                }
-            }
-
-            //TODO Reduce within the block
-            __shared__ T shared_data[32][2];
-            __shared__ int shared_idx[32][2];
-            if (tile.meta_group_rank() == 0) 
-            {
-                shared_data[tile.thread_rank()][0] = INFINITY;
-                shared_data[tile.thread_rank()][1] = INFINITY;
-                shared_idx[tile.thread_rank()][0] = INT_MAX;
-                shared_idx[tile.thread_rank()][1] = INT_MAX;
-            }
-            
-            // Synchronize threads within the warp
-            cta.sync();
-            
-            // Store the results in shared memory
-            if (tile.thread_rank() == 0) 
-            {
-                shared_data[tile.meta_group_rank()][0] = left_sum_min;
-                shared_data[tile.meta_group_rank()][1] = right_sum_min;
-                shared_idx[tile.meta_group_rank()][0] = l_idx;
-                shared_idx[tile.meta_group_rank()][1] = r_idx;
-
-                //printf("[%d, %d] [%d]=%f [%d]=%f\n", tile.meta_group_rank(), tile.thread_rank(), l_idx, left_sum_min, r_idx, right_sum_min);
-            }
-            
-            // Synchronize threads within the warp
-            cta.sync();
-            
-            // Prefix sum the shared data across the meta group
-            if(tile.meta_group_rank() == 0) 
-            {
-                T l_temp = shared_data[tile.thread_rank()][0];
-                T r_temp = shared_data[tile.thread_rank()][1];
-                int l_idx_temp = shared_idx[tile.thread_rank()][0];
-                int r_idx_temp = shared_idx[tile.thread_rank()][1];
-
-                for (int i = 1; i < 32; i *= 2)
-                {
-                    T _l_temp = tile.shfl_down(l_temp, i);
-                    T _r_temp = tile.shfl_down(r_temp, i);
-                    int _l_idx_temp = tile.shfl_down(l_idx_temp, i);
-                    int _r_idx_temp = tile.shfl_down(r_idx_temp, i);
-                    
-                    if (_l_temp < l_temp)
-                    {
-                        l_temp = _l_temp;
-                        l_idx_temp = _l_idx_temp;
-                    }
-                    if (_r_temp < r_temp)
-                    {
-                        r_temp = _r_temp;
-                        r_idx_temp = _r_idx_temp;
-                    }
-                }
-
-                //TODO Reduce across blocks by storing the minimum value and index for each block
-                if (tile.thread_rank() == 0)
-                {
-                    //Get the index of the minimum value among all threads which matched the condition
-                    //printf("Left pass: [%d] %f @ %d\n", tile.thread_rank(), left_sum_min, l_idx_temp);
-                        residual_sum_l[blockIdx.x] = l_temp;
-                        if (bounds_l != NULL) bounds_l[blockIdx.x] = l_idx_temp;
-
-                    //printf("Right pass: [%d] %f @ %d\n", tile.thread_rank(), right_sum_min, r_idx_temp);
-                    residual_sum_r[blockIdx.x] = r_temp;
-                    if (bounds_r != NULL) bounds_r[blockIdx.x] = r_idx_temp;
-                }
-            }
-
-            sum_l[idx] = left_sum_tmp;
-            sum_r[idx] = right_sum_tmp;
-        }
-    }
-    else if (KernelMode == 2)
-    {
-        T l_value = (idx < len) ? residual_sum_l[idx] : INFINITY;
-        int l_idx = (idx < len) ? bounds_l[idx] : INT_MAX;
-        T r_value = (idx < len) ? residual_sum_r[idx] : INFINITY;
-        int r_idx = (idx < len) ? bounds_r[idx] : INT_MAX;
-
-        //TODO track index closest to leftLimit and rightLimit respectively, via reduction, first within the block, then across blocks
-        T left_sum_min = abs(l_value - leftLimit);
-        T right_sum_min = abs(r_value - rightLimit);
-        for (int i = 1; i < 32; i *= 2)
-        {
-            T left_sum_min_r = tile.shfl_down(left_sum_min, i);
-            T right_sum_min_r = tile.shfl_down(right_sum_min, i);
-            T l_idx_tmp = tile.shfl_down(l_idx, i);
-            T r_idx_tmp = tile.shfl_down(r_idx, i);
-
-            if (left_sum_min_r < left_sum_min)
-            {
-                left_sum_min = left_sum_min_r;
-                l_idx = l_idx_tmp;
-            }
-            if (right_sum_min_r < right_sum_min)
-            {
-                right_sum_min = right_sum_min_r;
-                r_idx = r_idx_tmp;
-            }
-        }
-
-        //TODO Reduce within the block
-        __shared__ T shared_data[32][2];
-        __shared__ int shared_idx[32][2];
-        if (tile.meta_group_rank() == 0) 
-        {
-            shared_data[tile.thread_rank()][0] = INFINITY;
-            shared_data[tile.thread_rank()][1] = INFINITY;
-            shared_idx[tile.thread_rank()][0] = INT_MAX;
-            shared_idx[tile.thread_rank()][1] = INT_MAX;
-        }
-        
-        // Synchronize threads within the warp
-        cta.sync();
-        
-        // Store the results in shared memory
-        if (tile.thread_rank() == 0) 
-        {
-            shared_data[tile.meta_group_rank()][0] = left_sum_min;
-            shared_data[tile.meta_group_rank()][1] = right_sum_min;
-            shared_idx[tile.meta_group_rank()][0] = l_idx;
-            shared_idx[tile.meta_group_rank()][1] = r_idx;
-        }
-        
-        // Synchronize threads within the warp
-        cta.sync();
-        
-        // Prefix sum the shared data across the meta group
-        if(tile.meta_group_rank() == 0) 
-        {
-            T l_temp = shared_data[tile.thread_rank()][0];
-            T r_temp = shared_data[tile.thread_rank()][1];
-            int l_idx_temp = shared_idx[tile.thread_rank()][0];
-            int r_idx_temp = shared_idx[tile.thread_rank()][1];
-
-            for (int i = 1; i < 32; i *= 2)
-            {
-                T _l_temp = tile.shfl_down(l_temp, i);
-                T _r_temp = tile.shfl_down(r_temp, i);
-                int _l_idx_temp = tile.shfl_down(l_idx_temp, i);
-                int _r_idx_temp = tile.shfl_down(r_idx_temp, i);
-                
-                if (_l_temp < l_temp)
-                {
-                    l_temp = _l_temp;
-                    l_idx_temp = _l_idx_temp;
-                }
-                if (_r_temp < r_temp)
-                {
-                    r_temp = _r_temp;
-                    r_idx_temp = _r_idx_temp;
-                }
-            }
-
-            //TODO Reduce across blocks by storing the minimum value and index for each block
-            if (tile.thread_rank() == 0)
-            {
-                //Get the index of the minimum value among all threads which matched the condition
-                final_bounds[0] = l_idx_temp;
-                final_bounds[1] = r_idx_temp;
-            }
-        }
-    }
-}
-
 template<class T>
-int IntegrateOverX_GPU_base(T* p0, int* ixBounds, double xStep, long long Nx, long long Ny, double* AuxArrIntOverX, TGPUUsageArg* pGPU)
+int IntegrateOverX_GPU_base(T* p0, int ixStart, int ixEnd, double xStep, long long Nx, long long Ny, double* AuxArrIntOverX, TGPUUsageArg* pGPU)
 {
-    dim3 nblocks(Ny, Nx);
+    dim3 nblocks(Ny, Nx / PerThreadSum + !!(Nx % PerThreadSum));
     dim3 threads(1);
     CAuxGPU::CalcLaunchDims(IntegrateOverX_Kernel<T>, nblocks, nblocks, threads, 1);
 
     p0 = (T*)CAuxGPU::ToDevice(pGPU, p0, Nx * Ny);
     AuxArrIntOverX = CAuxGPU::ToDevice(pGPU, AuxArrIntOverX, Ny, CAuxGPU::DONT_COPY);
     CAuxGPU::Memset(pGPU, AuxArrIntOverX, 0.0, Ny);
-    ixBounds = CAuxGPU::ToDevice(pGPU, ixBounds, 2);
-    CAuxGPU::EnsureDeviceMemoryReady(pGPU, p0, AuxArrIntOverX, ixBounds);
-    IntegrateOverX_Kernel<T><<<nblocks, threads>>>(p0, ixBounds, xStep, (int)Nx, (int)Ny, AuxArrIntOverX);
+    CAuxGPU::EnsureDeviceMemoryReady(pGPU, p0, AuxArrIntOverX);
+    IntegrateOverX_Kernel<T><<<nblocks, threads>>>(p0, ixStart, ixEnd, xStep, (int)Nx, (int)Ny, AuxArrIntOverX);
     CAuxGPU::MarkUpdated(pGPU, AuxArrIntOverX, CAuxGPU::DEVICE);
     return 0;
 }
 
-int srTAuxMatStat::IntegrateOverX_GPU(float* p0, int ixStart, int ixEnd, double xStep, long long Nx, long long Ny, double* AuxArrIntOverX, TGPUUsageArg* pGPU)
-{
-    int ixBounds[2] = {ixStart, ixEnd};
-    return IntegrateOverX_GPU_base<float>(p0, ixBounds, xStep, Nx, Ny, AuxArrIntOverX, pGPU);
-}
-
-int srTAuxMatStat::IntegrateOverX_GPU(double* p0, int ixStart, int ixEnd, double xStep, long long Nx, long long Ny, double* AuxArrIntOverX, TGPUUsageArg* pGPU)
-{
-    int ixBounds[2] = {ixStart, ixEnd};
-    return IntegrateOverX_GPU_base<double>(p0, ixBounds, xStep, Nx, Ny, AuxArrIntOverX, pGPU);
-}
-
 template <class T>
-int IntegrateOverY_GPU_base(T* p0, int* iyBounds, double yStep, long long Nx, long long Ny, double* AuxArrIntOverY, TGPUUsageArg* pGPU)
+int IntegrateOverY_GPU_base(T* p0, int iyStart, int iyEnd, double yStep, long long Nx, long long Ny, double* AuxArrIntOverY, TGPUUsageArg* pGPU)
 {
     dim3 nblocks(Nx, Ny / PerThreadSum + !!(Ny % PerThreadSum));
     dim3 threads(1);
@@ -423,204 +101,50 @@ int IntegrateOverY_GPU_base(T* p0, int* iyBounds, double yStep, long long Nx, lo
     p0 = CAuxGPU::ToDevice(pGPU, p0, Nx*Ny);
     AuxArrIntOverY = CAuxGPU::ToDevice(pGPU, AuxArrIntOverY, Nx);
     CAuxGPU::Memset(pGPU, AuxArrIntOverY, 0.0, Nx);
-    iyBounds = CAuxGPU::ToDevice(pGPU, iyBounds, 2);
-    CAuxGPU::Memset(pGPU, iyBounds, 0, 2);
-    CAuxGPU::EnsureDeviceMemoryReady(pGPU, p0, AuxArrIntOverY, iyBounds);
-    IntegrateOverY_Kernel<T><<<nblocks, threads>>>(p0, iyBounds, yStep, (int)Nx, (int)Ny, AuxArrIntOverY);
+    CAuxGPU::EnsureDeviceMemoryReady(pGPU, p0, AuxArrIntOverY);
+    IntegrateOverY_Kernel<T><<<nblocks, threads>>>(p0, iyStart, iyEnd, yStep, (int)Nx, (int)Ny, AuxArrIntOverY);
     CAuxGPU::MarkUpdated(pGPU, AuxArrIntOverY, CAuxGPU::DEVICE);
     return 0;
 }
 
-int srTAuxMatStat::IntegrateOverY_GPU(float* p0, int iyStart, int iyEnd, double yStep, long long Nx, double* AuxArrIntOverY, TGPUUsageArg* pGPU)
-{
-    int iyBounds[2] = {iyStart, iyEnd};
-    return IntegrateOverY_GPU_base<float>(p0, iyBounds, yStep, Nx, iyEnd, AuxArrIntOverY, pGPU);
-}
-
-int srTAuxMatStat::IntegrateOverY_GPU(double* p0, int iyStart, int iyEnd, double yStep, long long Nx, double* AuxArrIntOverY, TGPUUsageArg* pGPU)
-{
-    int iyBounds[2] = {iyStart, iyEnd};
-    return IntegrateOverY_GPU_base<double>(p0, iyBounds, yStep, Nx, iyEnd, AuxArrIntOverY, pGPU);
-}
-
 template <class T>
-int IntegrateSimple_GPU_base(T* p0, long long LenArr, double Multiplier, double* OutVal, TGPUUsageArg* pGPU)
+int PrefixSum_GPU(T* data, int len, double step, double RelPowLevel, double IntegratedIntens, int *leftIndex, int *rightIndex, TGPUUsageArg* pGPU)
 {
-    dim3 nblocks(LenArr / PerThreadSum + !!(LenArr % PerThreadSum), 1);
-    dim3 threads(1);
-    CAuxGPU::CalcLaunchDims(SumVector_FixedStride_Kernel<T>, nblocks, nblocks, threads);
-    printf("\r\n%s [%d,%d,%d] [%d,%d,%d]\r\n", __func__, nblocks.x, nblocks.y, nblocks.z, threads.x, threads.y, threads.z);
-
-    p0 = CAuxGPU::ToDevice(pGPU, p0, LenArr);
-    OutVal = CAuxGPU::ToDevice(pGPU, OutVal, 1);
-    CAuxGPU::Memset(pGPU, OutVal, 0.0, 1);
-    CAuxGPU::EnsureDeviceMemoryReady(pGPU, p0, OutVal);
-    SumVector_FixedStride_Kernel<T><<<nblocks, threads>>>(p0, 0LL, LenArr - 1, Multiplier, OutVal);
-    CAuxGPU::MarkUpdated(pGPU, OutVal, CAuxGPU::DEVICE);
-    return 0;
-}
-
-int srTAuxMatStat::IntegrateSimple_GPU(float* p0, long long LenArr, double Multiplier, double* OutVal, TGPUUsageArg* pGPU)
-{
-    return IntegrateSimple_GPU_base<float>(p0, LenArr, Multiplier, OutVal, pGPU);
-}
-
-int srTAuxMatStat::IntegrateSimple_GPU(double* p0, long long LenArr, double Multiplier, double* OutVal, TGPUUsageArg* pGPU)
-{
-    return IntegrateSimple_GPU_base<double>(p0, LenArr, Multiplier, OutVal, pGPU);
-}
-
-template <class T>
-int PrefixSum_GPU(T* data, int len, int* sum_bounds, int* final_bounds, double RelPowLevel, double* IntegratedIntens, TGPUUsageArg* pGPU)
-{
-    cudaError_t err;
-    printf("\r\n%s\r\n", __func__);
-    dim3 nblocks0(len, 1);
-    dim3 nblocks1(len, 1);
-    dim3 threads0(1);
-    dim3 threads1(1);
-    CAuxGPU::CalcLaunchDims(PrefixSum_Kernel<T, 0>, nblocks0, nblocks0, threads0, 0, 0, true);
-    CAuxGPU::CalcLaunchDims(PrefixSum_Kernel<T, 1>, nblocks1, nblocks1, threads1, 0, 0, true);
-
     data = CAuxGPU::ToDevice(pGPU, data, len);
-    sum_bounds = CAuxGPU::ToDevice(pGPU, sum_bounds, 2);
-    final_bounds = CAuxGPU::ToDevice(pGPU, final_bounds, 2);
-    T* residual_sum_l = CAuxGPU::ToDevice(pGPU, (T*)NULL, (nblocks0.x + 1) * 2);
-    CAuxGPU::Memset(pGPU, residual_sum_l, (T)0, (nblocks0.x + 1) * 2);
-    T* residual_sum_r = residual_sum_l + nblocks0.x + 1;
-    T* sum_l = CAuxGPU::ToDevice(pGPU, (T*)NULL, len);
+    T* sum_local = new T[len * 2] {0};
+    T* sum_l = CAuxGPU::ToDevice(pGPU, sum_local, len * 2);
     T* sum_r = sum_l + len;
-    int* bounds_l = CAuxGPU::ToDevice(pGPU, (int*)NULL, nblocks0.x * 2);
-    int* bounds_r = bounds_l + nblocks0.x;
-    int tertiary_sum_bounds[2] { 0, (int)nblocks0.x - 1 };
-    int* tertiary_sum_bounds_d = CAuxGPU::ToDevice(pGPU, tertiary_sum_bounds, 2);
-
-    printf("%s %d %d\r\n", __func__, tertiary_sum_bounds[0], tertiary_sum_bounds[1]);
-    printf("%s [%d,%d,%d][%d,%d,%d]\r\n", __func__, nblocks0.x, nblocks0.y, nblocks0.z, threads0.x, threads0.y, threads0.z);
-    printf("%s [%d,%d,%d][%d,%d,%d]\r\n", __func__, nblocks1.x, nblocks1.y, nblocks1.z, threads1.x, threads1.y, threads1.z);
-    CAuxGPU::EnsureDeviceMemoryReady(pGPU, data, sum_bounds, final_bounds, residual_sum_l, sum_l, bounds_l, tertiary_sum_bounds_d);
-
-        cudaDeviceSynchronize();
-        err = cudaGetLastError();
-        if (err != cudaSuccess) printf("CUDA Error 0: %s\n", cudaGetErrorString(err));
-
-    int residual_thds = (nblocks0.x > 32) ? nblocks0.x : 32;
-    PrefixSum_Kernel<T, 0><<<nblocks0, threads0>>>(data, sum_bounds, sum_l, sum_r, residual_sum_l, residual_sum_r);
-    if (nblocks0.x > 1)
-    {
-        printf("Residual threads: %d %llx %llx\n", residual_thds, (long long)residual_sum_l, (long long)tertiary_sum_bounds_d);
-	cudaDeviceSynchronize();
-	err = cudaGetLastError();
-	if (err != cudaSuccess) printf("CUDA Error 1: %s\n", cudaGetErrorString(err));
-    if (residual_thds > 32) PrefixSum_Kernel<T, 0, true><<<1, residual_thds>>>(residual_sum_l, tertiary_sum_bounds_d, residual_sum_l, NULL);
-    else PrefixSum_Kernel<T, 0, false><<<1, residual_thds>>>(residual_sum_l, tertiary_sum_bounds_d, residual_sum_l, NULL);
     
-	cudaDeviceSynchronize();
-	err = cudaGetLastError();
-	if (err != cudaSuccess) printf("CUDA Error 2: %s\n", cudaGetErrorString(err));
-    int* tert_sum_bnds_local = CAuxGPU::ToHostAndFree(pGPU, tertiary_sum_bounds_d);
-    printf("%s %d %d\r\n", __func__, tert_sum_bnds_local[0], tert_sum_bnds_local[1]);
-    exit(0);
-        if (residual_thds > 32) PrefixSum_Kernel<T, 0, true><<<1, residual_thds>>>(residual_sum_r, tertiary_sum_bounds_d, NULL, residual_sum_r);
-        else PrefixSum_Kernel<T, 0, false><<<1, residual_thds>>>(residual_sum_r, tertiary_sum_bounds_d, NULL, residual_sum_r);
-    }     
+    CAuxGPU::EnsureDeviceMemoryReady(pGPU, data, sum_l);
+
+    auto stream0 = CAuxGPU::GetComputeStream(pGPU, 0);
+    auto stream1 = CAuxGPU::GetComputeStream(pGPU, 1);
+    auto async_policy0 = thrust::cuda::par_nosync.on((cudaStream_t)stream0);
+    auto async_policy1 = thrust::cuda::par_nosync.on((cudaStream_t)stream1);
+
+    CAuxGPU::SyncComputeStream(pGPU, 0, stream0);
+    CAuxGPU::SyncComputeStream(pGPU, 0, stream1);
+
+    thrust::inclusive_scan(async_policy0, data, data + len, sum_l);
+    thrust::reverse_copy(async_policy1, data, data + len, sum_r);
+    thrust::exclusive_scan(async_policy1, sum_r, sum_r + len, sum_r);
+    T* a00 = thrust::partition_point(async_policy0, sum_l, sum_l + len, [=] __device__ (T x) { return x < IntegratedIntens/step*(1. - RelPowLevel)*0.25; });
+    T* a10 = thrust::partition_point(async_policy1, sum_r, sum_r + len, [=] __device__ (T x) { return x < IntegratedIntens/step*(1. - RelPowLevel)*0.25; });
     
-	cudaDeviceSynchronize();
-	err = cudaGetLastError();
-	if (err != cudaSuccess) printf("CUDA Error 3: %s\n", cudaGetErrorString(err));
-    printf("aaaaa\n");
-    PrefixSum_Kernel<T, 1><<<nblocks1, threads1>>>(data, sum_bounds, sum_l, sum_r, residual_sum_l, residual_sum_r, RelPowLevel, IntegratedIntens, bounds_l, bounds_r);
+    CAuxGPU::SyncComputeStream(pGPU, stream0, 0);
+    CAuxGPU::SyncComputeStream(pGPU, stream1, 0);
 
-	cudaDeviceSynchronize();
-	err = cudaGetLastError();
-	if (err != cudaSuccess) printf("CUDA Error 4: %s\n", cudaGetErrorString(err));
-    PrefixSum_Kernel<T, 2><<<1, residual_thds>>>(NULL, tertiary_sum_bounds_d, NULL, NULL, residual_sum_l, residual_sum_r, RelPowLevel, IntegratedIntens, bounds_l, bounds_r, final_bounds);
+    *leftIndex = (int)(a00 - sum_l);
+    *rightIndex = (int)(len - (a10 - sum_r));
 
-	cudaDeviceSynchronize();
-	err = cudaGetLastError();
-	if (err != cudaSuccess) printf("CUDA Error 5: %s\n", cudaGetErrorString(err));
-
-    CAuxGPU::MarkUpdated(pGPU, bounds_l, CAuxGPU::DEVICE);
     CAuxGPU::MarkUpdated(pGPU, sum_l, CAuxGPU::DEVICE);
-    CAuxGPU::MarkUpdated(pGPU, residual_sum_l, CAuxGPU::DEVICE);
-    CAuxGPU::MarkUpdated(pGPU, final_bounds, CAuxGPU::DEVICE);
-    CAuxGPU::ToHostAndFree(pGPU, bounds_l, CAuxGPU::DONT_COPY);
     CAuxGPU::ToHostAndFree(pGPU, sum_l, CAuxGPU::DONT_COPY);
-    CAuxGPU::ToHostAndFree(pGPU, residual_sum_l, CAuxGPU::DONT_COPY);
-    CAuxGPU::ToHostAndFree(pGPU, tertiary_sum_bounds_d, CAuxGPU::DONT_COPY);
-    return 0;
-}
-
-int FindIntensityLimits2D_GPU(srTWaveAccessData& InWaveData, double RelPowLevel, double* IntegratedIntens, int* IndLims, TGPUUsageArg* pGPU)
-{
-    cudaError_t err;
-    printf("\r\n%s\r\n", __func__);
-    long Nx = (long)InWaveData.DimSizes[0];
-    long Ny = (long)InWaveData.DimSizes[1];
-    double xStep = InWaveData.DimSteps[0];
-    double yStep = InWaveData.DimSteps[1];
-
-    float* pf0 = NULL;
-    double* pd0 = NULL;
-    if (*(InWaveData.WaveType) == 'f') pf0 = (float*)InWaveData.pWaveData;
-    else pd0 = (double*)InWaveData.pWaveData;
-    
-    int *ixBounds_d = CAuxGPU::ToDevice(pGPU, IndLims, 2);
-    int *iyBounds_d = CAuxGPU::ToDevice(pGPU, IndLims + 2, 2);
-
-    //Integrate over X
-    double *AuxArrIntOverX = CAuxGPU::ToDevice<double>(pGPU, NULL, Ny);
-    CAuxGPU::Memset(pGPU, AuxArrIntOverX, 0.0, Ny);
-    CAuxGPU::EnsureDeviceMemoryReady(pGPU, ixBounds_d, iyBounds_d);
-
-    
-	cudaDeviceSynchronize();
-	err = cudaGetLastError();
-	if (err != cudaSuccess) printf("CUDA Error 0: %s\n", cudaGetErrorString(err));
-    if (pf0 != NULL) IntegrateOverX_GPU_base<float>(pf0, ixBounds_d, xStep, Nx, Ny, AuxArrIntOverX, pGPU);
-    else IntegrateOverX_GPU_base<double>(pd0, ixBounds_d, xStep, Nx, Ny, AuxArrIntOverX, pGPU);
-    
-	cudaDeviceSynchronize();
-	err = cudaGetLastError();
-	if (err != cudaSuccess) printf("CUDA Error 1: %s\n", cudaGetErrorString(err));
-    //Find the limits of integration over X
-    PrefixSum_GPU<double>(AuxArrIntOverX, Ny, ixBounds_d, iyBounds_d, RelPowLevel, IntegratedIntens, pGPU);
-    
-	cudaDeviceSynchronize();
-	err = cudaGetLastError();
-	if (err != cudaSuccess) printf("CUDA Error 2: %s\n", cudaGetErrorString(err));
-    //Integrate Y over the limits of integration over X
-    double* AuxArrIntOverY = CAuxGPU::ToDevice<double>(pGPU, NULL, Nx);
-    CAuxGPU::Memset(pGPU, AuxArrIntOverY, 0.0, Nx);
-	cudaDeviceSynchronize();
-	err = cudaGetLastError();
-	if (err != cudaSuccess) printf("CUDA Error 3: %s\n", cudaGetErrorString(err));
-    if (pf0 != NULL) IntegrateOverY_GPU_base<float>(pf0, iyBounds_d, yStep, Nx, Ny, AuxArrIntOverY, pGPU);
-    else IntegrateOverY_GPU_base<double>(pd0, iyBounds_d, yStep, Nx, Ny, AuxArrIntOverY, pGPU);
-
-	cudaDeviceSynchronize();
-	err = cudaGetLastError();
-	if (err != cudaSuccess) printf("CUDA Error 4: %s\n", cudaGetErrorString(err));
-    //Find the limits of integration over Y
-    PrefixSum_GPU<double>(AuxArrIntOverY, Nx, iyBounds_d, ixBounds_d, RelPowLevel, IntegratedIntens, pGPU);
-
-	cudaDeviceSynchronize();
-	err = cudaGetLastError();
-	if (err != cudaSuccess) printf("CUDA Error 5: %s\n", cudaGetErrorString(err));
-    //The integer limits of integration over X and Y are now in ixBounds_d and iyBounds_d respectively
-    CAuxGPU::MarkUpdated(pGPU, ixBounds_d, CAuxGPU::DEVICE);
-    CAuxGPU::MarkUpdated(pGPU, iyBounds_d, CAuxGPU::DEVICE);
-    CAuxGPU::MarkUpdated(pGPU, AuxArrIntOverX, CAuxGPU::DEVICE);
-    CAuxGPU::MarkUpdated(pGPU, AuxArrIntOverY, CAuxGPU::DEVICE);
-    CAuxGPU::ToHostAndFree(pGPU, AuxArrIntOverX, CAuxGPU::DONT_COPY);
-    CAuxGPU::ToHostAndFree(pGPU, AuxArrIntOverY, CAuxGPU::DONT_COPY);
     return 0;
 }
 
 int srTAuxMatStat::FindIntensityLimitsInds_GPU(CHGenObj& hRad, int ie, double RelPow, int* IndLims, void* pvGPU)
 {
     TGPUUsageArg parGPU(pvGPU);
-    printf("\r\n%s", __func__);
     srTSRWRadStructAccessData* Rad = ((srTSRWRadStructAccessData*)(hRad.ptr()));
 
 	IndLims[0] = 0;
@@ -635,12 +159,9 @@ int srTAuxMatStat::FindIntensityLimitsInds_GPU(CHGenObj& hRad, int ie, double Re
 		RadExtract.Int_or_Phase = 0;
 		RadExtract.PlotType = 3;
 		RadExtract.TransvPres = Rad->Pres;
-
 		RadExtract.ePh = Rad->eStart + ie*Rad->eStep;
 		RadExtract.pExtractedData = new float[Rad->nx*Rad->nz];
 
-		printf("%s %llx %llx\r\n", __func__, Rad->pBaseRadX, Rad->pBaseRadZ); //HG26072024
-        
 		//srTRadGenManip RadGenManip(Rad);
 		srTRadGenManip RadGenManip(hRad);
 		srTWaveAccessData ExtractedWaveData;
@@ -650,8 +171,6 @@ int srTAuxMatStat::FindIntensityLimitsInds_GPU(CHGenObj& hRad, int ie, double Re
             CAuxGPU::ToHostAndFree(&parGPU, RadExtract.pExtractedData, CAuxGPU::DONT_COPY);
 			delete[] RadExtract.pExtractedData; return res;
 		}
-        
-		printf("%s %llx %llx\r\n", __func__, Rad->pBaseRadX, Rad->pBaseRadZ); //HG26072024
 
 		float AuxArrF[5];
 		srTWaveAccessData OutInfoData;
@@ -670,19 +189,47 @@ int srTAuxMatStat::FindIntensityLimitsInds_GPU(CHGenObj& hRad, int ie, double Re
         double xStep = ExtractedWaveData.DimSteps[0];
         double yStep = ExtractedWaveData.DimSteps[1];
 
-        double IntegratedIntens = 0.;
-        if (*(ExtractedWaveData.WaveType) == 'f') IntegrateSimple_GPU((float*)ExtractedWaveData.pWaveData, Nx*Ny, xStep*yStep, &IntegratedIntens, &parGPU);
-        else IntegrateSimple_GPU((double*)ExtractedWaveData.pWaveData, Nx*Ny, xStep*yStep, &IntegratedIntens, &parGPU);
-		
-        //CAuxGPU::ToHostAndFree(&parGPU, &IntegratedIntens);
-        //printf("\r\nIntegratedIntens: %f %c %llx\r\n", IntegratedIntens, *(ExtractedWaveData.WaveType), (unsigned long long)ExtractedWaveData.pWaveData);
+        double *AuxArrIntOverX = CAuxGPU::ToDevice<double>(&parGPU, NULL, Ny);
+        CAuxGPU::Memset(&parGPU, AuxArrIntOverX, 0.0, Ny);
+        double* AuxArrIntOverY = CAuxGPU::ToDevice<double>(&parGPU, NULL, Nx);
+        CAuxGPU::Memset(&parGPU, AuxArrIntOverY, 0.0, Nx);
+        CAuxGPU::EnsureDeviceMemoryReady(&parGPU, AuxArrIntOverX, AuxArrIntOverY);
 
-        res = FindIntensityLimits2D_GPU(ExtractedWaveData, RelPow, &IntegratedIntens, IndLims, &parGPU);
+        double IntegratedIntens = 0.;
+        float* pf0 = NULL;
+        double* pd0 = NULL;
+        if (*(ExtractedWaveData.WaveType) == 'f')
+        {
+            pf0 = CAuxGPU::ToDevice(&parGPU, (float*)ExtractedWaveData.pWaveData, Nx*Ny);
+            CAuxGPU::EnsureDeviceMemoryReady(&parGPU, pf0);
+            IntegratedIntens = thrust::reduce(thrust::device, pf0, pf0 + Nx*Ny) * xStep*yStep;
+            IntegrateOverX_GPU_base<float>(pf0, IndLims[0], IndLims[1], xStep, Nx, Ny, AuxArrIntOverX, &parGPU);
+        } 
+        else
+        {
+            pd0 = CAuxGPU::ToDevice(&parGPU, (double*)ExtractedWaveData.pWaveData, Nx*Ny);
+            CAuxGPU::EnsureDeviceMemoryReady(&parGPU, pd0);
+            IntegratedIntens = thrust::reduce(thrust::device, pd0, pd0 + Nx*Ny) * xStep*yStep;
+            IntegrateOverX_GPU_base<double>(pd0, IndLims[0], IndLims[1], xStep, Nx, Ny, AuxArrIntOverX, &parGPU);
+        }
+        
+        //Find the limits of integration over X
+        PrefixSum_GPU<double>(AuxArrIntOverX, Ny, yStep, RelPow, IntegratedIntens, &IndLims[2], &IndLims[3], &parGPU);
+        
+        //Integrate Y over the limits of integration over X
+        if (pf0 != NULL) IntegrateOverY_GPU_base<float>(pf0, IndLims[2], IndLims[3], yStep, Nx, Ny, AuxArrIntOverY, &parGPU);
+        else IntegrateOverY_GPU_base<double>(pd0, IndLims[2], IndLims[3], yStep, Nx, Ny, AuxArrIntOverY, &parGPU);
+        
+        //Find the limits of integration over Y
+        PrefixSum_GPU<double>(AuxArrIntOverY, Nx, xStep, RelPow, IntegratedIntens, &IndLims[0], &IndLims[1], &parGPU);
+        
+        //The integer limits of integration over X and Y are now in ixBounds_d and iyBounds_d respectively
+        CAuxGPU::ToHostAndFree(&parGPU, AuxArrIntOverX, CAuxGPU::DONT_COPY);
+        CAuxGPU::ToHostAndFree(&parGPU, AuxArrIntOverY, CAuxGPU::DONT_COPY);
+
         CAuxGPU::ToHostAndFree(&parGPU, RadExtract.pExtractedData, CAuxGPU::DONT_COPY);
-        CAuxGPU::ToHostAndFree(&parGPU, &IntegratedIntens, CAuxGPU::DONT_COPY);
-        CAuxGPU::ToHostAndFree(&parGPU, IndLims);
-        printf("%s %d %d %d %d\r\n", __func__, IndLims[0], IndLims[1], IndLims[2], IndLims[3]);
         delete[] RadExtract.pExtractedData;
+
         if(res) return res;
 	}
 	catch(...)

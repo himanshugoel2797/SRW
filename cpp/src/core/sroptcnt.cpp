@@ -272,6 +272,20 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 	TGPUUsageArg *pGPU = &parGPU; //OC18022024
 #endif
 
+
+char fname[128];
+sprintf(fname, "base_rad_x_start_%s_%d.txt", CAuxGPU::GPUEnabled(pGPU) ? "gpu" : "cpu", elemCount);
+FILE *fd = fopen(fname, "w");
+if (fd)
+{
+	fprintf(fd, "#%d,%d\r\n", wfr.nx, wfr.nz);
+	for (int i = 0; i < wfr.nx*wfr.nz*2; i++)
+	{
+		fprintf(fd, "%f\n", wfr.pBaseRadX[i]);
+	}
+	fclose(fd);
+}
+
 	for(srTGenOptElemHndlList::iterator it = GenOptElemList.begin(); it != GenOptElemList.end(); ++it)
 	{
 		//Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP:
@@ -367,12 +381,42 @@ int srTCompositeOptElem::PropagateRadiationGuided(srTSRWRadStructAccessData& wfr
 		}
 #endif
 
-		printf("[%d] \r\n", elemCount);
+dataOnDevice = false;
+wfr.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadX);
+char fname[128];
+sprintf(fname, "base_rad_x_pre_%s_%d.txt", CAuxGPU::GPUEnabled(pGPU) ? "gpu" : "cpu", elemCount);
+FILE *fd = fopen(fname, "w");
+if (fd)
+{
+	fprintf(fd, "#%d,%d\r\n", wfr.nx, wfr.nz);
+	for (int i = 0; i < wfr.nx*wfr.nz*2; i++)
+	{
+		fprintf(fd, "%f\n", wfr.pBaseRadX[i]);
+	}
+	fclose(fd);
+}
+		printf("[%d] %s\r\n", elemCount, (CAuxGPU::GPUEnabled(pGPU) && ((((srTGenOptElem*)it->rep)->GPUImplFeatures() & 1) == 0)) ? "<CPU>" : "<GPU>");
 		srTRadResizeVect auxResizeVect;
 		//if(res = ((srTGenOptElem*)(it->rep))->PropagateRadiation(&wfr, precParWfrPropag, auxResizeVect)) return res;
 		//if(res = ((srTGenOptElem*)(it->rep))->PropagateRadiation(&wfr, precParWfrPropag, auxResizeVect, pvGPU)) return res; //HG30112023
 		if(res = ((srTGenOptElem*)(it->rep))->PropagateRadiation(&wfr, precParWfrPropag, auxResizeVect, (((srTGenOptElem*)it->rep)->GPUImplFeatures() & 1) == 0 ? 0 : pvGPU )) return res; //HG26072024 Don't pass pvGPU to propagators that don't support it
 		//maybe to use "PropagateRadiationGuided" for srTCompositeOptElem?
+
+		printf("[%d] Prop done\r\n", elemCount);
+
+dataOnDevice = false;
+wfr.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadX);
+sprintf(fname, "base_rad_x_post_%s_%d.txt", CAuxGPU::GPUEnabled(pGPU) ? "gpu" : "cpu", elemCount);
+fd = fopen(fname, "w");
+if (fd)
+{
+	fprintf(fd, "#%d,%d\r\n", wfr.nx, wfr.nz);
+	for (int i = 0; i < wfr.nx*wfr.nz*2; i++)
+	{
+		fprintf(fd, "%f\n", wfr.pBaseRadX[i]);
+	}
+	fclose(fd);
+}
 
 		//OC_DEBUG
 		//std::cout << "   DEBUG: PropagateRadiationGuided: PropagateRadiation done for element:" << elemCount << "\n";

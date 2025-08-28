@@ -317,7 +317,20 @@ public:
 		if (y_v > 1 && grid.y > 1)
 		{
 			//Calculate y grid
-			threads.y = (y_v > grid.y) ? grid.y : y_v;
+			if (y_v >= grid.y) threads.y = grid.y;
+			else
+			{
+				//Check the remainder if threads.y where set to y_v
+				int blky = grid.y / y_v + !!(grid.y % y_v); //round up the division result
+				int rem = (blky * y_v) % grid.y;
+				if (rem / (float)y_v > 0.1)
+				{
+					//Adjust threads.y to minimize the remainder
+					threads.y = grid.y / blky + !!(grid.y % blky);
+					if (threads.y > 32 && threads.y % 32 != 0) threads.y -= (threads.y % 32);
+				}
+				else threads.y = y_v;
+			}
 			blocks.y = grid.y / threads.y + !!(grid.y % threads.y); //round up the division result
 
 			int z_v = y_v / threads.y;

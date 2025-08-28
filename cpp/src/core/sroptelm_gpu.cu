@@ -27,13 +27,45 @@
 
 namespace cg = cooperative_groups; //HG31072024
 
+GPU_PORTABLE
+inline void CosAndSin(double x, float& Cos, float& Sin)
+{
+	if((x < -1.E+08) || (x > 1.E+08)) { Cos = (float)cos(x); Sin = (float)sin(x); return;} //OC13112011
+
+
+	double a2c, a4c, a6c, a8c, a10c, a12c;
+	double a3s, a5s, a7s, a9s, a11s, a13s;
+	double HalfPI, PI, TwoPI, ThreePIdTwo, One_dTwoPI; // Constants
+
+	HalfPI = 1.570796326794895;
+	PI = 3.14159265358979;
+	TwoPI = 6.28318530717958;
+	ThreePIdTwo = 4.712388980384685;
+	One_dTwoPI = 0.15915494309189549983131786791662293675521113402958547893595764032949613067;
+	a2c = -0.5; a4c = 0.041666666666667; a6c = -0.0013888888888889; a8c = 0.000024801587301587; a10c = -2.755731922E-07;
+	a3s = -0.16666666666667; a5s = 0.0083333333333333; a7s = -0.0001984126984127; a9s = 2.755731922E-06; a11s = -2.505210839E-08;
+	
+	//x -= TwoPI*((long)(x*One_dTwoPI));
+	x -= TwoPI*((long long)(x*One_dTwoPI));
+	if(x < 0.) x += TwoPI;
+
+	char ChangeSign=0;
+	if(x > ThreePIdTwo) x -= TwoPI;
+	else if(x > HalfPI) { x -= PI; ChangeSign = 1;}
+
+	double xe2 = x*x;
+	Cos = float(1. + xe2*(a2c + xe2*(a4c + xe2*(a6c + xe2*(a8c + xe2*a10c)))));
+	Sin = float(x*(1. + xe2*(a3s + xe2*(a5s + xe2*(a7s + xe2*(a9s + xe2*a11s))))));
+	if(ChangeSign) { Cos = -Cos; Sin = -Sin;}
+}
+
 //__global__ void TreatStronglyOscillatingTerm_Kernel(srTSRWRadStructAccessData RadAccessData, bool TreatPolCompX, bool TreatPolCompZ, double ConstRx, double ConstRz, int ieStart) 
 __global__ void TreatStronglyOscillatingTerm_Kernel(srTSRWRadStructAccessData* pRadAccessData, bool TreatPolCompX, bool TreatPolCompZ, double ConstRx, double ConstRz, int ieStart, int ieBefEnd) //HG27072024
 {
     //int ix = (blockIdx.x * blockDim.x + threadIdx.x); //nx range
     //int iz = (blockIdx.y * blockDim.y + threadIdx.y); //nz range
     //int ie = (blockIdx.z * blockDim.z + threadIdx.z) + ieStart; //ne range
-	int ie = (blockIdx.x * blockDim.x + threadIdx.x); //ne range //HG24042025
+	int ie = (blockIdx.x * blockDim.x + threadIdx.x) + ieStart; //ne range //HG24042025
 	int ix = (blockIdx.y * blockDim.y + threadIdx.y); //nx range
 	int iz = (blockIdx.z * blockDim.z + threadIdx.z); //nz range
 	
@@ -67,7 +99,7 @@ __global__ void TreatStronglyOscillatingTerm_Kernel(srTSRWRadStructAccessData* p
         if (pRadAccessData->WfrQuadTermCanBeTreatedAtResizeX) Phase += ConstRxE * x * x;
 
         float SinPh, CosPh;
-        sincosf(Phase, &SinPh, &CosPh);
+		CosAndSin(Phase, CosPh, SinPh);
 
         long long PerX = pRadAccessData->ne << 1;
         long long PerZ = PerX * pRadAccessData->nx;
@@ -77,8 +109,20 @@ __global__ void TreatStronglyOscillatingTerm_Kernel(srTSRWRadStructAccessData* p
 		{
 			float* pExRe = pRadAccessData->pBaseRadX + offset;
 			float* pExIm = pExRe + 1;
-			double ExReNew = (*pExRe) * CosPh - (*pExIm) * SinPh;
-			double ExImNew = (*pExRe) * SinPh + (*pExIm) * CosPh;
+			//double ExReNew = (*pExRe) * CosPh - (*pExIm) * SinPh;
+			//double ExImNew = (*pExRe) * SinPh + (*pExIm) * CosPh;
+			
+					double tmp0 = (*pExIm)*SinPh;
+					double ExReNew = fma(*pExRe, CosPh, -tmp0) + fma(-SinPh, *pExIm, tmp0); // To improve accuracy
+
+					double tmp1 = (*pExIm)*CosPh;
+					double ExImNew = fma(*pExRe, SinPh, -tmp1) + fma(CosPh, *pExIm, tmp1); // To improve accuracy
+			if(ix == 462 && iz == 315)
+			{
+				printf("*pExRe=%.10f *pExIm=%.10f\n", *pExRe, *pExIm);
+				printf("CosPh=%.10f SinPh=%.10f Phase=%.10f\n", CosPh, SinPh, Phase);
+				printf("ExReNew=%.10f ExImNew=%.10f\n", ExReNew, ExImNew);
+			}
 			*pExRe = (float)ExReNew; *pExIm = (float)ExImNew;
 		}
 		if (TreatPolCompZ)
@@ -94,7 +138,6 @@ __global__ void TreatStronglyOscillatingTerm_Kernel(srTSRWRadStructAccessData* p
 
 void srTGenOptElem::TreatStronglyOscillatingTerm_GPU(srTSRWRadStructAccessData& RadAccessData, bool TreatPolCompX, bool TreatPolCompZ, double ConstRx, double ConstRz, int ieStart, int ieBefEnd, TGPUUsageArg* pGPU)
 {
-	printf("\r\n%s %d %d %d %d\r\n", __func__, RadAccessData.ne, RadAccessData.nx, RadAccessData.nz, sizeof(srTSRWRadStructAccessData));
 	if (RadAccessData.pBaseRadX != NULL)
 	{
 		RadAccessData.pBaseRadX = CAuxGPU::ToDevice(pGPU, RadAccessData.pBaseRadX, 2*RadAccessData.ne*RadAccessData.nx*RadAccessData.nz);
@@ -111,20 +154,10 @@ void srTGenOptElem::TreatStronglyOscillatingTerm_GPU(srTSRWRadStructAccessData& 
 
 	dim3 blocks(ieBefEnd - ieStart, RadAccessData.nx, RadAccessData.nz);
 	dim3 threads(1, 1, 1);
-	printf("blocks=[%d,%d,%d]\r\n", blocks.x, blocks.y, blocks.z);
 	CAuxGPU::CalcLaunchDims(TreatStronglyOscillatingTerm_Kernel, blocks, blocks, threads);//, 0, (ieBefEnd - ieStart) * RadAccessData.nx * RadAccessData.nz);
-	printf("blocks=[%d,%d,%d] threads=[%d,%d,%d]\r\n", blocks.x, blocks.y, blocks.z, threads.x, threads.y, threads.z);
 
-	
-	cudaError_t err = cudaGetLastError();
-	if (err != cudaSuccess)
-		printf("CUDA Error: %s\n", cudaGetErrorString(err));
     //TreatStronglyOscillatingTerm_Kernel<< <blocks, threads >> > (RadAccessData, TreatPolCompX, TreatPolCompZ, ConstRx, ConstRz, ieStart);
     TreatStronglyOscillatingTerm_Kernel<<<blocks, threads>>> (pRadAccessData_dev, TreatPolCompX, TreatPolCompZ, ConstRx, ConstRz, ieStart, ieBefEnd); //HG27072024
-	
-	err = cudaGetLastError();
-	if (err != cudaSuccess)
-		printf("CUDA Error: %s\n", cudaGetErrorString(err));
 
 	CAuxGPU::ToHostAndFree(pGPU, pRadAccessData_dev, CAuxGPU::DONT_COPY); //HG27072024
 	
@@ -499,19 +532,33 @@ template<bool TreatPolCompX, bool TreatPolCompZ> __global__ void RadResizeCore_K
 
 		if (TreatPolCompX)
 		{
+			
 			float* pExSt_Old = pEX0_Old + TotOffsetOld;
 			srTGenOptElem::GetCellDataForInterpol(pExSt_Old, PerX_Old, PerZ_Old, AuxF);
-
 			srTGenOptElem::SetupCellDataI(AuxF, AuxFI);
 			UseLowOrderInterp_PolCompX = srTGenOptElem::CheckForLowOrderInterp(AuxF, AuxFI, ixcOld_mi_ixStOld, izcOld_mi_izStOld, &InterpolAux01, InterpolAux02, InterpolAux02I);
-
-			if (!UseLowOrderInterp_PolCompX)
+			if(ix == 462 && iz == 315)
 			{
-				for (int i = 0; i < 2; i++)
-				{
-					srTGenOptElem::SetupInterpolAux02(AuxF + i, &InterpolAux01, InterpolAux02 + i);
-				}
-				srTGenOptElem::SetupInterpolAux02(AuxFI, &InterpolAux01, InterpolAux02I);
+				printf("TotOffsetOld=%lld PerX_Old=%lld PerZ_Old=%lld izStOld=%d ixStOld=%d LowOrderInterp=%d\n", TotOffsetOld, PerX_Old, PerZ_Old, izStOld, ixStOld, UseLowOrderInterp_PolCompX);
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[0].f00, AuxF[0].f01, AuxF[0].f02, AuxF[0].f03);
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[0].f10, AuxF[0].f11, AuxF[0].f12, AuxF[0].f13);
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[0].f20, AuxF[0].f21, AuxF[0].f22, AuxF[0].f23);
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[0].f30, AuxF[0].f31, AuxF[0].f32, AuxF[0].f33);
+				printf("\r\n");
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[1].f00, AuxF[1].f01, AuxF[1].f02, AuxF[1].f03);
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[1].f10, AuxF[1].f11, AuxF[1].f12, AuxF[1].f13);
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[1].f20, AuxF[1].f21, AuxF[1].f22, AuxF[1].f23);
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[1].f30, AuxF[1].f31, AuxF[1].f32, AuxF[1].f33);
+				printf("\r\n");
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxFI[0].f00, AuxFI[0].f01, AuxFI[0].f02, AuxFI[0].f03);
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxFI[0].f10, AuxFI[0].f11, AuxFI[0].f12, AuxFI[0].f13);
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxFI[0].f20, AuxFI[0].f21, AuxFI[0].f22, AuxFI[0].f23);
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxFI[0].f30, AuxFI[0].f31, AuxFI[0].f32, AuxFI[0].f33);
+				printf("\r\n");
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", 0.0, InterpolAux01.cAx1z1, InterpolAux01.cAx2z1, InterpolAux01.cAx3z1);
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux01.cAx0z1, InterpolAux01.cAx1z1, InterpolAux01.cAx2z1, InterpolAux01.cAx3z1);
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux01.cAx0z2, InterpolAux01.cAx1z2, InterpolAux01.cAx2z2, InterpolAux01.cAx3z2);
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux01.cAx0z3, InterpolAux01.cAx1z3, InterpolAux01.cAx2z3, InterpolAux01.cAx3z3);
 			}
 
 			if (UseLowOrderInterp_PolCompX)
@@ -521,12 +568,27 @@ template<bool TreatPolCompX, bool TreatPolCompZ> __global__ void RadResizeCore_K
 			}
 			else
 			{
+				for (int i = 0; i < 2; i++)
+				{
+					srTGenOptElem::SetupInterpolAux02(AuxF + i, &InterpolAux01, InterpolAux02 + i);
+				}
+				srTGenOptElem::SetupInterpolAux02(AuxFI, &InterpolAux01, InterpolAux02I);
 				srTGenOptElem::InterpolF(InterpolAux02, xRel, zRel, BufF, 0);
 				srTGenOptElem::InterpolFI(InterpolAux02I, xRel, zRel, BufFI, 0);
 			}
 
-			(*BufFI) *= AuxFI->fNorm;
-			srTGenOptElem::ImproveReAndIm(BufF, BufFI);
+			//(*BufFI) *= AuxFI->fNorm;
+			//srTGenOptElem::ImproveReAndIm(BufF, BufFI);
+			if(ix == 462 && iz == 315)
+			{
+				printf("\r\n");
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux02[0].Ax0z0, InterpolAux02[0].Ax1z0, InterpolAux02[0].Ax2z0, InterpolAux02[0].Ax3z0);
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux02[0].Ax0z1, InterpolAux02[0].Ax1z1, InterpolAux02[0].Ax2z1, InterpolAux02[0].Ax3z1);
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux02[0].Ax0z2, InterpolAux02[0].Ax1z2, InterpolAux02[0].Ax2z2, InterpolAux02[0].Ax3z2);
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux02[0].Ax0z3, InterpolAux02[0].Ax1z3, InterpolAux02[0].Ax2z3, InterpolAux02[0].Ax3z3);
+				printf("\r\n");
+				printf("%f,%f,%f,%f\r\n", BufF[0], BufF[1], BufFI[0], BufFI[1]);
+			}
 
 			if (FieldShouldBeZeroed)
 			{
@@ -543,16 +605,6 @@ template<bool TreatPolCompX, bool TreatPolCompZ> __global__ void RadResizeCore_K
 
 			srTGenOptElem::SetupCellDataI(AuxF + 2, AuxFI + 1);
 			UseLowOrderInterp_PolCompZ = srTGenOptElem::CheckForLowOrderInterp(AuxF + 2, AuxFI + 1, ixcOld_mi_ixStOld, izcOld_mi_izStOld, &InterpolAux01, InterpolAux02 + 2, InterpolAux02I + 1);
-
-			if (!UseLowOrderInterp_PolCompZ)
-			{
-				for (int i = 0; i < 2; i++)
-				{
-					srTGenOptElem::SetupInterpolAux02(AuxF + 2 + i, &InterpolAux01, InterpolAux02 + 2 + i);
-				}
-				srTGenOptElem::SetupInterpolAux02(AuxFI + 1, &InterpolAux01, InterpolAux02I + 1);
-			}
-			
 			if (UseLowOrderInterp_PolCompZ)
 			{
 				srTGenOptElem::InterpolF_LowOrder(InterpolAux02, xRel, zRel, BufF, 2);
@@ -560,6 +612,11 @@ template<bool TreatPolCompX, bool TreatPolCompZ> __global__ void RadResizeCore_K
 			}
 			else
 			{
+				for (int i = 0; i < 2; i++)
+				{
+					srTGenOptElem::SetupInterpolAux02(AuxF + 2 + i, &InterpolAux01, InterpolAux02 + 2 + i);
+				}
+				srTGenOptElem::SetupInterpolAux02(AuxFI + 1, &InterpolAux01, InterpolAux02I + 1);
 				srTGenOptElem::InterpolF(InterpolAux02, xRel, zRel, BufF, 2);
 				srTGenOptElem::InterpolFI(InterpolAux02I, xRel, zRel, BufFI, 1);
 			}
@@ -1161,7 +1218,6 @@ __global__ void ComputeRadMoments_Kernel(const srTSRWRadStructAccessData* pSRWRa
 
 void srTGenOptElem::ComputeRadMoments_GPU(srTSRWRadStructAccessData* pSRWRadStructAccessData, int ie, double* SumsZ, int* IndLims, TGPUUsageArg* pGPU) //HG26072024
 {
-	printf("\r\n%s\r\n", __func__);
 	#define GEN_MEMBERS(i) \
 	ComputeRadMoments_Kernel <i, false, false>, \
 	ComputeRadMoments_Kernel <i, false, true>, \
@@ -1219,10 +1275,6 @@ void srTGenOptElem::ComputeRadMoments_GPU(srTSRWRadStructAccessData* pSRWRadStru
 	CAuxGPU::CalcLaunchDims(ComputeRadMoments_tbl[(3 << 2) | ((ExIsOK & 1) << 1) | (EzIsOK & 1)], blocks2, blocks2, threads2, 16);
 	CAuxGPU::CalcLaunchDims(ComputeRadMoments_tbl[(0 << 2) | ((ExIsOK & 1) << 1) | (EzIsOK & 1)], blocks3, blocks3, threads3, 16);
 	
-	cudaDeviceSynchronize();
-	cudaError_t err = cudaGetLastError();
-	if (err != cudaSuccess) printf("CUDA Error before ComputeRadMoments: %s\n", cudaGetErrorString(err));
-
 	double* sumz = SumsZ;
 	pSRWRadStructAccessData->pBaseRadX = CAuxGPU::ToDevice(pGPU, pSRWRadStructAccessData->pBaseRadX, 2 * pSRWRadStructAccessData->ne * pSRWRadStructAccessData->nx * pSRWRadStructAccessData->nz);
 	pSRWRadStructAccessData->pBaseRadZ = CAuxGPU::ToDevice(pGPU, pSRWRadStructAccessData->pBaseRadZ, 2 * pSRWRadStructAccessData->ne * pSRWRadStructAccessData->nx * pSRWRadStructAccessData->nz);
@@ -1237,11 +1289,6 @@ void srTGenOptElem::ComputeRadMoments_GPU(srTSRWRadStructAccessData* pSRWRadStru
 		pSRWRadStructAccessData_dev
 	);
 	
-	printf("0:  [%d,%d,%d][%d,%d,%d] Tgt:[%d,%d,%d]\r\n", blocks0.x, blocks0.y, blocks0.z, threads0.x, threads0.y, threads0.z, blocks00.x, blocks00.y, blocks00.z);
-	printf("1:  [%d,%d,%d][%d,%d,%d] Tgt:[%d,%d,%d]\r\n", blocks1.x, blocks1.y, blocks1.z, threads1.x, threads1.y, threads1.z, blocks01.x, blocks01.y, blocks01.z);
-	printf("2:  [%d,%d,%d][%d,%d,%d] Tgt:[%d,%d,%d]\r\n", blocks2.x, blocks2.y, blocks2.z, threads2.x, threads2.y, threads2.z, blocks02.x, blocks02.y, blocks02.z);
-	printf("3:  [%d,%d,%d][%d,%d,%d] Tgt:[%d,%d,%d]\r\n", blocks3.x, blocks3.y, blocks3.z, threads3.x, threads3.y, threads3.z, blocks03.x, blocks03.y, blocks03.z);
-
 	int4 IndLims_dev = { IndLims[0], IndLims[1], IndLims[2], IndLims[3] };
 
 	cudaStream_t stream1 = (cudaStream_t)CAuxGPU::GetComputeStream(pGPU, 0);
@@ -1252,20 +1299,13 @@ void srTGenOptElem::ComputeRadMoments_GPU(srTSRWRadStructAccessData* pSRWRadStru
 	CAuxGPU::SyncComputeStream(pGPU, 0, (long long)stream2);
 	CAuxGPU::SyncComputeStream(pGPU, 0, (long long)stream3);
 
-	cudaDeviceSynchronize();
-	err = cudaGetLastError();
-	if (err != cudaSuccess) printf("CUDA Error before ComputeRadMoments: %s\n", cudaGetErrorString(err));
 	ComputeRadMoments_tbl[(1 << 2) | ((ExIsOK & 1) << 1) | (EzIsOK & 1)] <<<blocks0, threads0 >>>(pSRWRadStructAccessData_dev, IndLims_dev, SumsZ, ie, TwoPi_d_Lamb_d_Rx_xStep, TwoPi_d_Lamb_d_Rz_zStep);
-	//if(IsCoordRepres) 
-	//{
-	//	ComputeRadMoments_tbl[(2 << 2) | ((ExIsOK & 1) << 1) | (EzIsOK & 1)] <<<blocks1, threads1, 0, stream1 >>>(pSRWRadStructAccessData_dev, IndLims_dev, SumsZ, ie, TwoPi_d_Lamb_d_Rx_xStep, TwoPi_d_Lamb_d_Rz_zStep);
-	//	ComputeRadMoments_tbl[(3 << 2) | ((ExIsOK & 1) << 1) | (EzIsOK & 1)] <<<blocks2, threads2, 0, stream2 >>>(pSRWRadStructAccessData_dev, IndLims_dev, SumsZ, ie, TwoPi_d_Lamb_d_Rx_xStep, TwoPi_d_Lamb_d_Rz_zStep);
-	//}
-	//ComputeRadMoments_tbl[(0 << 2) | ((ExIsOK & 1) << 1) | (EzIsOK & 1)] <<<blocks3, threads3, 0, stream3>>>(pSRWRadStructAccessData_dev, IndLims_dev, SumsZ, ie, TwoPi_d_Lamb_d_Rx_xStep, TwoPi_d_Lamb_d_Rz_zStep);
-
-	cudaDeviceSynchronize();
-err = cudaGetLastError();
-	if (err != cudaSuccess) printf("CUDA Error before ComputeRadMoments: %s\n", cudaGetErrorString(err));
+	if(IsCoordRepres) 
+	{
+		ComputeRadMoments_tbl[(2 << 2) | ((ExIsOK & 1) << 1) | (EzIsOK & 1)] <<<blocks1, threads1, 0, stream1 >>>(pSRWRadStructAccessData_dev, IndLims_dev, SumsZ, ie, TwoPi_d_Lamb_d_Rx_xStep, TwoPi_d_Lamb_d_Rz_zStep);
+		ComputeRadMoments_tbl[(3 << 2) | ((ExIsOK & 1) << 1) | (EzIsOK & 1)] <<<blocks2, threads2, 0, stream2 >>>(pSRWRadStructAccessData_dev, IndLims_dev, SumsZ, ie, TwoPi_d_Lamb_d_Rx_xStep, TwoPi_d_Lamb_d_Rz_zStep);
+	}
+	ComputeRadMoments_tbl[(0 << 2) | ((ExIsOK & 1) << 1) | (EzIsOK & 1)] <<<blocks3, threads3, 0, stream3>>>(pSRWRadStructAccessData_dev, IndLims_dev, SumsZ, ie, TwoPi_d_Lamb_d_Rx_xStep, TwoPi_d_Lamb_d_Rz_zStep);
 
 	CAuxGPU::SyncComputeStream(pGPU, (long long)stream1, 0);
 	CAuxGPU::SyncComputeStream(pGPU, (long long)stream2, 0);
@@ -1277,42 +1317,43 @@ err = cudaGetLastError();
 	pSRWRadStructAccessData->pBaseRadZ = CAuxGPU::GetHostPtr(pGPU, pSRWRadStructAccessData->pBaseRadZ);
 	
 	CAuxGPU::MarkUpdated(pGPU, SumsZ, CAuxGPU::DEVICE);
-
-	//CAuxGPU::ToHostAndFree(pGPU, IndLims, 4 * sizeof(int), true);
 	CAuxGPU::ToHostAndFree(pGPU, SumsZ);
-	for (int i=0; i<22; i++)
-	{
-		printf("SumZ[%d]=%f\r\n", i, sumz[i]);
-	}
-	exit(0);
 }
+
+const int PerThreadOps = 16;
 
 __global__ void ExtractRadSliceConstE_Kernel(srTSRWRadStructAccessData *pRadAccessData, long ie, float* __restrict__ pOutEx, float* __restrict__ pOutEz)
 {
-	int ix = (blockIdx.x * blockDim.x + threadIdx.x); //nx range
+	int ix = (blockIdx.x * blockDim.x + threadIdx.x) * PerThreadOps; //nx range
 	int iz = (blockIdx.y * blockDim.y + threadIdx.y); //nz range
 
-	if(ix >= pRadAccessData->nx) return;
 	if(iz >= pRadAccessData->nz) return;
 
-	float* __restrict__ pEx0 = pRadAccessData->pBaseRadX;
-	float* __restrict__ pEz0 = pRadAccessData->pBaseRadZ;
-	long long  PerX = pRadAccessData->ne << 1;
-	long long PerZ = PerX*pRadAccessData->nx;
-	long long izPerZ = iz * PerZ;
-	long long ixPerX = ix * PerX;
-	long long iePerE = ie << 1;
-	long long ixPerX_p_iePerE = ixPerX + iePerE;
+	for (int i = 0; i < PerThreadOps; i++)
+	{
+		if(ix >= pRadAccessData->nx) return;
 
-	float *tOutEx = pOutEx, *tOutEz = pOutEz;
-	float *pEx = pEx0 + izPerZ + ixPerX_p_iePerE;
-	float *pEz = pEz0 + izPerZ + ixPerX_p_iePerE;
+		float* __restrict__ pEx0 = pRadAccessData->pBaseRadX;
+		float* __restrict__ pEz0 = pRadAccessData->pBaseRadZ;
+		long long  PerX = pRadAccessData->ne << 1;
+		long long PerZ = PerX*pRadAccessData->nx;
+		long long izPerZ = iz * PerZ;
+		long long ixPerX = ix * PerX;
+		long long iePerE = ie << 1;
+		long long ixPerX_p_iePerE = ixPerX + iePerE;
+	
+		float *tOutEx = pOutEx, *tOutEz = pOutEz;
+		float *pEx = pEx0 + izPerZ + ixPerX_p_iePerE;
+		float *pEz = pEz0 + izPerZ + ixPerX_p_iePerE;
+		
+		tOutEx += (iz*pRadAccessData->nx + ix) << 1;
+		*tOutEx = *pEx; *(tOutEx + 1) = *(pEx + 1);
+		
+		tOutEz += (iz*pRadAccessData->nx + ix) << 1;
+		*tOutEz = *pEz; *(tOutEz + 1) = *(pEz + 1);
 
-	tOutEx += (iz*pRadAccessData->nx + ix) << 1;
-	*tOutEx = *pEx; *(tOutEx + 1) = *(pEx + 1);
-
-	tOutEz += (iz*pRadAccessData->nx + ix) << 1;
-	*tOutEz = *pEz; *(tOutEz + 1) = *(pEz + 1);
+		ix++;
+	}
 }
 
 int srTGenOptElem::ExtractRadSliceConstE_GPU(srTSRWRadStructAccessData* pRadAccessData, long ie, float* pOutEx, float* pOutEz, TGPUUsageArg* pGPU)
@@ -1333,7 +1374,7 @@ int srTGenOptElem::ExtractRadSliceConstE_GPU(srTSRWRadStructAccessData* pRadAcce
 	srTSRWRadStructAccessData* pRadAccessData_dev = CAuxGPU::ToDevice(pGPU, pRadAccessData, 1);
 	CAuxGPU::EnsureDeviceMemoryReady(pGPU, pRadAccessData_dev);
 
-	dim3 blocks(pRadAccessData->nx, pRadAccessData->nz, 1);
+	dim3 blocks(pRadAccessData->nx / PerThreadOps + !!(pRadAccessData->nx % PerThreadOps), pRadAccessData->nz, 1);
 	dim3 threads(1);
 	CAuxGPU::CalcLaunchDims(ExtractRadSliceConstE_Kernel, blocks, blocks, threads);
 
@@ -1353,7 +1394,7 @@ int srTGenOptElem::ExtractRadSliceConstE_GPU(srTSRWRadStructAccessData* pRadAcce
 
 __global__ void UpdateGenRadStructSliceConstE_Meth_0_Kernel(srTSRWRadStructAccessData* pRadDataSliceConstE, int ie, srTSRWRadStructAccessData* pRadAccessData)
 {
-	int ix = (blockIdx.x * blockDim.x + threadIdx.x); //nx range
+	int ix = (blockIdx.x * blockDim.x + threadIdx.x) * PerThreadOps; //nx range
 	int iz = (blockIdx.y * blockDim.y + threadIdx.y); //nz range
 
 	int neCom = pRadAccessData->ne;
@@ -1363,21 +1404,28 @@ __global__ void UpdateGenRadStructSliceConstE_Meth_0_Kernel(srTSRWRadStructAcces
 	if(ix >= nxCom) return;
 	if(iz >= nzCom) return;
 
-	float* __restrict__ pEx0 = pRadAccessData->pBaseRadX;
-	float* __restrict__ pEz0 = pRadAccessData->pBaseRadZ;
+	for (int i = 0; i < PerThreadOps; i++)
+	{
+		if(ix >= nxCom) return;
 
-	long long PerX = neCom << 1;
-	long long PerZ = PerX*nxCom;
-	long long iePerE = ie << 1;
+		float* __restrict__ pEx0 = pRadAccessData->pBaseRadX;
+		float* __restrict__ pEz0 = pRadAccessData->pBaseRadZ;
 
-	float* __restrict__ tSliceEx = pRadDataSliceConstE->pBaseRadX + iz*nxCom*2 + ix*2;
-	float* __restrict__ tSliceEz = pRadDataSliceConstE->pBaseRadZ + iz*nxCom*2 + ix*2;
+		long long PerX = neCom << 1;
+		long long PerZ = PerX*nxCom;
+		long long iePerE = ie << 1;
 
-	float *pEx = pEx0 + iz*PerZ + ix*PerX + iePerE;
-	float *pEz = pEz0 + iz*PerZ + ix*PerX + iePerE;
+		float* __restrict__ tSliceEx = pRadDataSliceConstE->pBaseRadX + iz*nxCom*2 + ix*2;
+		float* __restrict__ tSliceEz = pRadDataSliceConstE->pBaseRadZ + iz*nxCom*2 + ix*2;
 
-	*(pEx++) = *(tSliceEx++); *pEx = *(tSliceEx);
-	*(pEz++) = *(tSliceEz++); *pEz = *(tSliceEz);
+		float *pEx = pEx0 + iz*PerZ + ix*PerX + iePerE;
+		float *pEz = pEz0 + iz*PerZ + ix*PerX + iePerE;
+
+		*(pEx++) = *(tSliceEx++); *pEx = *(tSliceEx);
+		*(pEz++) = *(tSliceEz++); *pEz = *(tSliceEz);
+
+		ix++;
+	}
 }
 
 int srTGenOptElem::UpdateGenRadStructSliceConstE_Meth_0_GPU(srTSRWRadStructAccessData* pRadDataSliceConstE, int ie, srTSRWRadStructAccessData* pRadAccessData, TGPUUsageArg* pGPU)
@@ -1398,7 +1446,7 @@ int srTGenOptElem::UpdateGenRadStructSliceConstE_Meth_0_GPU(srTSRWRadStructAcces
 	srTSRWRadStructAccessData* pRadAccessData_dev = CAuxGPU::ToDevice(pGPU, pRadAccessData, 1);
 	CAuxGPU::EnsureDeviceMemoryReady(pGPU, pRadDataSliceConstE_dev, pRadAccessData_dev);
 
-	dim3 blocks(pRadAccessData->nx, pRadAccessData->nz, 1);
+	dim3 blocks(pRadAccessData->nx / PerThreadOps + !!(pRadAccessData->nx % PerThreadOps), pRadAccessData->nz, 1);
 	dim3 threads(1);
 	CAuxGPU::CalcLaunchDims(UpdateGenRadStructSliceConstE_Meth_0_Kernel, blocks, blocks, threads);
 
@@ -1678,21 +1726,27 @@ int srTGenOptElem::ReInterpolateWfrSliceSingleE_GPU(srTSRWRadStructAccessData& o
 
 __global__ void SetupRadSliceConstE_Kernel(srTSRWRadStructAccessData* pRadAccessData, long ie, float* __restrict__ pInEx, float* __restrict__ pInEz)
 {
-	int ix = (blockIdx.x * blockDim.x + threadIdx.x); //nx range
+	int ix = (blockIdx.x * blockDim.x + threadIdx.x) * PerThreadOps; //nx range
 	int iz = (blockIdx.y * blockDim.y + threadIdx.y); //nz range
 
-	if(ix >= pRadAccessData->nx) return;
 	if(iz >= pRadAccessData->nz) return;
 
-	float *pEx0 = pRadAccessData->pBaseRadX + iz * pRadAccessData->nx * pRadAccessData->ne * 2 + ix * pRadAccessData->ne * 2 + ie * 2;
-	float *pEz0 = pRadAccessData->pBaseRadZ + iz * pRadAccessData->nx * pRadAccessData->ne * 2 + ix * pRadAccessData->ne * 2 + ie * 2;
-	float *tInEx = pInEx + iz * pRadAccessData->nx * 2 + ix * 2;
-	float *tInEz = pInEz + iz * pRadAccessData->nx * 2 + ix * 2;
+	for (int i = 0; i < PerThreadOps; i++)
+	{
+		if(ix >= pRadAccessData->nx) return;
+		
+		float *pEx0 = pRadAccessData->pBaseRadX + iz * pRadAccessData->nx * pRadAccessData->ne * 2 + ix * pRadAccessData->ne * 2 + ie * 2;
+		float *pEz0 = pRadAccessData->pBaseRadZ + iz * pRadAccessData->nx * pRadAccessData->ne * 2 + ix * pRadAccessData->ne * 2 + ie * 2;
+		float *tInEx = pInEx + iz * pRadAccessData->nx * 2 + ix * 2;
+		float *tInEz = pInEz + iz * pRadAccessData->nx * 2 + ix * 2;
+		
+		*pEx0 = *tInEx;
+		*(pEx0+1) = *(tInEx+1);
+		*pEz0 = *tInEz;
+		*(pEz0+1) = *(tInEz+1);
 
-	*pEx0 = *tInEx;
-	*(pEx0+1) = *(tInEx+1);
-	*pEz0 = *tInEz;
-	*(pEz0+1) = *(tInEz+1);
+		ix++;
+	}
 }
 
 int srTGenOptElem::SetupRadSliceConstE_GPU(srTSRWRadStructAccessData* pRadAccessData, long ie, float* pInEx, float* pInEz, TGPUUsageArg* pGPU)
@@ -1712,7 +1766,7 @@ int srTGenOptElem::SetupRadSliceConstE_GPU(srTSRWRadStructAccessData* pRadAccess
 
 	srTSRWRadStructAccessData* pRadAccessData_dev = CAuxGPU::ToDevice(pGPU, pRadAccessData, 1);
 	CAuxGPU::EnsureDeviceMemoryReady(pGPU, pRadAccessData_dev);
-	dim3 blocks(pRadAccessData->nx, pRadAccessData->nz, 1);
+	dim3 blocks(pRadAccessData->nx / PerThreadOps + !!(pRadAccessData->nx % PerThreadOps), pRadAccessData->nz, 1);
 	dim3 threads(1);
 	CAuxGPU::CalcLaunchDims(SetupRadSliceConstE_Kernel, blocks, blocks, threads);
 	
@@ -1729,6 +1783,68 @@ int srTGenOptElem::SetupRadSliceConstE_GPU(srTSRWRadStructAccessData* pRadAccess
 	CAuxGPU::ToHostAndFree(pGPU, pInEz, CAuxGPU::DONT_COPY);
 
 	return 0;
+}
+
+template <char vsX_or_vsZ>
+__global__ void SetupRadXorZSectFromSliceConstE_Kernel(float* pInEx, float* pInEz, long nx, long nz, long iSect, float* pOutEx, float* pOutEz)
+{
+	int ix = (blockIdx.x * blockDim.x + threadIdx.x) * PerThreadOps;
+	
+	long long Per = (vsX_or_vsZ == 'x')? 2 : (nx << 1);
+	long long StartOffset = (vsX_or_vsZ == 'x')? iSect*(nx << 1) : (iSect << 1);
+	long long nPt = (vsX_or_vsZ == 'x')? nx : nz;
+
+	for(int i = 0; i < PerThreadOps; i++)
+	{
+		if (ix >= nPt) return;
+	
+		float *tOutEx = &pOutEx[ix * 2];
+		float *tOutEz = &pOutEz[ix * 2];
+		float *tEx = &pInEx[StartOffset + ix * Per];
+		float *tEz = &pInEz[StartOffset + ix * Per];
+
+		tOutEx[0] = tEx[0];
+		tOutEx[1] = tEx[1];
+		tOutEz[0] = tEz[0];
+		tOutEz[1] = tEz[1];
+
+		ix++;
+	}
+}
+
+void srTGenOptElem::SetupRadXorZSectFromSliceConstE_GPU(float* pInEx, float* pInEz, long nx, long nz, char vsX_or_vsZ, long iSect, float* pOutEx, float* pOutEz, TGPUUsageArg* pGPU)
+{
+	printf("\r\n%s\r\n", __func__);
+	pInEx = CAuxGPU::ToDevice(pGPU, pInEx, 2*nx*nz);
+	pInEz = CAuxGPU::ToDevice(pGPU, pInEz, 2*nx*nz);
+	pOutEx = CAuxGPU::ToDevice(pGPU, pOutEx, (vsX_or_vsZ == 'x')? 2*nx : 2*nz, CAuxGPU::DONT_COPY);
+	pOutEz = CAuxGPU::ToDevice(pGPU, pOutEz, (vsX_or_vsZ == 'x')? 2*nx : 2*nz, CAuxGPU::DONT_COPY);
+
+	CAuxGPU::EnsureDeviceMemoryReady(pGPU, 
+		pInEx,
+		pInEz
+	);
+
+	long long nPt = (vsX_or_vsZ == 'x')? nx : nz;
+
+	dim3 blocks(nPt / PerThreadOps + !!(nPt % PerThreadOps), 1, 1);
+	dim3 threads(1);
+
+	if (vsX_or_vsZ == 'x')
+	{
+		CAuxGPU::CalcLaunchDims(SetupRadXorZSectFromSliceConstE_Kernel<'x'>, blocks, blocks, threads);
+		SetupRadXorZSectFromSliceConstE_Kernel<'x'> <<<blocks, threads >>> (pInEx, pInEz, nx, nz, iSect, pOutEx, pOutEz);
+	} 
+	else
+	{
+		CAuxGPU::CalcLaunchDims(SetupRadXorZSectFromSliceConstE_Kernel<'z'>, blocks, blocks, threads);
+		SetupRadXorZSectFromSliceConstE_Kernel<'z'> <<<blocks, threads >>> (pInEx, pInEz, nx, nz, iSect, pOutEx, pOutEz);
+	}
+
+	CAuxGPU::MarkUpdated(pGPU, pOutEx, CAuxGPU::DEVICE);
+	CAuxGPU::MarkUpdated(pGPU, pOutEz, CAuxGPU::DEVICE);
+	CAuxGPU::ToHostAndFree(pGPU, pInEx, CAuxGPU::DONT_COPY);
+	CAuxGPU::ToHostAndFree(pGPU, pInEz, CAuxGPU::DONT_COPY);
 }
 
 #endif

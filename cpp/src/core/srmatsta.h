@@ -56,14 +56,6 @@ public:
 	int FindIntensityLimitsInds(CHGenObj&, int ie, double RelPow, int* IndLims, void* pvGPU=0); //HG01052025
 #ifdef _OFFLOAD_GPU //HG01052025
 	int FindIntensityLimitsInds_GPU(CHGenObj&, int ie, double RelPow, int* IndLims, void* pvGPU=0);
-
-    int IntegrateOverX_GPU(float* p0, int ixStart, int ixEnd, double xStep, long long Nx, long long Ny, double* AuxArrIntOverX, TGPUUsageArg* pGPU);
-	int IntegrateOverY_GPU(float* p0, int iyStart, int iyEnd, double yStep, long long Nx, double* AuxArrIntOverY, TGPUUsageArg* pGPU);
-	int IntegrateSimple_GPU(float* p0, long long LenArr, double Multiplier, double* OutVal, TGPUUsageArg* pGPU);
-	
-    int IntegrateOverX_GPU(double* p0, int ixStart, int ixEnd, double xStep, long long Nx, long long Ny, double* AuxArrIntOverX, TGPUUsageArg* pGPU);
-	int IntegrateOverY_GPU(double* p0, int iyStart, int iyEnd, double yStep, long long Nx, double* AuxArrIntOverY, TGPUUsageArg* pGPU);
-	int IntegrateSimple_GPU(double* p0, long long LenArr, double Multiplier, double* OutVal, TGPUUsageArg* pGPU);
 #endif
 
 	//void FindMax1D(float* p0, long LenArr, double& MaxVal, long& iMax);

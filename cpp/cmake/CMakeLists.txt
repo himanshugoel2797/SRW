@@ -35,6 +35,7 @@ endif()
 
 # Setup definitions for all targets
 add_definitions(${SRW_DEFINITIONS})
+add_compile_options(-O3 -mfma)
 
 #ext
 #auxgpu
@@ -47,6 +48,9 @@ if(USE_CUDA)
     add_library(auxgpu OBJECT ${auxgpu_source_files})
     target_include_directories(auxgpu PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../src/ext/auxgpu)
     target_compile_definitions(auxgpu PRIVATE ${SRW_DEFINITIONS})
+    target_compile_options(auxgpu PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
+                       --extended-lambda
+                       >)
 endif()
 
 #auxparse
@@ -130,6 +134,9 @@ if(USE_OPENMP)
 elseif(USE_CUDA)
     target_include_directories(genmath PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../src/ext/auxgpu/)
     set_target_properties(genmath PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+    target_compile_options(genmath PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
+                       --extended-lambda
+                       >)
 endif()
 
 target_compile_definitions(genmath PRIVATE ${SRW_DEFINITIONS})
@@ -213,6 +220,9 @@ target_include_directories(core PUBLIC
 if(USE_CUDA)
     target_include_directories(core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../src/ext/auxgpu/)
     set_target_properties(core PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+    target_compile_options(core PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
+                       --extended-lambda --expt-relaxed-constexpr
+                       >)
 endif()
 
 
@@ -245,6 +255,9 @@ if(USE_CUDA)
     target_include_directories(srw PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../src/ext/auxgpu>
     )
+    target_compile_options(srw PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
+                       --extended-lambda
+                       >)
 endif()
 
 target_include_directories(srw PUBLIC

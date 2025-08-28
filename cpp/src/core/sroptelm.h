@@ -270,7 +270,11 @@ public:
 #ifdef _OFFLOAD_GPU //HG27072024
 	int SetupRadSliceConstE_GPU(srTSRWRadStructAccessData*, long, float*, float*, TGPUUsageArg* =0);
 #endif
-	inline void SetupRadXorZSectFromSliceConstE(float*, float*, long, long, char, long, float*, float*);
+	//inline void SetupRadXorZSectFromSliceConstE(float*, float*, long, long, char, long, float*, float*);
+	inline void SetupRadXorZSectFromSliceConstE(float*, float*, long, long, char, long, float*, float*, void* pvGPU=0); //HG27072024
+#ifdef _OFFLOAD_GPU //HG27072024
+	void SetupRadXorZSectFromSliceConstE_GPU(float*, float*, long, long, char, long, float*, float*, TGPUUsageArg* pGPU=0); //HG27072024
+#endif
 
 #ifdef _OFFLOAD_GPU //HG26072024
 	int ExtractRadSliceConstE_GPU(srTSRWRadStructAccessData*, long, float*, float*, TGPUUsageArg* pGPU=0);
@@ -581,7 +585,10 @@ inline void srTGenOptElem::SetupInterpolAux02(srTInterpolAuxF* pF, srTInterpolAu
 	pA->Ax1z2 = (-2*(pF->f00 + pF->f02 - pF->f31) + 4*pF->f01 - 3*(pF->f10 + pF->f12) + 6*(pF->f11 + pF->f20 + pF->f22) - 12*pF->f21 - pF->f30 - pF->f32)*pC->cAx1z2;
 	pA->Ax1z3 = (2*(pF->f00 - pF->f03) + 6*(-pF->f01 + pF->f02 - pF->f20 + pF->f23) + 3*(pF->f10 - pF->f13 - pF->f31 + pF->f32) + 9*(pF->f12 - pF->f11) + 18*(pF->f21 - pF->f22) + pF->f30 - pF->f33)*pC->cAx1z3;
 	pA->Ax2z0 = (pF->f01 + pF->f21 - 2*pF->f11)*pC->cAx2z0;
-	pA->Ax2z1 = (2*(-pF->f00 + pF->f13 - pF->f20) - 3*(pF->f21 + pF->f01) + 6*(pF->f02 + pF->f11 + pF->f22) + 4*pF->f10 - 12*pF->f12 - pF->f23 - pF->f03)*pC->cAx2z1;
+
+	//pA->Ax2z1 = (2*(-pF->f00 + pF->f13 - pF->f20) - 3*(pF->f21 + pF->f01) + 6*(pF->f02 + pF->f11 + pF->f22) + 4*pF->f10 - 12*pF->f12 - pF->f23 - pF->f03)*pC->cAx2z1;
+	pA->Ax2z1 = fma(2.0f, (-pF->f00 + pF->f13 - pF->f20), fma(-3.0f, (pF->f21 + pF->f01), +6*(pF->f02 + pF->f11 + pF->f22) + 4*pF->f10 - 12*pF->f12 - pF->f23 - pF->f03))*pC->cAx2z1;
+
 	pA->Ax2z2 = (pF->f00 + pF->f02 + pF->f22 + pF->f20 - 2*(pF->f01 + pF->f10 + pF->f12 + pF->f21) + 4*pF->f11)*pC->cAx2z2;
 	pA->Ax2z3 = (-pF->f00 + pF->f03 - pF->f20 + pF->f23 + 3*(pF->f01 - pF->f02 + pF->f21 - pF->f22) + 2*(pF->f10 - pF->f13) + 6*(pF->f12 - pF->f11))*pC->cAx2z3;
 	pA->Ax3z0 = (pF->f31 - pF->f01 + 3*(pF->f11 - pF->f21))*pC->cAx3z0;
@@ -655,7 +662,23 @@ inline void srTGenOptElem::InterpolFI(srTInterpolAux02* A, double x, double z, f
 	double xE3 = xE2*x, xE2z = xE2*z, xzE2 = x*zE2, zE3 = zE2*z, xE2zE2 = xE2*zE2;
 	double xE3z = xE3*z, xE3zE2 = xE3*zE2, xE3zE3 = xE3*zE3, xE2zE3 = xE2*zE3, xzE3 = x*zE3;
 	srTInterpolAux02* tA = A + Offset;
-	double Buf = tA->Ax3z3*xE3zE3 + tA->Ax3z2*xE3zE2 + tA->Ax3z1*xE3z + tA->Ax3z0*xE3 + tA->Ax2z3*xE2zE3 + tA->Ax2z2*xE2zE2 + tA->Ax2z1*xE2z + tA->Ax2z0*xE2 + tA->Ax1z3*xzE3 + tA->Ax1z2*xzE2 + tA->Ax1z1*xz + tA->Ax1z0*x + tA->Ax0z3*zE3 + tA->Ax0z2*zE2 + tA->Ax0z1*z + tA->Ax0z0;
+//	double Buf = tA->Ax3z3*xE3zE3 + tA->Ax3z2*xE3zE2 + tA->Ax3z1*xE3z + tA->Ax3z0*xE3 + tA->Ax2z3*xE2zE3 + tA->Ax2z2*xE2zE2 + tA->Ax2z1*xE2z + tA->Ax2z0*xE2 + tA->Ax1z3*xzE3 + tA->Ax1z2*xzE2 + tA->Ax1z1*xz + tA->Ax1z0*x + tA->Ax0z3*zE3 + tA->Ax0z2*zE2 + tA->Ax0z1*z + tA->Ax0z0;
+	double Buf = tA->Ax0z0;
+Buf = fma(tA->Ax3z3, xE3zE3, Buf);
+Buf = fma(tA->Ax3z2, xE3zE2, Buf);
+Buf = fma(tA->Ax3z1, xE3z, Buf);
+Buf = fma(tA->Ax3z0, xE3, Buf);
+Buf = fma(tA->Ax2z3, xE2zE3, Buf);
+Buf = fma(tA->Ax2z2, xE2zE2, Buf);
+Buf = fma(tA->Ax2z1, xE2z, Buf);
+Buf = fma(tA->Ax2z0, xE2, Buf);
+Buf = fma(tA->Ax1z3, xzE3, Buf);
+Buf = fma(tA->Ax1z2, xzE2, Buf);
+Buf = fma(tA->Ax1z1, xz, Buf);
+Buf = fma(tA->Ax1z0, x, Buf);
+Buf = fma(tA->Ax0z3, zE3, Buf);
+Buf = fma(tA->Ax0z2, zE2, Buf);
+Buf = fma(tA->Ax0z1, z, Buf);
 	*(F + Offset) = (float)((Buf > 0.)? Buf : 0.);
 }
 
@@ -974,8 +997,16 @@ inline void srTGenOptElem::SetupExpCorrArray(float* pCmpData, long long AmOfPt, 
 
 //*************************************************************************
 
-inline void srTGenOptElem::SetupRadXorZSectFromSliceConstE(float* pInEx, float* pInEz, long nx, long nz, char vsX_or_vsZ, long iSect, float* pOutEx, float* pOutEz)
+//inline void srTGenOptElem::SetupRadXorZSectFromSliceConstE(float* pInEx, float* pInEz, long nx, long nz, char vsX_or_vsZ, long iSect, float* pOutEx, float* pOutEz)
+inline void srTGenOptElem::SetupRadXorZSectFromSliceConstE(float* pInEx, float* pInEz, long nx, long nz, char vsX_or_vsZ, long iSect, float* pOutEx, float* pOutEz, void* pvGPU) //HG27072024
 {
+#ifdef _OFFLOAD_GPU //HG26072024
+		TGPUUsageArg parGPU(pvGPU);
+		if (CAuxGPU::GPUEnabled(&parGPU))
+		{
+			return SetupRadXorZSectFromSliceConstE_GPU(pInEx, pInEx, nx, nz, vsX_or_vsZ, iSect, pOutEx, pOutEz, &parGPU); //If GPU version is successful, return, otherwise continue with CPU
+		}
+#endif
 	//long Per = (vsX_or_vsZ == 'x')? 2 : (nx << 1);
 	long long Per = (vsX_or_vsZ == 'x')? 2 : (nx << 1);
 	float *tOutEx = pOutEx, *tOutEz = pOutEz;

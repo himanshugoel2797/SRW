@@ -1153,7 +1153,7 @@ def ptypy_run(run_name, sample_name, plot_imgs = True, iter_count = 30000, probe
 
     
 def main():
-    v = srwl_uti_parse_options(srwl_uti_ext_options(varParam), use_sys_argv=True)
+    v = srwl_uti_parse_options(srwl_uti_ext_options(varParam), use_sys_argv=not True)
     
     #v = srwpy.srwl_bl.srwl_uti_parse_options(srwpy.srwl_bl.srwl_uti_ext_options(varParam), use_sys_argv=True)
     #names = ['CCM_C1','CCM_C2','After_CCM_Slits','Slits','Slits_Before_Ap_ZP','Ap_ZP','IL_as_ZP','After_ZP_At_Sample']
@@ -1182,7 +1182,7 @@ def main():
     local_idx = int(os.environ["SLURM_LOCALID"]) if "SLURM_LOCALID" in os.environ else 0
     save_idx_base = int(os.environ["SLURM_PROCID"]) if "SLURM_PROCID" in os.environ else 0
     gpu_cnt = 4
-    gpu_idx = 1 #(local_idx % gpu_cnt) + 1
+    gpu_idx = int(sys.argv[1]) #(local_idx % gpu_cnt) + 1
 
     #v.op_Sample_file_path = 'merged_s200_c400_u8.tiff' #'resolution_test_sample.png'
     sample_name = os.path.splitext(os.path.basename(v.op_Sample_file_path))[0] + "-" + str(v.scan_det_noise)
@@ -1256,7 +1256,7 @@ def main():
 
             #names = ['WB_Slits','WB_Slits_M1_HFM','M1_HFM','After_M1_Before_DCM','DCM_C1','DCM_C2','After_DCM_M2_VFM','M2_VFM','After_M2_Before_SSA1','SSA1']#,'After_SSA1_Before_ZP']#,'Ap_ZP','ZP','Beam_Stop','After_ZP_Before_OSA','OSA','After_OSA_At_Sample']
             #names = ['WB_Slits','WB_Slits_M1_HFM','M1_HFM','After_M1_Before_DCM','After_DCM_M2_VFM','M2_VFM','After_M2_Before_SSA1','SSA1','After_SSA1_Before_ZP','Ap_ZP','ZP','Beam_Stop','After_ZP_Before_OSA','OSA','After_OSA_At_Sample']
-            names = ['S1', 'S1_HCM']#, 'HCM', 'HCM_Before_DCM', 'DCM_C1', 'DCM_C2', 'After_DCM_HFM', 'HFM', 'HFM_VFM', 'VFM', 'VFM_VPM', 'VPM', 'After_VPM_Before_SSA', 'SSA']#, 'After_SSA_Before_VKB']#, 'VKB', 'After_VKB_Before_HKB', 'HKB', 'After_HKB_Focus']
+            names = ['S1', 'S1_HCM', 'HCM', 'HCM_Before_DCM', 'DCM_C1', 'DCM_C2', 'After_DCM_HFM', 'HFM', 'HFM_VFM', 'VFM', 'VFM_VPM', 'VPM', 'After_VPM_Before_SSA']#, 'SSA', 'After_SSA_Before_VKB']#, 'VKB', 'After_VKB_Before_HKB', 'HKB', 'After_HKB_Focus']
             op = set_optics(v, names, want_final_propagation=False)
             #op = set_optics(v, names, want_final_propagation=True)
 
@@ -1268,8 +1268,8 @@ def main():
             plotMesh1x = [mesh1.xStart, mesh1.xFin, mesh1.nx]
             plotMesh1y = [mesh1.yStart, mesh1.yFin, mesh1.ny]
 
-            uti_plot2d1d(arI1, plotMesh1x, plotMesh1y, 0, 0, ['Horizontal Position', 'Vertical Position', 'Intensity'], ['m', 'm', ''])
-            uti_plot_show()
+            #uti_plot2d1d(arI1, plotMesh1x, plotMesh1y, 0, 0, ['Horizontal Position', 'Vertical Position', 'Intensity'], ['m', 'm', ''])
+            #uti_plot_show()
             exit()
             if cmIdx > base_cm:
                 srwl.ResizeElecFieldMesh(curWfr, first_mesh, [0, 0])

@@ -522,7 +522,7 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 
 						PlanNx = Nx;
 						PlanNy = Ny;
-						int plan_shape[2]; plan_shape[0] = Nx; plan_shape[1] = Ny;
+						int plan_shape[2]; plan_shape[0] = Ny; plan_shape[1] = Nx;
 						cufftPlanMany(&Plan2DFFT_cu, 2, plan_shape, NULL, 0, 0, NULL, 0, 0, CUFFT_C2C, 1); //HG04122023
 						//cufftPlanMany(&Plan2DFFT_cu, 2, plan_shape, NULL, 0, 0, NULL, 0, 0, CUFFT_C2C, FFT2DInfo.howMany);
 						//cufftPlan2d(&Plan2DFFT_cu, Nx, Ny, CUFFT_C2C);
@@ -551,8 +551,8 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 
 						dPlanNx = Nx;
 						dPlanNy = Ny;
-						int plan_shape[2]; plan_shape[0] = Nx; plan_shape[1] = Ny;
-						cufftPlanMany(&Plan2DFFT_cu, 2, plan_shape, 0, 0, 0, 0, 0, 0, CUFFT_Z2Z, 1); //HG04122023
+						int plan_shape[2]; plan_shape[0] = Ny; plan_shape[1] = Nx;
+						cufftPlanMany(&dPlan2DFFT_cu, 2, plan_shape, 0, 0, 0, 0, 0, 0, CUFFT_Z2Z, 1); //HG04122023
 						//cufftPlanMany(&Plan2DFFT_cu, 2, plan_shape, 0, 0, 0, 0, 0, 0, CUFFT_Z2Z, FFT2DInfo.howMany);
 						//cufftPlan2d(&dPlan2DFFT_cu, Nx, Ny, CUFFT_Z2Z);
 					}
@@ -664,7 +664,7 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 						PlanNx = Nx;
 						PlanNy = Ny;
 						//HowMany = FFT2DInfo.howMany; //HG04122023 (Commented out)
-						int plan_shape[2]; plan_shape[0] = Nx; plan_shape[1] = Ny;
+						int plan_shape[2]; plan_shape[0] = Ny; plan_shape[1] = Nx;
 						cufftPlanMany(&Plan2DFFT_cu, 2, plan_shape, NULL, 0, 0, NULL, 0, 0, CUFFT_C2C, 1); //HG04122023
 						//cufftPlanMany(&Plan2DFFT_cu, 2, plan_shape, NULL, 0, 0, NULL, 0, 0, CUFFT_C2C, FFT2DInfo.howMany);
 						//cufftPlan2d(&Plan2DFFT_cu, Nx, Ny, CUFFT_C2C);
@@ -694,7 +694,7 @@ int CGenMathFFT2D::Make2DFFT(CGenMathFFT2DInfo& FFT2DInfo, fftwnd_plan* pPrecrea
 						dPlanNx = Nx;
 						dPlanNy = Ny;
 						//dHowMany = FFT2DInfo.howMany; //HG04122023 (Commented out)
-						int plan_shape[2]; plan_shape[0] = Nx; plan_shape[1] = Ny;
+						int plan_shape[2]; plan_shape[0] = Ny; plan_shape[1] = Nx;
 						cufftPlanMany(&Plan2DFFT_cu, 2, plan_shape, NULL, 0, 0, NULL, 0, 0, CUFFT_Z2Z, FFT2DInfo.howMany);
 						//cufftPlan2d(&dPlan2DFFT_cu, Nx, Ny, CUFFT_Z2Z);
 					}

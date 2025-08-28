@@ -31,16 +31,18 @@ int srTRectAperture::RadPointModifierParallel(srTSRWRadStructAccessData* pRadAcc
         double EffHalfDx = HalfDx + SmallOffset, EffHalfDz = HalfDz + SmallOffset;
 
         int xStart = (-EffHalfDx - pRadAccessData->xStart) / pRadAccessData->xStep;
-        int xEnd = (EffHalfDx - pRadAccessData->xStart) / pRadAccessData->xStep;
+        int xEnd = (EffHalfDx - pRadAccessData->xStart) / pRadAccessData->xStep + 1;
         int zStart = (-EffHalfDz - pRadAccessData->zStart) / pRadAccessData->zStep;
-        int zEnd = (EffHalfDz - pRadAccessData->zStart) / pRadAccessData->zStep;
+        int zEnd = (EffHalfDz - pRadAccessData->zStart) / pRadAccessData->zStep + 1;
 
-        xStart += Margin; xEnd -= Margin;
-        zStart += Margin; zEnd -= Margin;
+        if (xStart > 0) xStart += Margin; 
+        if (xEnd < pRadAccessData->nx) xEnd -= Margin;
+        if (zStart > 0) zStart += Margin; 
+        if (zEnd < pRadAccessData->nz) zEnd -= Margin;
         if (xStart < 0) xStart = 0;
-        if (xEnd >= pRadAccessData->nx) xEnd = pRadAccessData->nx - 1;
+        if (xEnd > pRadAccessData->nx) xEnd = pRadAccessData->nx;
         if (zStart < 0) zStart = 0;
-        if (zEnd >= pRadAccessData->nz) zEnd = pRadAccessData->nz - 1;
+        if (zEnd > pRadAccessData->nz) zEnd = pRadAccessData->nz;
 
         if (xStart == 0 && xEnd == pRadAccessData->nx - 1 && zStart == 0 && zEnd == pRadAccessData->nz - 1)
         {
@@ -65,16 +67,16 @@ int srTRectObstacle::RadPointModifierParallel(srTSRWRadStructAccessData* pRadAcc
         double EffHalfDx = HalfDx + SmallOffset, EffHalfDz = HalfDz + SmallOffset;
 
         int xStart = (-EffHalfDx - pRadAccessData->xStart) / pRadAccessData->xStep;
-        int xEnd = (EffHalfDx - pRadAccessData->xStart) / pRadAccessData->xStep;
+        int xEnd = (EffHalfDx - pRadAccessData->xStart) / pRadAccessData->xStep + 1;
         int zStart = (-EffHalfDz - pRadAccessData->zStart) / pRadAccessData->zStep;
-        int zEnd = (EffHalfDz - pRadAccessData->zStart) / pRadAccessData->zStep;
+        int zEnd = (EffHalfDz - pRadAccessData->zStart) / pRadAccessData->zStep + 1;
 
         xStart -= Margin; xEnd += Margin;
         zStart -= Margin; zEnd += Margin;
         if (xStart < 0) xStart = 0;
-        if (xEnd >= pRadAccessData->nx) xEnd = pRadAccessData->nx - 1;
+        if (xEnd > pRadAccessData->nx) xEnd = pRadAccessData->nx;
         if (zStart < 0) zStart = 0;
-        if (zEnd >= pRadAccessData->nz) zEnd = pRadAccessData->nz - 1;
+        if (zEnd > pRadAccessData->nz) zEnd = pRadAccessData->nz;
 
         int region_params[5] = { xStart, xEnd, zStart, zEnd, 0 };
         return RadPointModifierParallelImpl<srTRectObstacle>(pRadAccessData, pBufVars, pBufVarsSz, this, pGPU, region_params, true);
@@ -96,16 +98,19 @@ int srTCircAperture::RadPointModifierParallel(srTSRWRadStructAccessData* pRadAcc
         double Side = (1.414213562373095 * R)/2 + SmallOffset;
 
         int xStart = ((TransvCenPoint.x-Side) - pRadAccessData->xStart) / pRadAccessData->xStep;
-        int xEnd = ((TransvCenPoint.x+Side)  - pRadAccessData->xStart) / pRadAccessData->xStep;
+        int xEnd = ((TransvCenPoint.x+Side)  - pRadAccessData->xStart) / pRadAccessData->xStep + 1;
         int zStart = ((TransvCenPoint.y-Side)  - pRadAccessData->zStart) / pRadAccessData->zStep;
-        int zEnd = ((TransvCenPoint.y+Side)  - pRadAccessData->zStart) / pRadAccessData->zStep;
+        int zEnd = ((TransvCenPoint.y+Side)  - pRadAccessData->zStart) / pRadAccessData->zStep + 1;
 
-        xStart += Margin; xEnd -= Margin;
-        zStart += Margin; zEnd -= Margin;
+        if (xStart > 0) xStart += Margin; 
+        if (xEnd < pRadAccessData->nx) xEnd -= Margin;
+        if (zStart > 0) zStart += Margin; 
+        if (zEnd < pRadAccessData->nz) zEnd -= Margin;
+
         if (xStart < 0) xStart = 0;
-        if (xEnd >= pRadAccessData->nx) xEnd = pRadAccessData->nx - 1;
+        if (xEnd > pRadAccessData->nx) xEnd = pRadAccessData->nx;
         if (zStart < 0) zStart = 0;
-        if (zEnd >= pRadAccessData->nz) zEnd = pRadAccessData->nz - 1;
+        if (zEnd > pRadAccessData->nz) zEnd = pRadAccessData->nz;
 
         if (xStart == 0 && xEnd == pRadAccessData->nx - 1 && zStart == 0 && zEnd == pRadAccessData->nz - 1)
         {
@@ -132,16 +137,16 @@ int srTCircObstacle::RadPointModifierParallel(srTSRWRadStructAccessData* pRadAcc
         double Side = R + SmallOffset;
 
         int xStart = ((TransvCenPoint.x-Side) - pRadAccessData->xStart) / pRadAccessData->xStep;
-        int xEnd = ((TransvCenPoint.x+Side)  - pRadAccessData->xStart) / pRadAccessData->xStep;
+        int xEnd = ((TransvCenPoint.x+Side)  - pRadAccessData->xStart) / pRadAccessData->xStep + 1;
         int zStart = ((TransvCenPoint.y-Side)  - pRadAccessData->zStart) / pRadAccessData->zStep;
-        int zEnd = ((TransvCenPoint.y+Side)  - pRadAccessData->zStart) / pRadAccessData->zStep;
+        int zEnd = ((TransvCenPoint.y+Side)  - pRadAccessData->zStart) / pRadAccessData->zStep + 1;
 
         xStart -= Margin; xEnd += Margin;
         zStart -= Margin; zEnd += Margin;
         if (xStart < 0) xStart = 0;
-        if (xEnd >= pRadAccessData->nx) xEnd = pRadAccessData->nx - 1;
+        if (xEnd > pRadAccessData->nx) xEnd = pRadAccessData->nx;
         if (zStart < 0) zStart = 0;
-        if (zEnd >= pRadAccessData->nz) zEnd = pRadAccessData->nz - 1;
+        if (zEnd > pRadAccessData->nz) zEnd = pRadAccessData->nz;
 
         int region_params[5] = { xStart, xEnd, zStart, zEnd, 0 };
         return RadPointModifierParallelImpl<srTCircObstacle>(pRadAccessData, pBufVars, pBufVarsSz, this, pGPU, region_params, true);

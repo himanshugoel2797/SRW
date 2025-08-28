@@ -137,9 +137,7 @@ int RadPointModifierParallelImpl(srTSRWRadStructAccessData* pRadAccessData, void
 	{
 		dim3 blocks(combinedE ? 1 : pRadAccessData->ne, xFin - xStart, zFin - zStart);
 		dim3 threads(1);
-		printf("%s [%d, %d, %d] %d %d\r\n", __func__, blocks.x, blocks.y, blocks.z, xFin, zFin);
 		CAuxGPU::CalcLaunchDims(kern, blocks, blocks, threads);
-		printf("%s [%d, %d, %d][%d, %d, %d]", __func__, blocks.x, blocks.y, blocks.z, threads.x, threads.y, threads.z);
 		kern<<<blocks, threads >>> (pRadAccessData_dev, pBufVars_dev, local_copy, xStart, xFin, zStart, zFin);
 	}
 	else
@@ -153,8 +151,8 @@ int RadPointModifierParallelImpl(srTSRWRadStructAccessData* pRadAccessData, void
 		CAuxGPU::SyncComputeStream(pGPU, 0, (long long)stream2);
 		CAuxGPU::SyncComputeStream(pGPU, 0, (long long)stream3);
 
-		dim3 blocks0(combinedE ? 1 : pRadAccessData->ne, pRegion[0], pRadAccessData->nx);
-		dim3 blocks1(combinedE ? 1 : pRadAccessData->ne, pRadAccessData->nx - pRegion[1], pRadAccessData->nx);
+		dim3 blocks0(combinedE ? 1 : pRadAccessData->ne, pRegion[0], pRadAccessData->nz);
+		dim3 blocks1(combinedE ? 1 : pRadAccessData->ne, pRadAccessData->nx - pRegion[1], pRadAccessData->nz);
 		dim3 blocks2(combinedE ? 1 : pRadAccessData->ne, pRegion[1] - pRegion[0], pRadAccessData->nz - pRegion[3]);
 		dim3 blocks3(combinedE ? 1 : pRadAccessData->ne, pRegion[1] - pRegion[0], pRegion[2]);
 		dim3 threads0(1);

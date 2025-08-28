@@ -871,7 +871,7 @@ int srTGenOptElem::SetupWfrEdgeCorrData(srTSRWRadStructAccessData* pRadAccessDat
 			double xjSt = pRadAccessData->xStart + jxSt*pRadAccessData->xStep;
 			SetupExpCorrArray(DataPtrsForWfrEdgeCorr.ExpArrXSt, pRadAccessData->nx, xjSt, FFT2DInfo.xStartTr, FFT2DInfo.xStepTr);
 
-			SetupRadXorZSectFromSliceConstE(pDataEx, pDataEz, pRadAccessData->nx, pRadAccessData->nz, 'z', jxSt, DataPtrsForWfrEdgeCorr.FFTArrXStEx, DataPtrsForWfrEdgeCorr.FFTArrXStEz);
+			SetupRadXorZSectFromSliceConstE(pDataEx, pDataEz, pRadAccessData->nx, pRadAccessData->nz, 'z', jxSt, DataPtrsForWfrEdgeCorr.FFTArrXStEx, DataPtrsForWfrEdgeCorr.FFTArrXStEz, pvGPU);
 
 			if(dzSt != 0.)
 			{
@@ -912,7 +912,7 @@ int srTGenOptElem::SetupWfrEdgeCorrData(srTSRWRadStructAccessData* pRadAccessDat
 			double xjFi = pRadAccessData->xStart + ixWfrMaxLower*pRadAccessData->xStep;
 			SetupExpCorrArray(DataPtrsForWfrEdgeCorr.ExpArrXFi, pRadAccessData->nx, xjFi, FFT2DInfo.xStartTr, FFT2DInfo.xStepTr);
 
-			SetupRadXorZSectFromSliceConstE(pDataEx, pDataEz, pRadAccessData->nx, pRadAccessData->nz, 'z', ixWfrMaxLower, DataPtrsForWfrEdgeCorr.FFTArrXFiEx, DataPtrsForWfrEdgeCorr.FFTArrXFiEz);
+			SetupRadXorZSectFromSliceConstE(pDataEx, pDataEz, pRadAccessData->nx, pRadAccessData->nz, 'z', ixWfrMaxLower, DataPtrsForWfrEdgeCorr.FFTArrXFiEx, DataPtrsForWfrEdgeCorr.FFTArrXFiEz, pvGPU);
 
 			if(dzSt != 0.)
 			{
@@ -954,7 +954,7 @@ int srTGenOptElem::SetupWfrEdgeCorrData(srTSRWRadStructAccessData* pRadAccessDat
 			double zjSt = pRadAccessData->zStart + jzSt*pRadAccessData->zStep;
 			SetupExpCorrArray(DataPtrsForWfrEdgeCorr.ExpArrZSt, pRadAccessData->nz, zjSt, FFT2DInfo.yStartTr, FFT2DInfo.yStepTr);
 
-			SetupRadXorZSectFromSliceConstE(pDataEx, pDataEz, pRadAccessData->nx, pRadAccessData->nz, 'x', jzSt, DataPtrsForWfrEdgeCorr.FFTArrZStEx, DataPtrsForWfrEdgeCorr.FFTArrZStEz);
+			SetupRadXorZSectFromSliceConstE(pDataEx, pDataEz, pRadAccessData->nx, pRadAccessData->nz, 'x', jzSt, DataPtrsForWfrEdgeCorr.FFTArrZStEx, DataPtrsForWfrEdgeCorr.FFTArrZStEz, pvGPU);
 
 			FFT1DInfo.pInData = DataPtrsForWfrEdgeCorr.FFTArrZStEx;
 			FFT1DInfo.pOutData = 0;
@@ -978,7 +978,7 @@ int srTGenOptElem::SetupWfrEdgeCorrData(srTSRWRadStructAccessData* pRadAccessDat
 			double zjFi = pRadAccessData->zStart + izWfrMaxLower*pRadAccessData->zStep;
 			SetupExpCorrArray(DataPtrsForWfrEdgeCorr.ExpArrZFi, pRadAccessData->nz, zjFi, FFT2DInfo.yStartTr, FFT2DInfo.yStepTr);
 
-			SetupRadXorZSectFromSliceConstE(pDataEx, pDataEz, pRadAccessData->nx, pRadAccessData->nz, 'x', izWfrMaxLower, DataPtrsForWfrEdgeCorr.FFTArrZFiEx, DataPtrsForWfrEdgeCorr.FFTArrZFiEz);
+			SetupRadXorZSectFromSliceConstE(pDataEx, pDataEz, pRadAccessData->nx, pRadAccessData->nz, 'x', izWfrMaxLower, DataPtrsForWfrEdgeCorr.FFTArrZFiEx, DataPtrsForWfrEdgeCorr.FFTArrZFiEz, pvGPU);
 
 			FFT1DInfo.pInData = DataPtrsForWfrEdgeCorr.FFTArrZFiEx;
 			FFT1DInfo.pOutData = 0;
@@ -1777,13 +1777,9 @@ int srTGenOptElem::ComputeRadMoments(srTSRWRadStructAccessData* pSRWRadStructAcc
 		double TwoPi_d_Lamb_d_Rz_zStepE2 = TwoPi_d_Lamb_d_Rz_zStep*TwoPi_d_Lamb_d_Rz_zStep;
 
 		srTMomentsPtrs MomXPtrs(fpMomX), MomZPtrs(fpMomZ);
-
-		printf("%s %llx %llx\r\n", __func__, pSRWRadStructAccessData->pBaseRadX, pSRWRadStructAccessData->pBaseRadZ); //HG26072024
 		AuxMatStat.FindIntensityLimitsInds(hRad, ie, RelPowForLimits, IndLims, pvGPU);
-		printf("%s %llx %llx\r\n", __func__, pSRWRadStructAccessData->pBaseRadX, pSRWRadStructAccessData->pBaseRadZ); //HG26072024
-		printf("%s %d %d %d %d\r\n", __func__, IndLims[0], IndLims[1], IndLims[2], IndLims[3]); //HG26072024
 
-		#ifdef _OFFLOAD_GPU //HG31072024
+#ifdef _OFFLOAD_GPU //HG31072024
 		TGPUUsageArg parGPU(pvGPU);
 		if (CAuxGPU::GPUEnabled(&parGPU))
 		{
@@ -3354,9 +3350,32 @@ int srTGenOptElem::RadResizeCore(srTSRWRadStructAccessData& OldRadAccessData, sr
 						{
 							float* pExSt_Old = OldRadAccessData.pBaseRadX + TotOffsetOld;
 							GetCellDataForInterpol(pExSt_Old, PerX_Old, PerZ_Old, AuxF);
-
 							SetupCellDataI(AuxF, AuxFI);
 							UseLowOrderInterp_PolCompX = CheckForLowOrderInterp(AuxF, AuxFI, ixcOld_mi_ixStOld, izcOld_mi_izStOld, &InterpolAux01, InterpolAux02, InterpolAux02I);
+							if(ix == 462 && iz == 315)
+							{
+				printf("TotOffsetOld=%lld PerX_Old=%lld PerZ_Old=%lld izStOld=%d ixStOld=%d LowOrderInterp=%d\n", TotOffsetOld, PerX_Old, PerZ_Old, izStOld, ixStOld, UseLowOrderInterp_PolCompX);
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[0].f00, AuxF[0].f01, AuxF[0].f02, AuxF[0].f03);
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[0].f10, AuxF[0].f11, AuxF[0].f12, AuxF[0].f13);
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[0].f20, AuxF[0].f21, AuxF[0].f22, AuxF[0].f23);
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[0].f30, AuxF[0].f31, AuxF[0].f32, AuxF[0].f33);
+				printf("\r\n");
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[1].f00, AuxF[1].f01, AuxF[1].f02, AuxF[1].f03);
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[1].f10, AuxF[1].f11, AuxF[1].f12, AuxF[1].f13);
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[1].f20, AuxF[1].f21, AuxF[1].f22, AuxF[1].f23);
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[1].f30, AuxF[1].f31, AuxF[1].f32, AuxF[1].f33);
+				printf("\r\n");
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxFI[0].f00, AuxFI[0].f01, AuxFI[0].f02, AuxFI[0].f03);
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxFI[0].f10, AuxFI[0].f11, AuxFI[0].f12, AuxFI[0].f13);
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxFI[0].f20, AuxFI[0].f21, AuxFI[0].f22, AuxFI[0].f23);
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxFI[0].f30, AuxFI[0].f31, AuxFI[0].f32, AuxFI[0].f33);
+				printf("\r\n");
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", 0.0, InterpolAux01.cAx1z1, InterpolAux01.cAx2z1, InterpolAux01.cAx3z1);
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux01.cAx0z1, InterpolAux01.cAx1z1, InterpolAux01.cAx2z1, InterpolAux01.cAx3z1);
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux01.cAx0z2, InterpolAux01.cAx1z2, InterpolAux01.cAx2z2, InterpolAux01.cAx3z2);
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux01.cAx0z3, InterpolAux01.cAx1z3, InterpolAux01.cAx2z3, InterpolAux01.cAx3z3);
+							}
+
 
 							if(!UseLowOrderInterp_PolCompX)
 							{
@@ -3385,7 +3404,7 @@ int srTGenOptElem::RadResizeCore(srTSRWRadStructAccessData& OldRadAccessData, sr
 							}
 						}
 
-						ixStOldPrev = ixStOld; izStOldPrev = izStOld;
+						//ixStOldPrev = ixStOld; izStOldPrev = izStOld;
 					}
 
 					if(TreatPolCompX)
@@ -3394,15 +3413,33 @@ int srTGenOptElem::RadResizeCore(srTSRWRadStructAccessData& OldRadAccessData, sr
 						{
 							InterpolF_LowOrder(InterpolAux02, xRel, zRel, BufF, 0);
 							InterpolFI_LowOrder(InterpolAux02I, xRel, zRel, BufFI, 0);
+							//BufF[0] = 1.0f;
+							//BufF[1] = 1.0f;
+							//BufFI[0] = 1.0f;
+							//BufFI[1] = 1.0f;
 						}
 						else
 						{
 							InterpolF(InterpolAux02, xRel, zRel, BufF, 0);
 							InterpolFI(InterpolAux02I, xRel, zRel, BufFI, 0);
+							//BufF[0] = 1.0f;
+							//BufF[1] = 1.0f;
+							//BufFI[0] = 1.0f;
+							//BufFI[1] = 1.0f;
 						}
 
-						(*BufFI) *= AuxFI->fNorm;
-						ImproveReAndIm(BufF, BufFI);
+						//(*BufFI) *= AuxFI->fNorm;
+						//ImproveReAndIm(BufF, BufFI);
+			if(ix == 462 && iz == 315)
+			{
+				printf("\r\n");
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux02[0].Ax0z0, InterpolAux02[0].Ax1z0, InterpolAux02[0].Ax2z0, InterpolAux02[0].Ax3z0);
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux02[0].Ax0z1, InterpolAux02[0].Ax1z1, InterpolAux02[0].Ax2z1, InterpolAux02[0].Ax3z1);
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux02[0].Ax0z2, InterpolAux02[0].Ax1z2, InterpolAux02[0].Ax2z2, InterpolAux02[0].Ax3z2);
+				printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux02[0].Ax0z3, InterpolAux02[0].Ax1z3, InterpolAux02[0].Ax2z3, InterpolAux02[0].Ax3z3);
+				printf("\r\n");
+				printf("%f,%f,%f,%f\r\n", BufF[0], BufF[1], BufFI[0], BufFI[1]);
+			}
 
 						if(FieldShouldBeZeroed)
 						{
@@ -5141,8 +5178,23 @@ void srTGenOptElem::TreatStronglyOscillatingTerm(srTSRWRadStructAccessData& RadA
 				{
 					float *pExRe = pEX_StartForX + ixPerX_p_Two_ie;
 					float *pExIm = pExRe + 1;
-					double ExReNew = (*pExRe)*CosPh - (*pExIm)*SinPh;
-					double ExImNew = (*pExRe)*SinPh + (*pExIm)*CosPh;
+					//double ExReNew = (*pExRe)*CosPh - (*pExIm)*SinPh;
+					//double ExImNew = (*pExRe)*SinPh + (*pExIm)*CosPh;
+					//double ExReNew = fma(*pExRe, CosPh, -(*pExIm)*SinPh);
+					//double ExImNew = fma(*pExRe, SinPh, (*pExIm)*CosPh);
+
+					double tmp0 = (*pExIm)*SinPh;
+					double ExReNew = fma(*pExRe, CosPh, -tmp0) + fma(-SinPh, *pExIm, tmp0); // To improve accuracy
+
+					double tmp1 = (*pExIm)*CosPh;
+					double ExImNew = fma(*pExRe, SinPh, -tmp1) + fma(CosPh, *pExIm, tmp1); // To improve accuracy
+
+					if(ix == 462 && iz == 315)
+					{
+						printf("*pExRe=%.10f *pExIm=%.10f\n", *pExRe, *pExIm);
+				printf("CosPh=%.10f SinPh=%.10f Phase=%.10f\n", CosPh, SinPh, Phase);
+						printf("ExReNew=%.10f ExImNew=%.10f\n", ExReNew, ExImNew);
+					}
 					*pExRe = (float)ExReNew; *pExIm = (float)ExImNew;
 				}
 				if(TreatPolCompZ)

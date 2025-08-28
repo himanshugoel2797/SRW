@@ -103,7 +103,7 @@ template <typename T> __global__ void FillArrayShift_Kernel(double t0, double tS
     int ix = (blockIdx.x * blockDim.x + threadIdx.x); //HalfNx range
 
     double t0TwoPi = t0 * 2 * CUDART_PI;
-    double q = tStep * ix;
+    double q = tStep * (ix+1);
 
     if (ix < N) 
     {
@@ -384,7 +384,7 @@ template <typename T, typename T2> __global__ void RepairSignAndRotateDataAfter2
     int ix = (blockIdx.x * blockDim.x + threadIdx.x); //HalfNx range
     int iy = (blockIdx.y * blockDim.y + threadIdx.y); //HalfNy range
 
-    if (ix < HalfNx) 
+    if (ix < HalfNx && iy < HalfNy) 
     {
         float sx0 = 1.f - 2.f * (ix % 2);
         float sy0 = 1.f - 2.f * (iy % 2);
@@ -449,14 +449,14 @@ template <typename T> __global__ void NormalizeDataAfter2DFFT_Kernel(T* pAfterFF
     //}
 }
 
-template <typename T, bool NeedsShiftX, bool NeedsShiftY> __global__ void TreatShift2D_Kernel(T* pData, long Nx2, long Ny, T* tShiftX, T* tShiftY) 
+template <typename T, bool NeedsShiftX, bool NeedsShiftY> __global__ void TreatShift2D_Kernel(T* pData, long Nx, long Ny, T* tShiftX, T* tShiftY) 
 {
-    int ix = (blockIdx.x * blockDim.x + threadIdx.x) * 2; //Nx range
+    int ix = (blockIdx.x * blockDim.x + threadIdx.x); //Nx range
     int iy = (blockIdx.y * blockDim.y + threadIdx.y); //Ny range
 
-    if (ix < Nx2) 
+    if (ix < Nx && iy < Ny) 
     {
-        T MultRe = 1;
+        T MultRe = 0;
         T MultIm = 0;
 
         T MultX_Re = 1; 
@@ -472,8 +472,8 @@ template <typename T, bool NeedsShiftX, bool NeedsShiftY> __global__ void TreatS
         }
         if (NeedsShiftX)
         {
-            MultX_Re = tShiftX[ix];
-            MultX_Im = tShiftX[ix + 1];
+            MultX_Re = tShiftX[ix * 2];
+            MultX_Im = tShiftX[ix * 2 + 1];
 
             if (NeedsShiftY) 
             {
@@ -492,7 +492,7 @@ template <typename T, bool NeedsShiftX, bool NeedsShiftY> __global__ void TreatS
             MultIm = MultY_Im;
         }
 
-        T* pData_tmp = pData + (long long)iy * Nx2 + ix; //HG26022024
+        T* pData_tmp = pData + (long long)iy * Nx*2 + ix*2; //HG26022024
         T buf_r = pData_tmp[0];
         T buf_im = pData_tmp[1];
         //long offset = iy * Nx2 + ix;
@@ -556,7 +556,7 @@ void CGenMathFFT2D::TreatShifts2D_GPU(float* pData, long Nx, long Ny, bool Needs
     dim3 threads(1);
     CAuxGPU::CalcLaunchDims(kern, blocks, blocks, threads);
     
-    kern<<<blocks, threads >>> (pData, Nx * 2, Ny, m_ArrayShiftX, m_ArrayShiftY);
+    kern<<<blocks, threads >>> (pData, Nx, Ny, m_ArrayShiftX, m_ArrayShiftY);
 }
 
 void CGenMathFFT2D::RepairSignAfter2DFFT_GPU(double* pAfterFFT, long Nx, long Ny)
@@ -607,6 +607,6 @@ void CGenMathFFT2D::TreatShifts2D_GPU(double* pData, long Nx, long Ny, bool Need
     dim3 threads(1);
     CAuxGPU::CalcLaunchDims(kern, blocks, blocks, threads);
     
-    kern<<<blocks, threads >>> (pData, Nx * 2, Ny, m_ArrayShiftX, m_ArrayShiftY);
+    kern<<<blocks, threads >>> (pData, Nx, Ny, m_ArrayShiftX, m_ArrayShiftY);
 }
 #endif
