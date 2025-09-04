@@ -1030,9 +1030,9 @@ void srTMagFldTrUnif::AnalyzeForHarmonics(double* pB, int AmOfPts, double Per, d
 	}
 
 	const double Pi = 3.1415926535897932;
-	const double eEl = 1.602176462E-19; //[C]
-    const double me = 9.10938188E-31; //[kg]
-	const double c = 2.99792458E+08; //[m/c]
+	const double eEl = 1.602176462E-19; //[C] // TODO: Use srTCalcUtils::ChargeEl
+    const double me = 9.10938188E-31; //[kg] // TODO: Use srTCalcUtils::MassEl_kg
+	const double c = 2.99792458E+08; //[m/s] // TODO: Use srTCalcUtils::SpeedLight
 	double MultB2K = eEl*Per/(2.*Pi*me*c);
 
 	MagHarmArr = new srTMagHarm[HarmCount];

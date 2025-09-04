@@ -59,9 +59,6 @@ srTSRWRadStructAccessData* srTRadIntThickBeam::CreateNewRadStructWithConstParams
 	int hN = pStokes->nx + 2*NumStepsInHalfExtraRangeX;
 	//long long hN = pStokes->nx + 2*NumStepsInHalfExtraRangeX; //OC26042019
     double hFi = pStokes->xStart + xRangeStokes + ActualHalfExtraRangeX;
-    //double hSt = pStokes->xStart;
-    //int hN = pStokes->nx;
-    //double hFi = hSt + xRangeStokes;
 
 	double zStep = pStokes->zStep;
 	if(zStep <= 0) zStep = HalfExtraRangeZ/NpMin;
