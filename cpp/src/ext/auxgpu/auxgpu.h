@@ -65,8 +65,6 @@ struct TGPUUsageArg //OC18022024
 		long long warpBase = offset & ~31;
 		long long warpIdx = offset & 31;
 
-		long long perWarp = 32 * PerThread;
-
 		for (int i = 0; i < PerThread; i++)
 		{
 			long long idx = warpBase * PerThread + warpIdx + i * 32;
@@ -211,16 +209,15 @@ public:
 	* Transfer memory back to the host if necessary and free the associated device memory. Does not return until the latest copy of the data is on the host.
 	* @param [in] arg pointer to a GPU usage argument structure
 	* @param [in] devicePtr device pointer to the memory to be freed, if a host pointer is provided, the corresponding device pointer is freed
-	* @param [in] flags flags to control the memory transfer (DONT_COPY)
 	* @param [in] size size of the block to be freed
 	* @return The corresponding host pointer, NULL on error
 	*/
 	template <typename T>
-	static T* ToHostAndFree(TGPUUsageArg* arg, T* devicePtr, int flags=0, size_t elemCount=0) //HG30042025
+	static T* ToHostAndFree(TGPUUsageArg* arg, T* devicePtr, size_t elemCount=0) //HG30042025
 	{
 #ifdef _OFFLOAD_GPU
 		const int typeSize = (typeid(T) == typeid(void)) ? 1 : sizeof(T);
-		return (T*)_ToHostAndFree(arg, (void*)devicePtr, flags, elemCount * typeSize);
+		return (T*)_ToHostAndFree(arg, (void*)devicePtr, 0, elemCount * typeSize);
 #endif
 		return devicePtr;
 	}

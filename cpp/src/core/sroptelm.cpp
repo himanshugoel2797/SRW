@@ -177,7 +177,7 @@ int srTGenOptElem::TraverseRadZXE(srTSRWRadStructAccessData* pRadAccessData, voi
 
 	srTEFieldPtrs EFieldPtrs;
 	srTEXZ EXZ;
-	EXZ.z = pRadAccessData->zStart;
+	//EXZ.z = pRadAccessData->zStart;
 	//long izPerZ = 0;
 	//long iTotTest = 0; //OCTEST
 	long long izPerZ = 0;
@@ -190,7 +190,7 @@ int srTGenOptElem::TraverseRadZXE(srTSRWRadStructAccessData* pRadAccessData, voi
 
 		float *pEx_StartForX = pEx0 + izPerZ;
 		float *pEz_StartForX = pEz0 + izPerZ;
-		EXZ.x = pRadAccessData->xStart;
+		//EXZ.x = pRadAccessData->xStart;
 		//long ixPerX = 0;
 		long long ixPerX = 0;
 
@@ -198,12 +198,16 @@ int srTGenOptElem::TraverseRadZXE(srTSRWRadStructAccessData* pRadAccessData, voi
 		{
 			float *pEx_StartForE = pEx_StartForX + ixPerX;
 			float *pEz_StartForE = pEz_StartForX + ixPerX;
-			EXZ.e = pRadAccessData->eStart;
+			//EXZ.e = pRadAccessData->eStart;
 			//long iePerE = 0;
 			long long iePerE = 0;
 
 			for(int ie=0; ie<pRadAccessData->ne; ie++)
 			{
+				EXZ.z = pRadAccessData->zStart + iz * pRadAccessData->zStep;
+				EXZ.x = pRadAccessData->xStart + ix * pRadAccessData->xStep;
+				EXZ.e = pRadAccessData->eStart + ie * pRadAccessData->eStep;
+
 				if(pEx0 != 0)
 				{
 					EFieldPtrs.pExRe = pEx_StartForE + iePerE;
@@ -232,13 +236,13 @@ int srTGenOptElem::TraverseRadZXE(srTSRWRadStructAccessData* pRadAccessData, voi
 				//iTotTest++; //OCTEST
 
 				iePerE += 2;
-				EXZ.e += pRadAccessData->eStep;
+				//EXZ.e += pRadAccessData->eStep;
 			}
 			ixPerX += PerX;
-			EXZ.x += pRadAccessData->xStep;
+			//EXZ.x += pRadAccessData->xStep;
 		}
 		izPerZ += PerZ;
-		EXZ.z += pRadAccessData->zStep;
+		//EXZ.z += pRadAccessData->zStep;
 	}
 
 #else //OC28102018 (does this really need to be parallelized for OpenMP?)
@@ -3352,28 +3356,28 @@ int srTGenOptElem::RadResizeCore(srTSRWRadStructAccessData& OldRadAccessData, sr
 							GetCellDataForInterpol(pExSt_Old, PerX_Old, PerZ_Old, AuxF);
 							SetupCellDataI(AuxF, AuxFI);
 							UseLowOrderInterp_PolCompX = CheckForLowOrderInterp(AuxF, AuxFI, ixcOld_mi_ixStOld, izcOld_mi_izStOld, &InterpolAux01, InterpolAux02, InterpolAux02I);
-							if(ix == 462 && iz == 315)
+							if(ix == 541 && iz == 252)
 							{
-				printf("TotOffsetOld=%lld PerX_Old=%lld PerZ_Old=%lld izStOld=%d ixStOld=%d LowOrderInterp=%d\n", TotOffsetOld, PerX_Old, PerZ_Old, izStOld, ixStOld, UseLowOrderInterp_PolCompX);
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[0].f00, AuxF[0].f01, AuxF[0].f02, AuxF[0].f03);
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[0].f10, AuxF[0].f11, AuxF[0].f12, AuxF[0].f13);
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[0].f20, AuxF[0].f21, AuxF[0].f22, AuxF[0].f23);
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[0].f30, AuxF[0].f31, AuxF[0].f32, AuxF[0].f33);
-				printf("\r\n");
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[1].f00, AuxF[1].f01, AuxF[1].f02, AuxF[1].f03);
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[1].f10, AuxF[1].f11, AuxF[1].f12, AuxF[1].f13);
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[1].f20, AuxF[1].f21, AuxF[1].f22, AuxF[1].f23);
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[1].f30, AuxF[1].f31, AuxF[1].f32, AuxF[1].f33);
-				printf("\r\n");
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxFI[0].f00, AuxFI[0].f01, AuxFI[0].f02, AuxFI[0].f03);
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxFI[0].f10, AuxFI[0].f11, AuxFI[0].f12, AuxFI[0].f13);
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxFI[0].f20, AuxFI[0].f21, AuxFI[0].f22, AuxFI[0].f23);
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxFI[0].f30, AuxFI[0].f31, AuxFI[0].f32, AuxFI[0].f33);
-				printf("\r\n");
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", 0.0, InterpolAux01.cAx1z1, InterpolAux01.cAx2z1, InterpolAux01.cAx3z1);
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux01.cAx0z1, InterpolAux01.cAx1z1, InterpolAux01.cAx2z1, InterpolAux01.cAx3z1);
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux01.cAx0z2, InterpolAux01.cAx1z2, InterpolAux01.cAx2z2, InterpolAux01.cAx3z2);
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux01.cAx0z3, InterpolAux01.cAx1z3, InterpolAux01.cAx2z3, InterpolAux01.cAx3z3);
+				//printf("TotOffsetOld=%lld PerX_Old=%lld PerZ_Old=%lld izStOld=%d ixStOld=%d LowOrderInterp=%d\n", TotOffsetOld, PerX_Old, PerZ_Old, izStOld, ixStOld, UseLowOrderInterp_PolCompX);
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[0].f00, AuxF[0].f01, AuxF[0].f02, AuxF[0].f03);
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[0].f10, AuxF[0].f11, AuxF[0].f12, AuxF[0].f13);
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[0].f20, AuxF[0].f21, AuxF[0].f22, AuxF[0].f23);
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[0].f30, AuxF[0].f31, AuxF[0].f32, AuxF[0].f33);
+				//printf("\r\n");
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[1].f00, AuxF[1].f01, AuxF[1].f02, AuxF[1].f03);
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[1].f10, AuxF[1].f11, AuxF[1].f12, AuxF[1].f13);
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[1].f20, AuxF[1].f21, AuxF[1].f22, AuxF[1].f23);
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[1].f30, AuxF[1].f31, AuxF[1].f32, AuxF[1].f33);
+				//printf("\r\n");
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxFI[0].f00, AuxFI[0].f01, AuxFI[0].f02, AuxFI[0].f03);
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxFI[0].f10, AuxFI[0].f11, AuxFI[0].f12, AuxFI[0].f13);
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxFI[0].f20, AuxFI[0].f21, AuxFI[0].f22, AuxFI[0].f23);
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxFI[0].f30, AuxFI[0].f31, AuxFI[0].f32, AuxFI[0].f33);
+				//printf("\r\n");
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", 0.0, InterpolAux01.cAx1z1, InterpolAux01.cAx2z1, InterpolAux01.cAx3z1);
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux01.cAx0z1, InterpolAux01.cAx1z1, InterpolAux01.cAx2z1, InterpolAux01.cAx3z1);
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux01.cAx0z2, InterpolAux01.cAx1z2, InterpolAux01.cAx2z2, InterpolAux01.cAx3z2);
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux01.cAx0z3, InterpolAux01.cAx1z3, InterpolAux01.cAx2z3, InterpolAux01.cAx3z3);
 							}
 
 
@@ -3428,17 +3432,22 @@ int srTGenOptElem::RadResizeCore(srTSRWRadStructAccessData& OldRadAccessData, sr
 							//BufFI[1] = 1.0f;
 						}
 
-						//(*BufFI) *= AuxFI->fNorm;
+						(*BufFI) *= AuxFI->fNorm;
 						//ImproveReAndIm(BufF, BufFI);
-			if(ix == 462 && iz == 315)
+			if(ix == 541 && iz == 252)
 			{
-				printf("\r\n");
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux02[0].Ax0z0, InterpolAux02[0].Ax1z0, InterpolAux02[0].Ax2z0, InterpolAux02[0].Ax3z0);
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux02[0].Ax0z1, InterpolAux02[0].Ax1z1, InterpolAux02[0].Ax2z1, InterpolAux02[0].Ax3z1);
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux02[0].Ax0z2, InterpolAux02[0].Ax1z2, InterpolAux02[0].Ax2z2, InterpolAux02[0].Ax3z2);
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux02[0].Ax0z3, InterpolAux02[0].Ax1z3, InterpolAux02[0].Ax2z3, InterpolAux02[0].Ax3z3);
-				printf("\r\n");
-				printf("%f,%f,%f,%f\r\n", BufF[0], BufF[1], BufFI[0], BufFI[1]);
+				//printf("2*(-%f + %f - %f) - 3*(%f + %f) + 6*(%f + %f + %f) + 4*%f - 12*%f - %f - %f) * %f\r\n", AuxF[0].f00, AuxF[0].f13, AuxF[0].f20, AuxF[0].f21, AuxF[0].f01, AuxF[0].f02, AuxF[0].f11, AuxF[0].f22, AuxF[0].f10, AuxF[0].f12, AuxF[0].f23, AuxF[0].f03, InterpolAux01.cAx2z1);
+				//printf("2*%f - 3*%f + 6*%f + 4*%f - 12*%f + %f) * %f\r\n", -AuxF[0].f00 +AuxF[0].f13 -AuxF[0].f20, AuxF[0].f21+AuxF[0].f01, AuxF[0].f02+AuxF[0].f11+AuxF[0].f22, AuxF[0].f10, AuxF[0].f12, - AuxF[0].f23 - AuxF[0].f03, InterpolAux01.cAx2z1);
+				//printf("%f + %f + %f + %f + %f + %f) * %f\r\n", 2*(-AuxF[0].f00 +AuxF[0].f13 -AuxF[0].f20), -3*(AuxF[0].f21+AuxF[0].f01), 6*(AuxF[0].f02+AuxF[0].f11+AuxF[0].f22), 4*AuxF[0].f10, -12*AuxF[0].f12, - AuxF[0].f23 - AuxF[0].f03, InterpolAux01.cAx2z1);
+				//printf("%f * %f\r\n", 2*(-AuxF[0].f00 +AuxF[0].f13 -AuxF[0].f20) -3*(AuxF[0].f21+AuxF[0].f01) + 6*(AuxF[0].f02+AuxF[0].f11+AuxF[0].f22) + 4*AuxF[0].f10 -12*AuxF[0].f12 - AuxF[0].f23 - AuxF[0].f03, InterpolAux01.cAx2z1);
+				//printf("%f\r\n", (2*(-AuxF[0].f00 +AuxF[0].f13 -AuxF[0].f20) -3*(AuxF[0].f21+AuxF[0].f01) + 6*(AuxF[0].f02+AuxF[0].f11+AuxF[0].f22) + 4*AuxF[0].f10 -12*AuxF[0].f12 - AuxF[0].f23 - AuxF[0].f03) * InterpolAux01.cAx2z1);
+				//printf("\r\n");
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux02[0].Ax0z0, InterpolAux02[0].Ax1z0, InterpolAux02[0].Ax2z0, InterpolAux02[0].Ax3z0);
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux02[0].Ax0z1, InterpolAux02[0].Ax1z1, InterpolAux02[0].Ax2z1, InterpolAux02[0].Ax3z1);
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux02[0].Ax0z2, InterpolAux02[0].Ax1z2, InterpolAux02[0].Ax2z2, InterpolAux02[0].Ax3z2);
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux02[0].Ax0z3, InterpolAux02[0].Ax1z3, InterpolAux02[0].Ax2z3, InterpolAux02[0].Ax3z3);
+				//printf("\r\n");
+				//printf("%f,%f,%f,%f,%f\r\n", BufF[0], BufF[1], BufFI[0], BufFI[1], AuxFI->fNorm);
 			}
 
 						if(FieldShouldBeZeroed)
@@ -4977,7 +4986,7 @@ void srTGenOptElem::TreatStronglyOscillatingTerm(srTSRWRadStructAccessData& RadA
 
 	const double Pi = 3.14159265358979;
 	//double Const = Pi*1.E+06/1.239854; // Assumes m and eV
-	double Const = Pi*1.E+06/1.23984186; // Assumes m and eV
+	double Const = 1.E+06/1.23984186; // Assumes m and eV
 
 /**
 	//Correcting Effective Wavefront Radius taking into account Rayleigh Length (relies on Stat. Moments...)
@@ -5160,19 +5169,25 @@ void srTGenOptElem::TreatStronglyOscillatingTerm(srTSRWRadStructAccessData& RadA
 			float *pEX_StartForX = pEX0 + izPerZ;
 			float *pEZ_StartForX = pEZ0 + izPerZ;
 
-			x = RadAccessData.xStart - RadAccessData.xc; //To check: this is probably not correct in Angular representation?
+			//x = RadAccessData.xStart - RadAccessData.xc; //To check: this is probably not correct in Angular representation?
 
 			for(int ix=0; ix<RadAccessData.nx; ix++)
 			{
 				//long ixPerX_p_Two_ie = ix*PerX + Two_ie;
 				long long ixPerX_p_Two_ie = ix*PerX + Two_ie;
 
+				x = (RadAccessData.xStart - RadAccessData.xc) + ix*RadAccessData.xStep;
+				z = (RadAccessData.zStart - RadAccessData.zc) + iz*RadAccessData.zStep;
+				zE2 = z*z;
+				PhaseAddZ = 0.;
+				if(RadAccessData.WfrQuadTermCanBeTreatedAtResizeZ) PhaseAddZ = ConstRzE*zE2;
+
 				//Phase = ConstRxE*x*x + ConstRzE*zE2;
 				Phase = PhaseAddZ;
 				if(RadAccessData.WfrQuadTermCanBeTreatedAtResizeX) Phase += ConstRxE*x*x;
 
 				//AuxFFT2D.CosAndSin(Phase, CosPh, SinPh);
-				CosAndSin(Phase, CosPh, SinPh);
+				CosAndSinPi(Phase, CosPh, SinPh);
 
 				if(TreatPolCompX)
 				{
@@ -5189,12 +5204,6 @@ void srTGenOptElem::TreatStronglyOscillatingTerm(srTSRWRadStructAccessData& RadA
 					double tmp1 = (*pExIm)*CosPh;
 					double ExImNew = fma(*pExRe, SinPh, -tmp1) + fma(CosPh, *pExIm, tmp1); // To improve accuracy
 
-					if(ix == 462 && iz == 315)
-					{
-						printf("*pExRe=%.10f *pExIm=%.10f\n", *pExRe, *pExIm);
-				printf("CosPh=%.10f SinPh=%.10f Phase=%.10f\n", CosPh, SinPh, Phase);
-						printf("ExReNew=%.10f ExImNew=%.10f\n", ExReNew, ExImNew);
-					}
 					*pExRe = (float)ExReNew; *pExIm = (float)ExImNew;
 				}
 				if(TreatPolCompZ)
@@ -5206,7 +5215,7 @@ void srTGenOptElem::TreatStronglyOscillatingTerm(srTSRWRadStructAccessData& RadA
 					*pEzRe = (float)EzReNew; *pEzIm = (float)EzImNew;
 				}
 
-				x += RadAccessData.xStep;
+				//x += RadAccessData.xStep;
 			}
 			z += RadAccessData.zStep;
 			zE2 = z*z;

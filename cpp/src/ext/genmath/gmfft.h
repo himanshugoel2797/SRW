@@ -416,6 +416,59 @@ public:
 	}
 #endif
 
+#ifdef _FFTW3
+	template <class T> void RepairSignAndRotateDataAfter2DFFT(T* pAfterFFT, long Nx, long Ny, double Mult) 
+	{
+		long HalfNx = Nx / 2;
+		long HalfNy = Ny / 2;
+
+		for (int iy = 0; iy < HalfNy; iy++)
+			for (int ix = 0; ix < HalfNx; ix++)
+			{
+				float sx0 = 1.f - 2.f * (ix % 2);
+				float sy0 = 1.f - 2.f * (iy % 2);
+				float sx1 = 1.f - 2.f * ((HalfNx + ix) % 2);
+				float sy1 = 1.f - 2.f * ((HalfNy + iy) % 2);
+				
+				float s1 = sx0 * sy0 * Mult;
+				float s2 = sx1 * sy1 * Mult;
+				float s3 = sx1 * sy0 * Mult;
+				float s4 = sx0 * sy1 * Mult;
+
+				long long idx = ((long long)ix + (long long)iy * Nx) * 2; //HG26022024
+				//int idx = (ix + iy * Nx);
+				
+				long long HalfNyNx = ((long long)HalfNy) * ((long long)Nx);
+				T* t1 = pAfterFFT, *t2 = pAfterFFT + (HalfNyNx + HalfNx) * 2;
+				T* t3 = pAfterFFT + HalfNx * 2, *t4 = pAfterFFT + HalfNyNx * 2;
+
+				T buf1[2], buf2[2];
+
+				buf1[0] = t1[idx]; buf1[1] = t1[idx+1];
+				buf1[0] *= s1;
+				buf1[1] *= s1;
+
+				buf2[0] = t2[idx]; buf2[1] = t2[idx+1];
+				buf2[0] *= s2;
+				buf2[1] *= s2;
+
+				t1[idx] = buf2[0]; t1[idx+1] = buf2[1];
+				t2[idx] = buf1[0]; t2[idx+1] = buf1[1];
+
+				buf1[0] = t3[idx]; buf1[1] = t3[idx+1];
+				buf1[0] *= s3;
+				buf1[1] *= s3;
+
+				buf2[0] = t4[idx]; buf2[1] = t4[idx+1];
+				buf2[0] *= s4;
+				buf2[1] *= s4;
+
+				t3[idx] = buf2[0]; t3[idx+1] = buf2[1];
+				t4[idx] = buf1[0]; t4[idx+1] = buf1[1];
+			}
+	}
+#endif
+
 #ifdef _FFTW3 //OC29012019
 	void TreatShifts(fftwf_complex* pData)
 	{

@@ -47,7 +47,7 @@ def read_field(idx, dev, p='post'):
 
     return data, int(line0[0][1:]), int(line0[1])
 
-idx = 1
+idx = 19
 
 
 srw_fft_cpu, nx, nz = read_field(idx, 'cpu')
@@ -55,9 +55,11 @@ srw_fft_gpu, _, _ = read_field(idx, 'gpu')
 dims = [-0.000991, 1e-6, nx, -0.000488, 1e-6, nz]
 
 srw_fft_cpu = srw_fft_cpu.reshape((nz, nx, 2))
+#srw_fft_cpu = np.abs(srw_fft_cpu[:,:,0]) 
 srw_fft_cpu = np.abs((srw_fft_cpu[:,:,0] + 1j*srw_fft_cpu[:,:,1]) ** 2)
 
 srw_fft_gpu = srw_fft_gpu.reshape((nz, nx, 2))
+#srw_fft_gpu = np.abs(srw_fft_gpu[:,:,0]) 
 srw_fft_gpu = np.abs((srw_fft_gpu[:,:,0] + 1j*srw_fft_gpu[:,:,1]) ** 2)
 
 max_v = max(np.max(np.abs(srw_fft_cpu)), np.max(np.abs(srw_fft_gpu)))

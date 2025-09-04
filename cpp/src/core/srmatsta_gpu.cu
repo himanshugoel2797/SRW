@@ -111,8 +111,7 @@ template <class T>
 int PrefixSum_GPU(T* data, int len, double step, double RelPowLevel, double IntegratedIntens, int *leftIndex, int *rightIndex, TGPUUsageArg* pGPU)
 {
     data = CAuxGPU::ToDevice(pGPU, data, len);
-    T* sum_local = new T[len * 2] {0};
-    T* sum_l = CAuxGPU::ToDevice(pGPU, sum_local, len * 2);
+    T* sum_l = CAuxGPU::ToDevice<T>(pGPU, NULL, len * 2);
     T* sum_r = sum_l + len;
     
     CAuxGPU::EnsureDeviceMemoryReady(pGPU, data, sum_l);
@@ -138,7 +137,7 @@ int PrefixSum_GPU(T* data, int len, double step, double RelPowLevel, double Inte
     *rightIndex = (int)(len - (a10 - sum_r));
 
     CAuxGPU::MarkUpdated(pGPU, sum_l, CAuxGPU::DEVICE);
-    CAuxGPU::ToHostAndFree(pGPU, sum_l, CAuxGPU::DONT_COPY);
+    CAuxGPU::ToHostAndFree(pGPU, sum_l);
     return 0;
 }
 
@@ -168,7 +167,7 @@ int srTAuxMatStat::FindIntensityLimitsInds_GPU(CHGenObj& hRad, int ie, double Re
 		int res = 0;
         if(res = RadGenManip.ExtractRadiation(RadExtract, ExtractedWaveData, pvGPU))
 		{
-            CAuxGPU::ToHostAndFree(&parGPU, RadExtract.pExtractedData, CAuxGPU::DONT_COPY);
+            CAuxGPU::ToHostAndFree(&parGPU, RadExtract.pExtractedData);
 			delete[] RadExtract.pExtractedData; return res;
 		}
 
@@ -224,10 +223,10 @@ int srTAuxMatStat::FindIntensityLimitsInds_GPU(CHGenObj& hRad, int ie, double Re
         PrefixSum_GPU<double>(AuxArrIntOverY, Nx, xStep, RelPow, IntegratedIntens, &IndLims[0], &IndLims[1], &parGPU);
         
         //The integer limits of integration over X and Y are now in ixBounds_d and iyBounds_d respectively
-        CAuxGPU::ToHostAndFree(&parGPU, AuxArrIntOverX, CAuxGPU::DONT_COPY);
-        CAuxGPU::ToHostAndFree(&parGPU, AuxArrIntOverY, CAuxGPU::DONT_COPY);
+        CAuxGPU::ToHostAndFree(&parGPU, AuxArrIntOverX);
+        CAuxGPU::ToHostAndFree(&parGPU, AuxArrIntOverY);
 
-        CAuxGPU::ToHostAndFree(&parGPU, RadExtract.pExtractedData, CAuxGPU::DONT_COPY);
+        CAuxGPU::ToHostAndFree(&parGPU, RadExtract.pExtractedData);
         delete[] RadExtract.pExtractedData;
 
         if(res) return res;

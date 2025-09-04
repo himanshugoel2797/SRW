@@ -11,7 +11,6 @@
  * @version 1.0
  ***************************************************************************/
 
- #define _OFFLOAD_GPU
 #ifdef _OFFLOAD_GPU
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
@@ -26,38 +25,6 @@
 #include "sroptelm_gpu.h"
 
 namespace cg = cooperative_groups; //HG31072024
-
-GPU_PORTABLE
-inline void CosAndSin(double x, float& Cos, float& Sin)
-{
-	if((x < -1.E+08) || (x > 1.E+08)) { Cos = (float)cos(x); Sin = (float)sin(x); return;} //OC13112011
-
-
-	double a2c, a4c, a6c, a8c, a10c, a12c;
-	double a3s, a5s, a7s, a9s, a11s, a13s;
-	double HalfPI, PI, TwoPI, ThreePIdTwo, One_dTwoPI; // Constants
-
-	HalfPI = 1.570796326794895;
-	PI = 3.14159265358979;
-	TwoPI = 6.28318530717958;
-	ThreePIdTwo = 4.712388980384685;
-	One_dTwoPI = 0.15915494309189549983131786791662293675521113402958547893595764032949613067;
-	a2c = -0.5; a4c = 0.041666666666667; a6c = -0.0013888888888889; a8c = 0.000024801587301587; a10c = -2.755731922E-07;
-	a3s = -0.16666666666667; a5s = 0.0083333333333333; a7s = -0.0001984126984127; a9s = 2.755731922E-06; a11s = -2.505210839E-08;
-	
-	//x -= TwoPI*((long)(x*One_dTwoPI));
-	x -= TwoPI*((long long)(x*One_dTwoPI));
-	if(x < 0.) x += TwoPI;
-
-	char ChangeSign=0;
-	if(x > ThreePIdTwo) x -= TwoPI;
-	else if(x > HalfPI) { x -= PI; ChangeSign = 1;}
-
-	double xe2 = x*x;
-	Cos = float(1. + xe2*(a2c + xe2*(a4c + xe2*(a6c + xe2*(a8c + xe2*a10c)))));
-	Sin = float(x*(1. + xe2*(a3s + xe2*(a5s + xe2*(a7s + xe2*(a9s + xe2*a11s))))));
-	if(ChangeSign) { Cos = -Cos; Sin = -Sin;}
-}
 
 //__global__ void TreatStronglyOscillatingTerm_Kernel(srTSRWRadStructAccessData RadAccessData, bool TreatPolCompX, bool TreatPolCompZ, double ConstRx, double ConstRz, int ieStart) 
 __global__ void TreatStronglyOscillatingTerm_Kernel(srTSRWRadStructAccessData* pRadAccessData, bool TreatPolCompX, bool TreatPolCompZ, double ConstRx, double ConstRz, int ieStart, int ieBefEnd) //HG27072024
@@ -99,7 +66,7 @@ __global__ void TreatStronglyOscillatingTerm_Kernel(srTSRWRadStructAccessData* p
         if (pRadAccessData->WfrQuadTermCanBeTreatedAtResizeX) Phase += ConstRxE * x * x;
 
         float SinPh, CosPh;
-		CosAndSin(Phase, CosPh, SinPh);
+		srTGenOptElem::CosAndSinPi(Phase, CosPh, SinPh);
 
         long long PerX = pRadAccessData->ne << 1;
         long long PerZ = PerX * pRadAccessData->nx;
@@ -117,12 +84,7 @@ __global__ void TreatStronglyOscillatingTerm_Kernel(srTSRWRadStructAccessData* p
 
 					double tmp1 = (*pExIm)*CosPh;
 					double ExImNew = fma(*pExRe, SinPh, -tmp1) + fma(CosPh, *pExIm, tmp1); // To improve accuracy
-			if(ix == 462 && iz == 315)
-			{
-				printf("*pExRe=%.10f *pExIm=%.10f\n", *pExRe, *pExIm);
-				printf("CosPh=%.10f SinPh=%.10f Phase=%.10f\n", CosPh, SinPh, Phase);
-				printf("ExReNew=%.10f ExImNew=%.10f\n", ExReNew, ExImNew);
-			}
+			
 			*pExRe = (float)ExReNew; *pExIm = (float)ExImNew;
 		}
 		if (TreatPolCompZ)
@@ -159,7 +121,7 @@ void srTGenOptElem::TreatStronglyOscillatingTerm_GPU(srTSRWRadStructAccessData& 
     //TreatStronglyOscillatingTerm_Kernel<< <blocks, threads >> > (RadAccessData, TreatPolCompX, TreatPolCompZ, ConstRx, ConstRz, ieStart);
     TreatStronglyOscillatingTerm_Kernel<<<blocks, threads>>> (pRadAccessData_dev, TreatPolCompX, TreatPolCompZ, ConstRx, ConstRz, ieStart, ieBefEnd); //HG27072024
 
-	CAuxGPU::ToHostAndFree(pGPU, pRadAccessData_dev, CAuxGPU::DONT_COPY); //HG27072024
+	CAuxGPU::ToHostAndFree(pGPU, pRadAccessData_dev); //HG27072024
 	
 	CAuxGPU::MarkUpdated(pGPU, RadAccessData.pBaseRadX, CAuxGPU::DEVICE);
 	CAuxGPU::MarkUpdated(pGPU, RadAccessData.pBaseRadZ, CAuxGPU::DEVICE);
@@ -183,21 +145,21 @@ void srTGenOptElem::TreatStronglyOscillatingTerm_GPU(srTSRWRadStructAccessData& 
 }
 
 //__global__ void MakeWfrEdgeCorrection_Kernel(srTSRWRadStructAccessData RadAccessData, float* pDataEx, float* pDataEz, srTDataPtrsForWfrEdgeCorr DataPtrs, float dxSt, float dxFi, float dzSt, float dzFi)
-__global__ void MakeWfrEdgeCorrection_Kernel(srTSRWRadStructAccessData* pRadAccessData, float* __restrict__ pDataEx, float* __restrict__ pDataEz, srTDataPtrsForWfrEdgeCorr DataPtrs, float dxSt, float dxFi, float dzSt, float dzFi) //HG27072024
+__global__ void MakeWfrEdgeCorrection_Kernel(srTSRWRadStructAccessData* pRadAccessData, float* __restrict__ pDataEx, float* __restrict__ pDataEz, srTDataPtrsForWfrEdgeCorr DataPtrs) //HG27072024
 {
     int ix = (blockIdx.x * blockDim.x + threadIdx.x); //nx range
     int iz = (blockIdx.y * blockDim.y + threadIdx.y); //nz range
 
     if (ix < pRadAccessData->nx && iz < pRadAccessData->nz)
     {
-		//float dxSt = (float)DataPtrs.dxSt;
-		//float dxFi = (float)DataPtrs.dxFi;
-		//float dzSt = (float)DataPtrs.dzSt;
-		//float dzFi = (float)DataPtrs.dzFi;
-		float dxSt_dzSt = dxSt * dzSt;
-		float dxSt_dzFi = dxSt * dzFi;
-		float dxFi_dzSt = dxFi * dzSt;
-		float dxFi_dzFi = dxFi * dzFi;
+		double dxSt = DataPtrs.dxSt;
+		double dxFi = DataPtrs.dxFi;
+		double dzSt = DataPtrs.dzSt;
+		double dzFi = DataPtrs.dzFi;
+		double dxSt_dzSt = dxSt * dzSt;
+		double dxSt_dzFi = dxSt * dzFi;
+		double dxFi_dzSt = dxFi * dzSt;
+		double dxFi_dzFi = dxFi * dzFi;
 
 		//long TwoNz = RadAccessData.nz << 1; //OC25012024 (commented-out)
 		long PerX = 2;
@@ -375,22 +337,22 @@ void srTGenOptElem::MakeWfrEdgeCorrection_GPU(srTSRWRadStructAccessData* RadAcce
 	CAuxGPU::CalcLaunchDims(MakeWfrEdgeCorrection_Kernel, blocks, blocks, threads);
     
 	//MakeWfrEdgeCorrection_Kernel << <blocks, threads >> > (*RadAccessData, pDataEx, pDataEz, DataPtrs, (float)DataPtrs.dxSt, (float)DataPtrs.dxFi, (float)DataPtrs.dzSt, (float)DataPtrs.dzFi);
-	MakeWfrEdgeCorrection_Kernel <<<blocks, threads>>> (pRadAccessData_dev, pDataEx, pDataEz, DataPtrs, (float)DataPtrs.dxSt, (float)DataPtrs.dxFi, (float)DataPtrs.dzSt, (float)DataPtrs.dzFi); //HG27072024
+	MakeWfrEdgeCorrection_Kernel <<<blocks, threads>>> (pRadAccessData_dev, pDataEx, pDataEz, DataPtrs); //HG27072024
 
-	CAuxGPU::ToHostAndFree(pGPU, pRadAccessData_dev, CAuxGPU::DONT_COPY); //HG27072024
+	CAuxGPU::ToHostAndFree(pGPU, pRadAccessData_dev); //HG27072024
 
-	DataPtrs.FFTArrXStEx = CAuxGPU::ToHostAndFree(pGPU, DataPtrs.FFTArrXStEx, CAuxGPU::DONT_COPY);
-	DataPtrs.FFTArrXStEz = CAuxGPU::ToHostAndFree(pGPU, DataPtrs.FFTArrXStEz, CAuxGPU::DONT_COPY);
-	DataPtrs.FFTArrXFiEx = CAuxGPU::ToHostAndFree(pGPU, DataPtrs.FFTArrXFiEx, CAuxGPU::DONT_COPY);
-	DataPtrs.FFTArrXFiEz = CAuxGPU::ToHostAndFree(pGPU, DataPtrs.FFTArrXFiEz, CAuxGPU::DONT_COPY);
-	DataPtrs.FFTArrZStEx = CAuxGPU::ToHostAndFree(pGPU, DataPtrs.FFTArrZStEx, CAuxGPU::DONT_COPY);
-	DataPtrs.FFTArrZStEz = CAuxGPU::ToHostAndFree(pGPU, DataPtrs.FFTArrZStEz, CAuxGPU::DONT_COPY);
-	DataPtrs.FFTArrZFiEx = CAuxGPU::ToHostAndFree(pGPU, DataPtrs.FFTArrZFiEx, CAuxGPU::DONT_COPY);
-	DataPtrs.FFTArrZFiEz = CAuxGPU::ToHostAndFree(pGPU, DataPtrs.FFTArrZFiEz, CAuxGPU::DONT_COPY);
-	DataPtrs.ExpArrXSt = CAuxGPU::ToHostAndFree(pGPU, DataPtrs.ExpArrXSt, CAuxGPU::DONT_COPY);
-	DataPtrs.ExpArrXFi = CAuxGPU::ToHostAndFree(pGPU, DataPtrs.ExpArrXFi, CAuxGPU::DONT_COPY);
-	DataPtrs.ExpArrZSt = CAuxGPU::ToHostAndFree(pGPU, DataPtrs.ExpArrZSt, CAuxGPU::DONT_COPY);
-	DataPtrs.ExpArrZFi = CAuxGPU::ToHostAndFree(pGPU, DataPtrs.ExpArrZFi, CAuxGPU::DONT_COPY);
+	DataPtrs.FFTArrXStEx = CAuxGPU::ToHostAndFree(pGPU, DataPtrs.FFTArrXStEx);
+	DataPtrs.FFTArrXStEz = CAuxGPU::ToHostAndFree(pGPU, DataPtrs.FFTArrXStEz);
+	DataPtrs.FFTArrXFiEx = CAuxGPU::ToHostAndFree(pGPU, DataPtrs.FFTArrXFiEx);
+	DataPtrs.FFTArrXFiEz = CAuxGPU::ToHostAndFree(pGPU, DataPtrs.FFTArrXFiEz);
+	DataPtrs.FFTArrZStEx = CAuxGPU::ToHostAndFree(pGPU, DataPtrs.FFTArrZStEx);
+	DataPtrs.FFTArrZStEz = CAuxGPU::ToHostAndFree(pGPU, DataPtrs.FFTArrZStEz);
+	DataPtrs.FFTArrZFiEx = CAuxGPU::ToHostAndFree(pGPU, DataPtrs.FFTArrZFiEx);
+	DataPtrs.FFTArrZFiEz = CAuxGPU::ToHostAndFree(pGPU, DataPtrs.FFTArrZFiEz);
+	DataPtrs.ExpArrXSt = CAuxGPU::ToHostAndFree(pGPU, DataPtrs.ExpArrXSt);
+	DataPtrs.ExpArrXFi = CAuxGPU::ToHostAndFree(pGPU, DataPtrs.ExpArrXFi);
+	DataPtrs.ExpArrZSt = CAuxGPU::ToHostAndFree(pGPU, DataPtrs.ExpArrZSt);
+	DataPtrs.ExpArrZFi = CAuxGPU::ToHostAndFree(pGPU, DataPtrs.ExpArrZFi);
 
 	CAuxGPU::MarkUpdated(pGPU, pDataEx, CAuxGPU::DEVICE);
 	CAuxGPU::MarkUpdated(pGPU, pDataEz, CAuxGPU::DEVICE);
@@ -537,29 +499,29 @@ template<bool TreatPolCompX, bool TreatPolCompZ> __global__ void RadResizeCore_K
 			srTGenOptElem::GetCellDataForInterpol(pExSt_Old, PerX_Old, PerZ_Old, AuxF);
 			srTGenOptElem::SetupCellDataI(AuxF, AuxFI);
 			UseLowOrderInterp_PolCompX = srTGenOptElem::CheckForLowOrderInterp(AuxF, AuxFI, ixcOld_mi_ixStOld, izcOld_mi_izStOld, &InterpolAux01, InterpolAux02, InterpolAux02I);
-			if(ix == 462 && iz == 315)
-			{
-				printf("TotOffsetOld=%lld PerX_Old=%lld PerZ_Old=%lld izStOld=%d ixStOld=%d LowOrderInterp=%d\n", TotOffsetOld, PerX_Old, PerZ_Old, izStOld, ixStOld, UseLowOrderInterp_PolCompX);
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[0].f00, AuxF[0].f01, AuxF[0].f02, AuxF[0].f03);
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[0].f10, AuxF[0].f11, AuxF[0].f12, AuxF[0].f13);
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[0].f20, AuxF[0].f21, AuxF[0].f22, AuxF[0].f23);
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[0].f30, AuxF[0].f31, AuxF[0].f32, AuxF[0].f33);
-				printf("\r\n");
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[1].f00, AuxF[1].f01, AuxF[1].f02, AuxF[1].f03);
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[1].f10, AuxF[1].f11, AuxF[1].f12, AuxF[1].f13);
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[1].f20, AuxF[1].f21, AuxF[1].f22, AuxF[1].f23);
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[1].f30, AuxF[1].f31, AuxF[1].f32, AuxF[1].f33);
-				printf("\r\n");
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxFI[0].f00, AuxFI[0].f01, AuxFI[0].f02, AuxFI[0].f03);
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxFI[0].f10, AuxFI[0].f11, AuxFI[0].f12, AuxFI[0].f13);
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxFI[0].f20, AuxFI[0].f21, AuxFI[0].f22, AuxFI[0].f23);
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxFI[0].f30, AuxFI[0].f31, AuxFI[0].f32, AuxFI[0].f33);
-				printf("\r\n");
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", 0.0, InterpolAux01.cAx1z1, InterpolAux01.cAx2z1, InterpolAux01.cAx3z1);
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux01.cAx0z1, InterpolAux01.cAx1z1, InterpolAux01.cAx2z1, InterpolAux01.cAx3z1);
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux01.cAx0z2, InterpolAux01.cAx1z2, InterpolAux01.cAx2z2, InterpolAux01.cAx3z2);
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux01.cAx0z3, InterpolAux01.cAx1z3, InterpolAux01.cAx2z3, InterpolAux01.cAx3z3);
-			}
+			//if(ix == 541 && iz == 252)
+			//{
+				//printf("TotOffsetOld=%lld PerX_Old=%lld PerZ_Old=%lld izStOld=%d ixStOld=%d LowOrderInterp=%d\n", TotOffsetOld, PerX_Old, PerZ_Old, izStOld, ixStOld, UseLowOrderInterp_PolCompX);
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[0].f00, AuxF[0].f01, AuxF[0].f02, AuxF[0].f03);
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[0].f10, AuxF[0].f11, AuxF[0].f12, AuxF[0].f13);
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[0].f20, AuxF[0].f21, AuxF[0].f22, AuxF[0].f23);
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[0].f30, AuxF[0].f31, AuxF[0].f32, AuxF[0].f33);
+				//printf("\r\n");
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[1].f00, AuxF[1].f01, AuxF[1].f02, AuxF[1].f03);
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[1].f10, AuxF[1].f11, AuxF[1].f12, AuxF[1].f13);
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[1].f20, AuxF[1].f21, AuxF[1].f22, AuxF[1].f23);
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxF[1].f30, AuxF[1].f31, AuxF[1].f32, AuxF[1].f33);
+				//printf("\r\n");
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxFI[0].f00, AuxFI[0].f01, AuxFI[0].f02, AuxFI[0].f03);
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxFI[0].f10, AuxFI[0].f11, AuxFI[0].f12, AuxFI[0].f13);
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxFI[0].f20, AuxFI[0].f21, AuxFI[0].f22, AuxFI[0].f23);
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", AuxFI[0].f30, AuxFI[0].f31, AuxFI[0].f32, AuxFI[0].f33);
+				//printf("\r\n");
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", 0.0, InterpolAux01.cAx1z1, InterpolAux01.cAx2z1, InterpolAux01.cAx3z1);
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux01.cAx0z1, InterpolAux01.cAx1z1, InterpolAux01.cAx2z1, InterpolAux01.cAx3z1);
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux01.cAx0z2, InterpolAux01.cAx1z2, InterpolAux01.cAx2z2, InterpolAux01.cAx3z2);
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux01.cAx0z3, InterpolAux01.cAx1z3, InterpolAux01.cAx2z3, InterpolAux01.cAx3z3);
+			//}
 
 			if (UseLowOrderInterp_PolCompX)
 			{
@@ -577,18 +539,32 @@ template<bool TreatPolCompX, bool TreatPolCompZ> __global__ void RadResizeCore_K
 				srTGenOptElem::InterpolFI(InterpolAux02I, xRel, zRel, BufFI, 0);
 			}
 
-			//(*BufFI) *= AuxFI->fNorm;
+			(*BufFI) *= AuxFI->fNorm;
 			//srTGenOptElem::ImproveReAndIm(BufF, BufFI);
-			if(ix == 462 && iz == 315)
-			{
-				printf("\r\n");
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux02[0].Ax0z0, InterpolAux02[0].Ax1z0, InterpolAux02[0].Ax2z0, InterpolAux02[0].Ax3z0);
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux02[0].Ax0z1, InterpolAux02[0].Ax1z1, InterpolAux02[0].Ax2z1, InterpolAux02[0].Ax3z1);
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux02[0].Ax0z2, InterpolAux02[0].Ax1z2, InterpolAux02[0].Ax2z2, InterpolAux02[0].Ax3z2);
-				printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux02[0].Ax0z3, InterpolAux02[0].Ax1z3, InterpolAux02[0].Ax2z3, InterpolAux02[0].Ax3z3);
-				printf("\r\n");
-				printf("%f,%f,%f,%f\r\n", BufF[0], BufF[1], BufFI[0], BufFI[1]);
-			}
+			//if(ix == 541 && iz == 252)
+			//{
+				//a0 = -pF->f00 + pF->f13 - pF->f20
+				//a1 = -pF->f21 - pF->f01
+				//a2 = pF->f02 + pF->f11 + pF->f22
+				//a3 = pF->f10
+				//a4 = -pF->f12
+				//a5 = -pF->f23-pF->f03
+
+				//(2*(a0) + 3*(a1) + 6*(a2) + 4*a3 12*a4 +a5)*pC->cAx2z1
+				//(3*(a1 + 2*a2) + 2*(a0 + 2*(a3 + 3*a4)) + a5)*pC->cAx2z1
+				//printf("2*(-%f + %f - %f) - 3*(%f + %f) + 6*(%f + %f + %f) + 4*%f - 12*%f - %f - %f) * %f\r\n", AuxF[0].f00, AuxF[0].f13, AuxF[0].f20, AuxF[0].f21, AuxF[0].f01, AuxF[0].f02, AuxF[0].f11, AuxF[0].f22, AuxF[0].f10, AuxF[0].f12, AuxF[0].f23, AuxF[0].f03, InterpolAux01.cAx2z1);
+				//printf("2*%f - 3*%f + 6*%f + 4*%f - 12*%f + %f) * %f\r\n", -AuxF[0].f00 +AuxF[0].f13 -AuxF[0].f20, AuxF[0].f21+AuxF[0].f01, AuxF[0].f02+AuxF[0].f11+AuxF[0].f22, AuxF[0].f10, AuxF[0].f12, - AuxF[0].f23 - AuxF[0].f03, InterpolAux01.cAx2z1);
+				//printf("%f + %f + %f + %f + %f + %f) * %f\r\n", 2*(-AuxF[0].f00 +AuxF[0].f13 -AuxF[0].f20), -3*(AuxF[0].f21+AuxF[0].f01), 6*(AuxF[0].f02+AuxF[0].f11+AuxF[0].f22), 4*AuxF[0].f10, -12*AuxF[0].f12, - AuxF[0].f23 - AuxF[0].f03, InterpolAux01.cAx2z1);
+				//printf("%f * %f\r\n", 2*(-AuxF[0].f00 +AuxF[0].f13 -AuxF[0].f20) -3*(AuxF[0].f21+AuxF[0].f01) + 6*(AuxF[0].f02+AuxF[0].f11+AuxF[0].f22) + 4*AuxF[0].f10 -12*AuxF[0].f12 - AuxF[0].f23 - AuxF[0].f03, InterpolAux01.cAx2z1);
+				//printf("%f\r\n", (2*(-AuxF[0].f00 +AuxF[0].f13 -AuxF[0].f20) -3*(AuxF[0].f21+AuxF[0].f01) + 6*(AuxF[0].f02+AuxF[0].f11+AuxF[0].f22) + 4*AuxF[0].f10 -12*AuxF[0].f12 - AuxF[0].f23 - AuxF[0].f03) * InterpolAux01.cAx2z1);
+				//printf("\r\n");
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux02[0].Ax0z0, InterpolAux02[0].Ax1z0, InterpolAux02[0].Ax2z0, InterpolAux02[0].Ax3z0);
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux02[0].Ax0z1, InterpolAux02[0].Ax1z1, InterpolAux02[0].Ax2z1, InterpolAux02[0].Ax3z1);
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux02[0].Ax0z2, InterpolAux02[0].Ax1z2, InterpolAux02[0].Ax2z2, InterpolAux02[0].Ax3z2);
+				//printf("%.10f,%.10f,%.10f,%.10f\r\n", InterpolAux02[0].Ax0z3, InterpolAux02[0].Ax1z3, InterpolAux02[0].Ax2z3, InterpolAux02[0].Ax3z3);
+				//printf("\r\n");
+				//printf("%f,%f,%f,%f,%f\r\n", BufF[0], BufF[1], BufFI[0], BufFI[1], AuxFI->fNorm);
+			//}
 
 			if (FieldShouldBeZeroed)
 			{
@@ -637,7 +613,6 @@ template<bool TreatPolCompX, bool TreatPolCompZ> __global__ void RadResizeCore_K
 
 int srTGenOptElem::RadResizeCore_GPU(srTSRWRadStructAccessData& OldRadAccessData, srTSRWRadStructAccessData& NewRadAccessData, char PolComp, TGPUUsageArg* pGPU)
 {
-	printf("\r\n%s\r\n", __func__);
 	char TreatPolCompX = ((PolComp == 0) || (PolComp == 'x'));
 	char TreatPolCompZ = ((PolComp == 0) || (PolComp == 'z'));
 
@@ -668,11 +643,11 @@ int srTGenOptElem::RadResizeCore_GPU(srTSRWRadStructAccessData& OldRadAccessData
 	if (TreatPolCompZ) RadResizeCore_Kernel<false, true> <<<blocks1, threads1, 0, (cudaStream_t)stream1 >>> (pOldRadAccessData_dev, pNewRadAccessData_dev);
 
 	CAuxGPU::SyncComputeStream(pGPU, stream1, 0);
-	CAuxGPU::ToHostAndFree(pGPU, pOldRadAccessData_dev, CAuxGPU::DONT_COPY); //HG27072024
-	CAuxGPU::ToHostAndFree(pGPU, pNewRadAccessData_dev, CAuxGPU::DONT_COPY); //HG27072024
+	CAuxGPU::ToHostAndFree(pGPU, pOldRadAccessData_dev); //HG27072024
+	CAuxGPU::ToHostAndFree(pGPU, pNewRadAccessData_dev); //HG27072024
 
-	OldRadAccessData.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, OldRadAccessData.pBaseRadX, CAuxGPU::DONT_COPY);
-	OldRadAccessData.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, OldRadAccessData.pBaseRadZ, CAuxGPU::DONT_COPY);
+	OldRadAccessData.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, OldRadAccessData.pBaseRadX);
+	OldRadAccessData.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, OldRadAccessData.pBaseRadZ);
 	//NewRadAccessData.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, NewRadAccessData.pBaseRadX, 2*NewRadAccessData.ne*NewRadAccessData.nx*NewRadAccessData.nz*sizeof(float));
 	//NewRadAccessData.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, NewRadAccessData.pBaseRadZ, 2*NewRadAccessData.ne*NewRadAccessData.nx*NewRadAccessData.nz*sizeof(float));
 	CAuxGPU::MarkUpdated(pGPU, NewRadAccessData.pBaseRadX, CAuxGPU::DEVICE);
@@ -753,7 +728,6 @@ template<bool TreatPolCompX, bool TreatPolCompZ> __global__ void RadResizeCore_O
 
 int srTGenOptElem::RadResizeCore_OnlyLargerRange_GPU(srTSRWRadStructAccessData& OldRadAccessData, srTSRWRadStructAccessData& NewRadAccessData, char PolComp, TGPUUsageArg* pGPU)
 {
-	printf("\r\n%s\r\n", __func__);
 	char TreatPolCompX = ((PolComp == 0) || (PolComp == 'x'));
 	char TreatPolCompZ = ((PolComp == 0) || (PolComp == 'z'));
 
@@ -765,6 +739,9 @@ int srTGenOptElem::RadResizeCore_OnlyLargerRange_GPU(srTSRWRadStructAccessData& 
 	OldRadAccessData.pBaseRadZ = CAuxGPU::ToDevice(pGPU, OldRadAccessData.pBaseRadZ, 2 * OldRadAccessData.ne * OldRadAccessData.nx * OldRadAccessData.nz);
 	NewRadAccessData.pBaseRadX = CAuxGPU::ToDevice(pGPU, NewRadAccessData.pBaseRadX, 2 * NewRadAccessData.ne * NewRadAccessData.nx * NewRadAccessData.nz, CAuxGPU::DONT_COPY);
 	NewRadAccessData.pBaseRadZ = CAuxGPU::ToDevice(pGPU, NewRadAccessData.pBaseRadZ, 2 * NewRadAccessData.ne * NewRadAccessData.nx * NewRadAccessData.nz, CAuxGPU::DONT_COPY);
+
+	CAuxGPU::Memset(pGPU, NewRadAccessData.pBaseRadX, 0.0f, 2 * NewRadAccessData.ne * NewRadAccessData.nx * NewRadAccessData.nz);
+	CAuxGPU::Memset(pGPU, NewRadAccessData.pBaseRadZ, 0.0f, 2 * NewRadAccessData.ne * NewRadAccessData.nx * NewRadAccessData.nz);
 
 	CAuxGPU::EnsureDeviceMemoryReady(pGPU, OldRadAccessData.pBaseRadX, OldRadAccessData.pBaseRadZ, NewRadAccessData.pBaseRadX, NewRadAccessData.pBaseRadZ);
 
@@ -784,11 +761,11 @@ int srTGenOptElem::RadResizeCore_OnlyLargerRange_GPU(srTSRWRadStructAccessData& 
 	CAuxGPU::CalcLaunchDims(kern, blocks, blocks, threads);
 	kern<<<blocks, threads>>> (pOldRadAccessData_dev, pNewRadAccessData_dev);
 
-	CAuxGPU::ToHostAndFree(pGPU, pOldRadAccessData_dev, CAuxGPU::DONT_COPY);
-	CAuxGPU::ToHostAndFree(pGPU, pNewRadAccessData_dev, CAuxGPU::DONT_COPY);
+	CAuxGPU::ToHostAndFree(pGPU, pOldRadAccessData_dev);
+	CAuxGPU::ToHostAndFree(pGPU, pNewRadAccessData_dev);
 
-	OldRadAccessData.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, OldRadAccessData.pBaseRadZ, CAuxGPU::DONT_COPY);
-	OldRadAccessData.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, OldRadAccessData.pBaseRadX, CAuxGPU::DONT_COPY);
+	OldRadAccessData.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, OldRadAccessData.pBaseRadZ);
+	OldRadAccessData.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, OldRadAccessData.pBaseRadX);
 
 	CAuxGPU::MarkUpdated(pGPU, NewRadAccessData.pBaseRadX, CAuxGPU::DEVICE);
 	CAuxGPU::MarkUpdated(pGPU, NewRadAccessData.pBaseRadZ, CAuxGPU::DEVICE);
@@ -877,11 +854,11 @@ int srTGenOptElem::RadResizeCore_OnlyLargerRangeE_GPU(srTSRWRadStructAccessData&
 	CAuxGPU::CalcLaunchDims(kern, blocks, blocks, threads);
 	kern<<<blocks, threads>>> (pOldRadAccessData_dev, pNewRadAccessData_dev);
 	
-	CAuxGPU::ToHostAndFree(pGPU, pOldRadAccessData_dev, CAuxGPU::DONT_COPY); //HG27072024
-	CAuxGPU::ToHostAndFree(pGPU, pNewRadAccessData_dev, CAuxGPU::DONT_COPY); //HG27072024
+	CAuxGPU::ToHostAndFree(pGPU, pOldRadAccessData_dev); //HG27072024
+	CAuxGPU::ToHostAndFree(pGPU, pNewRadAccessData_dev); //HG27072024
 
-	OldRadAccessData.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, OldRadAccessData.pBaseRadX, CAuxGPU::DONT_COPY);
-	OldRadAccessData.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, OldRadAccessData.pBaseRadZ, CAuxGPU::DONT_COPY);
+	OldRadAccessData.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, OldRadAccessData.pBaseRadX);
+	OldRadAccessData.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, OldRadAccessData.pBaseRadZ);
 	CAuxGPU::MarkUpdated(pGPU, NewRadAccessData.pBaseRadX, CAuxGPU::DEVICE);
 	CAuxGPU::MarkUpdated(pGPU, NewRadAccessData.pBaseRadZ, CAuxGPU::DEVICE);
 	NewRadAccessData.pBaseRadX = CAuxGPU::GetHostPtr(pGPU, NewRadAccessData.pBaseRadX);
@@ -1311,7 +1288,7 @@ void srTGenOptElem::ComputeRadMoments_GPU(srTSRWRadStructAccessData* pSRWRadStru
 	CAuxGPU::SyncComputeStream(pGPU, (long long)stream2, 0);
 	CAuxGPU::SyncComputeStream(pGPU, (long long)stream3, 0);
 	
-	CAuxGPU::ToHostAndFree(pGPU, pSRWRadStructAccessData_dev, CAuxGPU::DONT_COPY);
+	CAuxGPU::ToHostAndFree(pGPU, pSRWRadStructAccessData_dev);
 	
 	pSRWRadStructAccessData->pBaseRadX = CAuxGPU::GetHostPtr(pGPU, pSRWRadStructAccessData->pBaseRadX);
 	pSRWRadStructAccessData->pBaseRadZ = CAuxGPU::GetHostPtr(pGPU, pSRWRadStructAccessData->pBaseRadZ);
@@ -1380,7 +1357,7 @@ int srTGenOptElem::ExtractRadSliceConstE_GPU(srTSRWRadStructAccessData* pRadAcce
 
 	ExtractRadSliceConstE_Kernel <<<blocks, threads >>> (pRadAccessData_dev, ie, pOutEx, pOutEz);
 
-	CAuxGPU::ToHostAndFree(pGPU, pRadAccessData_dev, CAuxGPU::DONT_COPY);
+	CAuxGPU::ToHostAndFree(pGPU, pRadAccessData_dev);
 
 	CAuxGPU::MarkUpdated(pGPU, pOutEx, CAuxGPU::DEVICE);
 	CAuxGPU::MarkUpdated(pGPU, pOutEz, CAuxGPU::DEVICE);
@@ -1452,8 +1429,8 @@ int srTGenOptElem::UpdateGenRadStructSliceConstE_Meth_0_GPU(srTSRWRadStructAcces
 
 	UpdateGenRadStructSliceConstE_Meth_0_Kernel <<<blocks, threads >>> (pRadDataSliceConstE_dev, ie, pRadAccessData_dev);
 
-	CAuxGPU::ToHostAndFree(pGPU, pRadAccessData_dev, CAuxGPU::DONT_COPY);
-	CAuxGPU::ToHostAndFree(pGPU, pRadDataSliceConstE_dev, CAuxGPU::DONT_COPY);
+	CAuxGPU::ToHostAndFree(pGPU, pRadAccessData_dev);
+	CAuxGPU::ToHostAndFree(pGPU, pRadDataSliceConstE_dev);
 
 	pRadDataSliceConstE->pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, pRadDataSliceConstE->pBaseRadX);
 	pRadDataSliceConstE->pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, pRadDataSliceConstE->pBaseRadZ);
@@ -1710,11 +1687,11 @@ int srTGenOptElem::ReInterpolateWfrSliceSingleE_GPU(srTSRWRadStructAccessData& o
 
 	ReInterpolateWfrSliceSingleE_Kernel <<<blocks, threads >>> (pOldRadSingleE_dev, pNewRadMultiE_dev, ie);
 
-	CAuxGPU::ToHostAndFree(pGPU, pNewRadMultiE_dev, CAuxGPU::DONT_COPY);
-	CAuxGPU::ToHostAndFree(pGPU, pOldRadSingleE_dev, CAuxGPU::DONT_COPY);
+	CAuxGPU::ToHostAndFree(pGPU, pNewRadMultiE_dev);
+	CAuxGPU::ToHostAndFree(pGPU, pOldRadSingleE_dev);
 
-	oldRadSingleE.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, oldRadSingleE.pBaseRadX, CAuxGPU::DONT_COPY);
-	oldRadSingleE.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, oldRadSingleE.pBaseRadZ, CAuxGPU::DONT_COPY);
+	oldRadSingleE.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, oldRadSingleE.pBaseRadX);
+	oldRadSingleE.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, oldRadSingleE.pBaseRadZ);
 
 	CAuxGPU::MarkUpdated(pGPU, newRadMultiE.pBaseRadX, CAuxGPU::DEVICE);
 	CAuxGPU::MarkUpdated(pGPU, newRadMultiE.pBaseRadZ, CAuxGPU::DEVICE);
@@ -1772,15 +1749,15 @@ int srTGenOptElem::SetupRadSliceConstE_GPU(srTSRWRadStructAccessData* pRadAccess
 	
 	SetupRadSliceConstE_Kernel <<<blocks, threads >>> (pRadAccessData_dev, ie, pInEx, pInEz);
 
-	CAuxGPU::ToHostAndFree(pGPU, pRadAccessData_dev, CAuxGPU::DONT_COPY);
+	CAuxGPU::ToHostAndFree(pGPU, pRadAccessData_dev);
 
 	CAuxGPU::MarkUpdated(pGPU, pRadAccessData->pBaseRadX, CAuxGPU::DEVICE);
 	CAuxGPU::MarkUpdated(pGPU, pRadAccessData->pBaseRadZ, CAuxGPU::DEVICE);
 	pRadAccessData->pBaseRadX = CAuxGPU::GetHostPtr(pGPU, pRadAccessData->pBaseRadX);
 	pRadAccessData->pBaseRadZ = CAuxGPU::GetHostPtr(pGPU, pRadAccessData->pBaseRadZ);
 
-	CAuxGPU::ToHostAndFree(pGPU, pInEx, CAuxGPU::DONT_COPY);
-	CAuxGPU::ToHostAndFree(pGPU, pInEz, CAuxGPU::DONT_COPY);
+	CAuxGPU::ToHostAndFree(pGPU, pInEx);
+	CAuxGPU::ToHostAndFree(pGPU, pInEz);
 
 	return 0;
 }
@@ -1843,8 +1820,6 @@ void srTGenOptElem::SetupRadXorZSectFromSliceConstE_GPU(float* pInEx, float* pIn
 
 	CAuxGPU::MarkUpdated(pGPU, pOutEx, CAuxGPU::DEVICE);
 	CAuxGPU::MarkUpdated(pGPU, pOutEz, CAuxGPU::DEVICE);
-	CAuxGPU::ToHostAndFree(pGPU, pInEx, CAuxGPU::DONT_COPY);
-	CAuxGPU::ToHostAndFree(pGPU, pInEz, CAuxGPU::DONT_COPY);
 }
 
 #endif

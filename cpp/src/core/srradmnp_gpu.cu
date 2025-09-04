@@ -243,7 +243,6 @@ __global__ void ExtractSingleElecIntensity2DvsXZ_Kernel(srTRadExtract RadExtract
 //int srTRadGenManip::ExtractSingleElecIntensity2DvsXZ_GPU(srTRadExtract& RadExtract, double* arAuxInt, long long ie0, long long ie1, double InvStepRelArg, TGPUUsageArg* pGPU)
 int srTRadGenManip::ExtractSingleElecIntensity2DvsXZ_GPU(srTRadExtract& RadExtract, long long ie0, long long ie1, double InvStepRelArg, TGPUUsageArg* pGPU) //HG31072024
 {
-	printf("\r\n%s\r\n", __func__);
 #define GEN_MEMBERS(i) \
 	ExtractSingleElecIntensity2DvsXZ_Kernel<false, false, i, false>, \
 	ExtractSingleElecIntensity2DvsXZ_Kernel<false, false, i, true>, \
@@ -350,7 +349,7 @@ int srTRadGenManip::ExtractSingleElecIntensity2DvsXZ_GPU(srTRadExtract& RadExtra
 		}
 	}
 
-	CAuxGPU::ToHostAndFree(pGPU, pRadAccessData_dev, CAuxGPU::DONT_COPY); //HG27072024
+	CAuxGPU::ToHostAndFree(pGPU, pRadAccessData_dev); //HG27072024
 
 	
 	//RadAccessData.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, RadAccessData.pBaseRadX);
@@ -380,7 +379,7 @@ int srTRadGenManip::ExtractSingleElecIntensity2DvsXZ_GPU(srTRadExtract& RadExtra
 //	}
 //#endif
 
-    CAuxGPU::ToHostAndFree(pGPU, local_copy, CAuxGPU::DONT_COPY);
+    CAuxGPU::ToHostAndFree(pGPU, local_copy);
 	//CAuxGPU::ToHostAndFree(pGPU, arAuxInt, RadAccessData.ne*sizeof(double), true); //HG31072024
     //CAuxGPU::MarkUpdated(pGPU, RadAccessData.pBaseRadX, true, false);
 	//CAuxGPU::MarkUpdated(pGPU, RadAccessData.pBaseRadZ, true, false);
@@ -613,8 +612,8 @@ int srTRadGenManip::ExtractSingleElecMutualIntensityVsXZ_GPU(float* pEx, float* 
 
 	ExtractSingleElecMutualIntensityVsXZ_tbl[idx]<<<grid, threads >>> (pEx, pEz, pMI0, (long)nxnz, itStart, itEnd, PerX, iter);
 
-	pEx = CAuxGPU::ToHostAndFree(pGPU, pEx, CAuxGPU::DONT_COPY);
-	pEz = CAuxGPU::ToHostAndFree(pGPU, pEz, CAuxGPU::DONT_COPY);
+	pEx = CAuxGPU::ToHostAndFree(pGPU, pEx);
+	pEz = CAuxGPU::ToHostAndFree(pGPU, pEz);
 	CAuxGPU::MarkUpdated(pGPU, pMI0, CAuxGPU::DEVICE);
 
 //HG26022024 (commented out)

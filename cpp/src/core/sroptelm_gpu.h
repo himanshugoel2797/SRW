@@ -186,9 +186,9 @@ int RadPointModifierParallelImpl(srTSRWRadStructAccessData* pRadAccessData, void
 		CAuxGPU::SyncComputeStream(pGPU, (long long)stream3, 0);
 	}
 
-	if (pBufVarsSz > 0) CAuxGPU::ToHostAndFree(pGPU, (char*)pBufVars_dev, CAuxGPU::DONT_COPY);
-	CAuxGPU::ToHostAndFree(pGPU, pRadAccessData_dev, CAuxGPU::DONT_COPY); //HG27072024
-	CAuxGPU::ToHostAndFree(pGPU, local_copy, CAuxGPU::DONT_COPY);
+	if (pBufVarsSz > 0) CAuxGPU::ToHostAndFree(pGPU, (char*)pBufVars_dev);
+	CAuxGPU::ToHostAndFree(pGPU, pRadAccessData_dev);
+	CAuxGPU::ToHostAndFree(pGPU, local_copy);
 	
 	CAuxGPU::MarkUpdated(pGPU, pRadAccessData->pBaseRadX, CAuxGPU::DEVICE);
 	CAuxGPU::MarkUpdated(pGPU, pRadAccessData->pBaseRadZ, CAuxGPU::DEVICE);

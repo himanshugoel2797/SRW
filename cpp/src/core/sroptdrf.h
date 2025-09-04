@@ -160,7 +160,6 @@ public:
 		//return result; //test
 
 		char &MethNo = ParPrecWfrPropag.MethNo;
-		printf("%s %d\r\n", __func__, MethNo);
 		//if(MethNo == 0) result = PropagateRadiationMeth_0(pRadAccessData, &BufVars); //OC06092019
 		//OC01102019 (restored)
 		//if(MethNo == 0) result = PropagateRadiationMeth_0(pRadAccessData);
@@ -205,7 +204,6 @@ public:
 		//OC251214
 		//if((LocalPropMode == 0) || (LocalPropMode == 3) || (pRadAccessData->ne == 1)) return PropagateRadiationSingleE_Meth_0(pRadAccessData, 0);
 
-		printf("%s %d\r\n", __func__, LocalPropMode);
 		//srTDriftPropBufVars* pBufVars = (srTDriftPropBufVars*)pBuf; //OC06092019
 		//if((pBufVars->LocalPropMode == 0) || (pBufVars->LocalPropMode == 3) || (pRadAccessData->ne == 1)) return PropagateRadiationSingleE_Meth_0(pRadAccessData, 0, pBuf); //OC06092019
 		//OC01102019 (restored)
@@ -324,7 +322,6 @@ public:
 		//srTDriftPropBufVars* pBufVars = (srTDriftPropBufVars*)pBuf; //OC06092019
 		//char LocalPropMode = pBufVars->LocalPropMode; //OC06092019
 		//OC01102019 (commented-out / restored)
-		printf("%s %d\r\n", __func__, LocalPropMode);
 
 		//if(LocalPropMode == 0) return PropagateRadiationSimple_AngRepres(pRadAccessData);
 		if(LocalPropMode == 0) return PropagateRadiationSimple_AngRepres(pRadAccessData, pvGPU); //HG01122023
@@ -826,16 +823,17 @@ public:
 			double rx = EXZ.x - pBufVars->xc, rz = EXZ.z - pBufVars->zc; //OC30082019
 			//double rx = EXZ.x - PropBufVars.xc, rz = EXZ.z - PropBufVars.zc;
 			double Pi_d_Lambda_m = 3.1415926536/Lambda_m;
-			PhaseShift = -Pi_d_Lambda_m*((pBufVars->invRx)*rx*rx + (pBufVars->invRz)*rz*rz); //OC30082019
+			//PhaseShift = -Pi_d_Lambda_m*((pBufVars->invRx)*rx*rx + (pBufVars->invRz)*rz*rz); //OC30082019
+			PhaseShift = -((pBufVars->invRx)*rx*rx + (pBufVars->invRz)*rz*rz)/Lambda_m; //OC30082019
 			//PhaseShift = -Pi_d_Lambda_m*(PropBufVars.invRx*rx*rx + PropBufVars.invRz*rz*rz);
 		}
 		else if(pBufVars->PassNo == 2) //OC30082019
 		//else if(PropBufVars.PassNo == 2) //loop on angular side
 		{// e in eV; Length in m !!! Operates on Angles side !!!
 			double Pi_Lambda_m = 3.1415926536*Lambda_m;
-			double c0x = -Pi_Lambda_m*(pBufVars->Lx), c0z = -Pi_Lambda_m*(pBufVars->Lz); //OC30082019
+			//double c0x = -Pi_Lambda_m*(pBufVars->Lx), c0z = -Pi_Lambda_m*(pBufVars->Lz); //OC30082019
+			double c0x = -(pBufVars->Lx)*Lambda_m, c0z = -(pBufVars->Lz)*Lambda_m; //OC30082019
 			//double c0x = -Pi_Lambda_m*PropBufVars.Lx, c0z = -Pi_Lambda_m*PropBufVars.Lz; //c1 = 0.25*Lambda_m*Lambda_m;
-			
 			//double c0 = -3.1415926536*Length*Lambda_m, c1 = 0.25*Lambda_m*Lambda_m;
 			//double qx2_p_qz2 = EXZ.x*EXZ.x + EXZ.z*EXZ.z;
 			//double c1qx2_p_qz2 = c1*qx2_p_qz2;
@@ -850,7 +848,8 @@ public:
 			//double rx = EXZ.x - PropBufVars.xc, rz = EXZ.z - PropBufVars.zc;
 			//double rx = EXZ.x /*- PropBufVars.xc*/, rz = EXZ.z; /*- PropBufVars.zc;*/
 			double Pi_d_Lambda_m = 3.1415926536/Lambda_m;
-			PhaseShift = Pi_d_Lambda_m*((pBufVars->invRxL)*rx*rx + (pBufVars->invRzL)*rz*rz); //OC30082019
+			//PhaseShift = Pi_d_Lambda_m*((pBufVars->invRxL)*rx*rx + (pBufVars->invRzL)*rz*rz); //OC30082019
+			PhaseShift = ((pBufVars->invRxL)*rx*rx + (pBufVars->invRzL)*rz*rz)/Lambda_m; //OC30082019
 			//PhaseShift = Pi_d_Lambda_m*(PropBufVars.invRxL*rx*rx + PropBufVars.invRzL*rz*rz);
 
 			//OCTEST
@@ -858,11 +857,12 @@ public:
 			//END OCTEST
 			if(TreatPath == 1) //OC010813
 			{
-				PhaseShift += 2*Pi_d_Lambda_m*Length;
+				//PhaseShift += 2*Pi_d_Lambda_m*Length;
+				PhaseShift += 2*Length/Lambda_m;
 			}
 		}
 
-		float CosPh, SinPh; CosAndSin(PhaseShift, CosPh, SinPh);
+		float CosPh, SinPh; CosAndSinPi(PhaseShift, CosPh, SinPh);
 		float NewExRe = (*(EPtrs.pExRe))*CosPh - (*(EPtrs.pExIm))*SinPh;
 		float NewExIm = (*(EPtrs.pExRe))*SinPh + (*(EPtrs.pExIm))*CosPh;
 		float NewEzRe = (*(EPtrs.pEzRe))*CosPh - (*(EPtrs.pEzIm))*SinPh;

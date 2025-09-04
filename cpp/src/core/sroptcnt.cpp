@@ -365,9 +365,9 @@ if (fd)
 				//				printf("Element does not support GPU, transferring to CPU.\r\n");
 				//#endif
 				if(wfr.pBaseRadX != NULL)
-					wfr.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadX, 0, 2*wfr.ne*wfr.nx*wfr.nz);
+					wfr.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadX, 2*wfr.ne*wfr.nx*wfr.nz);
 				if(wfr.pBaseRadZ != NULL)
-					wfr.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadZ, 0, 2*wfr.ne*wfr.nx*wfr.nz);
+					wfr.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadZ, 2*wfr.ne*wfr.nx*wfr.nz);
 				dataOnDevice = false;
 			}
 			//else if(!dataOnDevice && (((srTGenOptElem*)it->rep)->SupportedFeatures() & 1) == 1)
@@ -381,20 +381,20 @@ if (fd)
 		}
 #endif
 
-dataOnDevice = false;
-wfr.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadX);
-char fname[128];
-sprintf(fname, "base_rad_x_pre_%s_%d.txt", CAuxGPU::GPUEnabled(pGPU) ? "gpu" : "cpu", elemCount);
-FILE *fd = fopen(fname, "w");
-if (fd)
-{
-	fprintf(fd, "#%d,%d\r\n", wfr.nx, wfr.nz);
-	for (int i = 0; i < wfr.nx*wfr.nz*2; i++)
-	{
-		fprintf(fd, "%f\n", wfr.pBaseRadX[i]);
-	}
-	fclose(fd);
-}
+//dataOnDevice = false;
+//wfr.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadX);
+//char fname[128];
+//sprintf(fname, "base_rad_x_pre_%s_%d.txt", CAuxGPU::GPUEnabled(pGPU) ? "gpu" : "cpu", elemCount);
+//FILE *fd = fopen(fname, "w");
+//if (fd)
+//{
+//	fprintf(fd, "#%d,%d\r\n", wfr.nx, wfr.nz);
+//	for (int i = 0; i < wfr.nx*wfr.nz*2; i++)
+//	{
+//		fprintf(fd, "%f\n", wfr.pBaseRadX[i]);
+//	}
+//	fclose(fd);
+//}
 		printf("[%d] %s\r\n", elemCount, (CAuxGPU::GPUEnabled(pGPU) && ((((srTGenOptElem*)it->rep)->GPUImplFeatures() & 1) == 0)) ? "<CPU>" : "<GPU>");
 		srTRadResizeVect auxResizeVect;
 		//if(res = ((srTGenOptElem*)(it->rep))->PropagateRadiation(&wfr, precParWfrPropag, auxResizeVect)) return res;
@@ -404,19 +404,19 @@ if (fd)
 
 		printf("[%d] Prop done\r\n", elemCount);
 
-dataOnDevice = false;
-wfr.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadX);
-sprintf(fname, "base_rad_x_post_%s_%d.txt", CAuxGPU::GPUEnabled(pGPU) ? "gpu" : "cpu", elemCount);
-fd = fopen(fname, "w");
-if (fd)
-{
-	fprintf(fd, "#%d,%d\r\n", wfr.nx, wfr.nz);
-	for (int i = 0; i < wfr.nx*wfr.nz*2; i++)
-	{
-		fprintf(fd, "%f\n", wfr.pBaseRadX[i]);
-	}
-	fclose(fd);
-}
+//dataOnDevice = false;
+//wfr.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadX);
+//sprintf(fname, "base_rad_x_post_%s_%d.txt", CAuxGPU::GPUEnabled(pGPU) ? "gpu" : "cpu", elemCount);
+//fd = fopen(fname, "w");
+//if (fd)
+//{
+//	fprintf(fd, "#%d,%d\r\n", wfr.nx, wfr.nz);
+//	for (int i = 0; i < wfr.nx*wfr.nz*2; i++)
+//	{
+//		fprintf(fd, "%f\n", wfr.pBaseRadX[i]);
+//	}
+//	fclose(fd);
+//}
 
 		//OC_DEBUG
 		//std::cout << "   DEBUG: PropagateRadiationGuided: PropagateRadiation done for element:" << elemCount << "\n";
@@ -434,9 +434,9 @@ if (fd)
 				if(dataOnDevice)
 				{
 					if(wfr.pBaseRadX != NULL)
-						wfr.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadX, 0, 2*wfr.ne*wfr.nx*wfr.nz);
+						wfr.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadX, 2*wfr.ne*wfr.nx*wfr.nz);
 					if(wfr.pBaseRadZ != NULL)
-						wfr.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadZ, 0, 2*wfr.ne*wfr.nx*wfr.nz);
+						wfr.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadZ, 2*wfr.ne*wfr.nx*wfr.nz);
 					dataOnDevice = false;
 				}
 			}
@@ -477,9 +477,9 @@ if (fd)
 			if (dataOnDevice)
 			{
 				if (wfr.pBaseRadX != NULL)
-					wfr.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadX, 0, 2*wfr.ne*wfr.nx*wfr.nz);
+					wfr.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadX, 2*wfr.ne*wfr.nx*wfr.nz);
 				if (wfr.pBaseRadZ != NULL)
-					wfr.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadZ, 0, 2*wfr.ne*wfr.nx*wfr.nz);
+					wfr.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadZ, 2*wfr.ne*wfr.nx*wfr.nz);
 				dataOnDevice = false;
 			}
 		}
@@ -494,9 +494,9 @@ if (fd)
 		if (dataOnDevice)
 		{
 			if (wfr.pBaseRadX != NULL)
-				wfr.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadX, 0, 2*wfr.ne*wfr.nx*wfr.nz);
+				wfr.pBaseRadX = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadX, 2*wfr.ne*wfr.nx*wfr.nz);
 			if (wfr.pBaseRadZ != NULL)
-				wfr.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadZ, 0, 2*wfr.ne*wfr.nx*wfr.nz);
+				wfr.pBaseRadZ = CAuxGPU::ToHostAndFree(pGPU, wfr.pBaseRadZ, 2*wfr.ne*wfr.nx*wfr.nz);
 			dataOnDevice = false;
 		}
 	}

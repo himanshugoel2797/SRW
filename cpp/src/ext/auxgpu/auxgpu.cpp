@@ -315,7 +315,7 @@ void* CAuxGPU::_ToHostAndFree(TGPUUsageArg* arg, void* devicePtr, int flags, siz
 	info = gpuMap[devicePtr];
 	devicePtr = info.devicePtr;
 	void *hostPtr = info.hostPtr;
-	bool dontCopy = flags & CAuxGPU::DONT_COPY; //HG26072024
+	bool dontCopy = false; //HG26072024
 	if (hostPtr == NULL) dontCopy = true;
 	if (size == 0) size = info.size;
 	if (size == 0) dontCopy = true;

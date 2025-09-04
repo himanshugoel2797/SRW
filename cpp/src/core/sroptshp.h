@@ -62,6 +62,9 @@ public:
 		tr.SetupIdent();
 	}
 
+#ifdef __CUDA_ARCH__
+	GPU_PORTABLE
+#endif
 	void FromLabToLocFrame_Point(TVector3d& P)
 	{
 		if(TransHndl.rep != 0) P = TransHndl.rep->TrPoint_inv(P);

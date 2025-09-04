@@ -1256,7 +1256,8 @@ def main():
 
             #names = ['WB_Slits','WB_Slits_M1_HFM','M1_HFM','After_M1_Before_DCM','DCM_C1','DCM_C2','After_DCM_M2_VFM','M2_VFM','After_M2_Before_SSA1','SSA1']#,'After_SSA1_Before_ZP']#,'Ap_ZP','ZP','Beam_Stop','After_ZP_Before_OSA','OSA','After_OSA_At_Sample']
             #names = ['WB_Slits','WB_Slits_M1_HFM','M1_HFM','After_M1_Before_DCM','After_DCM_M2_VFM','M2_VFM','After_M2_Before_SSA1','SSA1','After_SSA1_Before_ZP','Ap_ZP','ZP','Beam_Stop','After_ZP_Before_OSA','OSA','After_OSA_At_Sample']
-            names = ['S1', 'S1_HCM', 'HCM', 'HCM_Before_DCM', 'DCM_C1', 'DCM_C2', 'After_DCM_HFM', 'HFM', 'HFM_VFM', 'VFM', 'VFM_VPM', 'VPM', 'After_VPM_Before_SSA']#, 'SSA', 'After_SSA_Before_VKB']#, 'VKB', 'After_VKB_Before_HKB', 'HKB', 'After_HKB_Focus']
+            names = ['S1', 'S1_HCM', 'HCM', 'HCM_Before_DCM', 'DCM_C1', 'DCM_C2', 'After_DCM_HFM', 'HFM', 'HFM_VFM', 'VFM', 'VFM_VPM', 'VPM', 'After_VPM_Before_SSA', 'SSA', 'After_SSA_Before_VKB', 'VKB', 'After_VKB_Before_HKB', 'HKB', 'After_HKB_Focus']
+                    #[  0,        1,     2,                3,        4,        5,               6,     7,         8,(9,10),        11,    12,                     13,    14,                     15,    16,                     17,    18,                19]
             op = set_optics(v, names, want_final_propagation=False)
             #op = set_optics(v, names, want_final_propagation=True)
 

@@ -386,11 +386,11 @@ template <typename T, typename T2> __global__ void RepairSignAndRotateDataAfter2
 
     if (ix < HalfNx && iy < HalfNy) 
     {
-        float sx0 = 1.f - 2.f * (ix % 2);
-        float sy0 = 1.f - 2.f * (iy % 2);
-        float sx1 = 1.f - 2.f * ((HalfNx + ix) % 2);
-        float sy1 = 1.f - 2.f * ((HalfNy + iy) % 2);
-        
+        float sx0 = (ix % 2) == 0 ? 1.f : -1.f;
+        float sy0 = (iy % 2) == 0 ? 1.f : -1.f;
+        float sx1 = (HalfNx + ix) % 2 == 0 ? 1.f : -1.f;
+        float sy1 = (HalfNy + iy) % 2 == 0 ? 1.f : -1.f;
+
         float s1 = sx0 * sy0 * Mult;
         float s2 = sx1 * sy1 * Mult;
         float s3 = sx1 * sy0 * Mult;

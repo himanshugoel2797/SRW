@@ -428,6 +428,10 @@ public:
 #ifdef _OFFLOAD_GPU //HG04122023
 	GPU_PORTABLE
 #endif
+	inline static void CosAndSinPi(double, float&, float&);
+#ifdef _OFFLOAD_GPU //HG04122023
+	GPU_PORTABLE
+#endif
 	inline void CosAndSin(double, float&, float&);
 	inline void FindLowestAndUppestPoints(TVector3d&, TVector3d*, int, int&, int&);
 	inline void ReflectVect(TVector3d& N, TVector3d& V);
@@ -587,7 +591,16 @@ inline void srTGenOptElem::SetupInterpolAux02(srTInterpolAuxF* pF, srTInterpolAu
 	pA->Ax2z0 = (pF->f01 + pF->f21 - 2*pF->f11)*pC->cAx2z0;
 
 	//pA->Ax2z1 = (2*(-pF->f00 + pF->f13 - pF->f20) - 3*(pF->f21 + pF->f01) + 6*(pF->f02 + pF->f11 + pF->f22) + 4*pF->f10 - 12*pF->f12 - pF->f23 - pF->f03)*pC->cAx2z1;
-	pA->Ax2z1 = fma(2.0f, (-pF->f00 + pF->f13 - pF->f20), fma(-3.0f, (pF->f21 + pF->f01), +6*(pF->f02 + pF->f11 + pF->f22) + 4*pF->f10 - 12*pF->f12 - pF->f23 - pF->f03))*pC->cAx2z1;
+	pA->Ax2z1 = pC->cAx2z1 * (
+		6*(pF->f02 + pF->f11 + pF->f22) 
+		+ 4*pF->f10 
+		- 12*pF->f12 
+		- 3*(pF->f21 + pF->f01) 
+		+ 2*(-pF->f00 + pF->f13 - pF->f20) 
+		- pF->f23 
+		- pF->f03
+	);
+
 
 	pA->Ax2z2 = (pF->f00 + pF->f02 + pF->f22 + pF->f20 - 2*(pF->f01 + pF->f10 + pF->f12 + pF->f21) + 4*pF->f11)*pC->cAx2z2;
 	pA->Ax2z3 = (-pF->f00 + pF->f03 - pF->f20 + pF->f23 + 3*(pF->f01 - pF->f02 + pF->f21 - pF->f22) + 2*(pF->f10 - pF->f13) + 6*(pF->f12 - pF->f11))*pC->cAx2z3;
@@ -629,13 +642,20 @@ inline void srTGenOptElem::SetupInterpolAux02_LowOrder1D(srTInterpolAuxF_1D* pF,
 
 inline void srTGenOptElem::InterpolF(srTInterpolAux02* A, double x, double z, float* F, int Offset)
 {
-	double xE2 = x*x, xz = x*z, zE2 = z*z;
-	double xE3 = xE2*x, xE2z = xE2*z, xzE2 = x*zE2, zE3 = zE2*z, xE2zE2 = xE2*zE2;
-	double xE3z = xE3*z, xE3zE2 = xE3*zE2, xE3zE3 = xE3*zE3, xE2zE3 = xE2*zE3, xzE3 = x*zE3;
+	//double xE2 = x*x, xz = x*z, zE2 = z*z;
+	//double xE3 = xE2*x, xE2z = xE2*z, xzE2 = x*zE2, zE3 = zE2*z, xE2zE2 = xE2*zE2;
+	//double xE3z = xE3*z, xE3zE2 = xE3*zE2, xE3zE3 = xE3*zE3, xE2zE3 = xE2*zE3, xzE3 = x*zE3;
 	srTInterpolAux02* tA = A + Offset;
 	for(int i=0; i<4-Offset; i++)
 	{
-		F[i + Offset] = (float)(tA->Ax3z3*xE3zE3 + tA->Ax3z2*xE3zE2 + tA->Ax3z1*xE3z + tA->Ax3z0*xE3 + tA->Ax2z3*xE2zE3 + tA->Ax2z2*xE2zE2 + tA->Ax2z1*xE2z + tA->Ax2z0*xE2 + tA->Ax1z3*xzE3 + tA->Ax1z2*xzE2 + tA->Ax1z1*xz + tA->Ax1z0*x + tA->Ax0z3*zE3 + tA->Ax0z2*zE2 + tA->Ax0z1*z + tA->Ax0z0);
+		//F[i + Offset] = (float)(tA->Ax3z3*xE3zE3 + tA->Ax3z2*xE3zE2 + tA->Ax3z1*xE3z + tA->Ax3z0*xE3 + tA->Ax2z3*xE2zE3 + tA->Ax2z2*xE2zE2 + tA->Ax2z1*xE2z + tA->Ax2z0*xE2 + tA->Ax1z3*xzE3 + tA->Ax1z2*xzE2 + tA->Ax1z1*xz + tA->Ax1z0*x + tA->Ax0z3*zE3 + tA->Ax0z2*zE2 + tA->Ax0z1*z + tA->Ax0z0);
+
+		double x3 = (z*(z*(tA->Ax3z3*z + tA->Ax3z2) + tA->Ax3z1) + tA->Ax3z0); 
+		double x2 = (z*(z*(tA->Ax2z3*z + tA->Ax2z2) + tA->Ax2z1) + tA->Ax2z0);
+		double x1 = (z*(z*(tA->Ax1z3*z + tA->Ax1z2) + tA->Ax1z1) + tA->Ax1z0);
+		double x0 = (z*(z*(tA->Ax0z3*z + tA->Ax0z2) + tA->Ax0z1) + tA->Ax0z0);
+
+		F[i + Offset] = (float)(x*(x*(x*x3 + x2) + x1) + x0);
 		tA++;
 	}
 }
@@ -662,23 +682,7 @@ inline void srTGenOptElem::InterpolFI(srTInterpolAux02* A, double x, double z, f
 	double xE3 = xE2*x, xE2z = xE2*z, xzE2 = x*zE2, zE3 = zE2*z, xE2zE2 = xE2*zE2;
 	double xE3z = xE3*z, xE3zE2 = xE3*zE2, xE3zE3 = xE3*zE3, xE2zE3 = xE2*zE3, xzE3 = x*zE3;
 	srTInterpolAux02* tA = A + Offset;
-//	double Buf = tA->Ax3z3*xE3zE3 + tA->Ax3z2*xE3zE2 + tA->Ax3z1*xE3z + tA->Ax3z0*xE3 + tA->Ax2z3*xE2zE3 + tA->Ax2z2*xE2zE2 + tA->Ax2z1*xE2z + tA->Ax2z0*xE2 + tA->Ax1z3*xzE3 + tA->Ax1z2*xzE2 + tA->Ax1z1*xz + tA->Ax1z0*x + tA->Ax0z3*zE3 + tA->Ax0z2*zE2 + tA->Ax0z1*z + tA->Ax0z0;
-	double Buf = tA->Ax0z0;
-Buf = fma(tA->Ax3z3, xE3zE3, Buf);
-Buf = fma(tA->Ax3z2, xE3zE2, Buf);
-Buf = fma(tA->Ax3z1, xE3z, Buf);
-Buf = fma(tA->Ax3z0, xE3, Buf);
-Buf = fma(tA->Ax2z3, xE2zE3, Buf);
-Buf = fma(tA->Ax2z2, xE2zE2, Buf);
-Buf = fma(tA->Ax2z1, xE2z, Buf);
-Buf = fma(tA->Ax2z0, xE2, Buf);
-Buf = fma(tA->Ax1z3, xzE3, Buf);
-Buf = fma(tA->Ax1z2, xzE2, Buf);
-Buf = fma(tA->Ax1z1, xz, Buf);
-Buf = fma(tA->Ax1z0, x, Buf);
-Buf = fma(tA->Ax0z3, zE3, Buf);
-Buf = fma(tA->Ax0z2, zE2, Buf);
-Buf = fma(tA->Ax0z1, z, Buf);
+	double Buf = tA->Ax3z3*xE3zE3 + tA->Ax3z2*xE3zE2 + tA->Ax3z1*xE3z + tA->Ax3z0*xE3 + tA->Ax2z3*xE2zE3 + tA->Ax2z2*xE2zE2 + tA->Ax2z1*xE2z + tA->Ax2z0*xE2 + tA->Ax1z3*xzE3 + tA->Ax1z2*xzE2 + tA->Ax1z1*xz + tA->Ax1z0*x + tA->Ax0z3*zE3 + tA->Ax0z2*zE2 + tA->Ax0z1*z + tA->Ax0z0;
 	*(F + Offset) = (float)((Buf > 0.)? Buf : 0.);
 }
 
@@ -901,6 +905,98 @@ inline void srTGenOptElem::MultSquareMatrByVect(double** b, double* c, int n, do
 }
 
 //*************************************************************************
+inline void srTGenOptElem::CosAndSinPi(double x, float& Cos, float& Sin)
+{
+    bool flipSign = false;
+    x *= 0.5;
+    double x_int = 0;
+    x = modf(x, &x_int);
+    if (x > 0.5) x -=1.0;
+    else if (x < -0.5) x += 1.0;
+    if (x < -0.25 || x > 0.25) flipSign = true;
+    //printf("%.10f\r\n", x);
+    x = fmax(fmin(x, 0.5 - x), -0.5 - x);
+    //printf("%.10f\r\n", x);
+
+    double cos_coeffs[] = {
+		//Order 20
+       // 0.99999999999999999999999147710326932,
+       //-19.7392088021787172376359678928319532,
+       // 64.9393940226682914698223657630719327,
+       //-85.4568172066937224576379424120240736,
+       // 60.2446413718759843864392543849185206,
+       //-26.4262567833238940511661820566269929,
+       //  7.90353636896598002129119927354601458,
+       // -1.71439064070099719011216697690710745,
+       //  0.282004615014669515429128968641374382,
+       // -0.0363666671046050444380288068438178429,
+       //+ 0.00367035423724807832643664170925383103,
+
+	   //Order 10 - Min. Rel. Err.
+        0.99999999901810067632218592152414676,
+        -19.7392080320548995682599111266827624,
+        64.9392878245787538584194003810854251,
+        -85.4511616308164044967465654262107341,
+        60.1029288012462159679724965251436792,
+        -24.7337944595523781372950725036124394,
+
+	   //Order 10 - Min. Abs. Err.
+	   0.99999999978065168218442462303648381,
+	   -19.739208548913522979242130820260143,
+	   64.9393466294885804834208034156025726,
+	   -85.4535716268352565215233341354096818,
+	   60.1440150929656073143633201490654729,
+	   -24.9822378062077400002138086395123456,
+    };
+
+    double sin_coeffs[] = {
+		//Order 21
+        //6.2831853071795864769252599563031966,
+        //-41.3417022403997602339306576356599242,
+        //81.6052492760750541876825752642530684,
+        //-76.7058597530613828230848159062962774,
+        //42.0586939448973310146925362491739518,
+        //-15.0946425768019873115405581943853673,
+        //3.81995258396875378359254797464255721,
+        //-0.718122277631009308859760818550070395,
+        //0.104228729786475701384518698659704212,
+        //-0.0120267195143608644969507692496160832,
+        //+ 0.00109963715657365408162883154551737462,
+
+		//Order 11 - Min. Rel. Err
+        6.28318530704669073655382220589738758,
+       -41.3417020969260358562295154399161189,
+        81.6052236901305879070487996745527555,
+       -76.7041702522234536443141173678808329,
+        42.0077971361087965477414621069542974,
+       -14.3813907433071852719484446678883883,
+
+		//Order 11 - Min Abs. Err
+		6.28318530648750555750168039633888658,
+		-41.3417019297726782752642081499228641,
+		81.605209431076456455082671035413192,
+		-76.7036678275326660847999194353563935,
+		41.9999898253486435026302929016540341,
+		-14.3370246790313375969687637066849494,
+    };
+
+    const int N = 5;
+
+	double x2 = x*x;
+	double res0 = cos_coeffs[N];
+	double res1 = sin_coeffs[N];
+	for (int i = N-1; i >= 0; i--)
+	{
+		res0 = cos_coeffs[i] + res0 * x2;
+		res1 = sin_coeffs[i] + res1 * x2;
+	}
+    res1 = x * res1;
+    if (flipSign) res0 = -res0;
+
+    Cos = res0;
+    Sin = res1;
+}
+
 
 inline void srTGenOptElem::CosAndSin(double x, float& Cos, float& Sin)
 {
