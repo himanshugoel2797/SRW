@@ -737,8 +737,8 @@ int srTGenOptElem::UpdateGenRadStructSliceConstE_Meth_0(srTSRWRadStructAccessDat
 //*************************************************************************
 
 int srTGenOptElem::UpdateGenRadStructSliceConstE_Meth_2(srTSRWRadStructAccessData* pRadDataSliceConstE, int ie, srTSRWRadStructAccessData* pRadAccessData)
-{//To implement:
- // Undate the Electric Field of the pRadAccessData from the slice ConstE.
+{// TODO: Implement UpdateGenRadStructSliceConstE_Meth_2
+ // Update the Electric Field of the pRadAccessData from the slice ConstE.
 // The slice can have different dimensions over nx and nz, compared to general pRadAccessData. 
 // In such a case, maximum nx and nz (over Range and Resolution) are taken and Resizing is performed on pRadAccessData.
 // No loss of data / precision here.

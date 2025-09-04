@@ -37,9 +37,9 @@ void srTGenTrjDat::CompTrjCrdVelRK(double sStart, double sEnd, long long ns, dou
 
 	double sStep = (ns <= 1)? 0 : (sEnd - sStart)/(ns - 1);
 
-	const double chElec = 1.602176462e-19; //[C]
-	const double mElec = 9.10938188e-31; //[kg]
-	const double cLight = 2.99792458e+08; //[m/s]
+	const double chElec = 1.602176462e-19; //[C] // TODO: Use srTCalcUtils::ChargeEl
+	const double mElec = 9.10938188e-31; //[kg] // TODO: Use srTCalcUtils::MassEl_kg
+	const double cLight = 2.99792458e+08; //[m/s] // TODO: Use srTCalcUtils::SpeedLight
 	//double gamElec = EbmDat.Gamma;
 	//m_Mult2ndDer = -chElec/(mElec*cLight*EbmDat.Gamma*sqrt(1. - 1./(EbmDat.Gamma*EbmDat.Gamma)));
 	m_Mult2ndDerRK = EbmDat.nQ*chElec/(mElec*cLight*EbmDat.Gamma);
