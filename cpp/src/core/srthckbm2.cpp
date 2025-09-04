@@ -62,7 +62,7 @@ srTSRWRadStructAccessData* srTRadIntThickBeam::CreateNewRadStructWithConstParams
     //double hSt = pStokes->xStart;
     //int hN = pStokes->nx;
     //double hFi = hSt + xRangeStokes;
-	
+
 	double zStep = pStokes->zStep;
 	if(zStep <= 0) zStep = HalfExtraRangeZ/NpMin;
 	double zRangeStokes = (pStokes->nz - 1)*zStep;
@@ -92,7 +92,7 @@ srTSRWRadStructAccessData* srTRadIntThickBeam::CreateNewRadStructWithConstParams
 
 double srTRadIntThickBeam::GetNextElecEnergyFromGausDistrib(srTEbmDat& OrigElecBeam, CGenMathRand& RandGen)
 {
-	if(m_SpareElecEnergyVal > 0) 
+	if(m_SpareElecEnergyVal > 0)
 	{
 		double OutVal = m_SpareElecEnergyVal;
 		m_SpareElecEnergyVal = 0;
@@ -180,7 +180,7 @@ void srTRadIntThickBeam::ComputeTotalStokesDistrViaSingleElec(srTEbmDat* pElecBe
 	if(pMagFldTrUnif == 0) throw NO_MAG_FIELD_DEFINED;
     if((pElecBeam == 0) || (pPrcPar == 0)) throw INCORRECT_PARAMS_SR_COMP;
 	if(pStokes == 0) throw NO_STOKES_STRUCTURE_SUPPLIED;
-	
+
 	srTEbmDat& OrigElecBeam = *pElecBeam;
 	srTEbmDat LocElecBeam(OrigElecBeam);
 	//CRandGen RandGen;
@@ -189,7 +189,7 @@ void srTRadIntThickBeam::ComputeTotalStokesDistrViaSingleElec(srTEbmDat* pElecBe
 	LocElecBeam.SetNewEnergy(GetNextElecEnergyFromGausDistrib(OrigElecBeam, RandGen));
 	srTTrjDat* pTrjDat = (srTTrjDat*)(pMagFldTrUnif->CreateAndSetupNewTrjDat(&LocElecBeam));
 	//gAuxPar.Setup(*pElecBeam);
-	
+
 	srTWfrSmp* pWfrSmp = 0;
 	srTSRWRadStructAccessData* pRad = CreateNewRadStructWithConstParams(pElecBeam, pTrjDat, pStokes, pWfrSmp);
 	CHGenObj hRad(pRad);

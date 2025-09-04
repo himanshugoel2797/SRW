@@ -98,7 +98,7 @@ void srTSRWRadStructAccessData::AuxSetupActions(srTTrjDat* pTrjDat, srTWfrSmp* p
 	SetupXcZcFromElecData();
 	ProcessNxNzForPropag(pWfrSmp, NxNzOversamplingFactor);
 	AllocBaseRadAccordingToNeNxNz();
-  
+
 	AllocStatMom();
 	SetupNonZeroWavefrontLimitsAtCreation();
 }
@@ -162,8 +162,8 @@ srTSRWRadStructAccessData::srTSRWRadStructAccessData(srTWfrSmp* pWfrSmp, bool Al
 
 	Pres = 0; // 0- Coord, 1- Ang.
 	PresT = 0; // 0- Frequency (Photon Energy), 1- Time
-	LengthUnit = 0; // 0- m; 1- mm; 
-	PhotEnergyUnit = 0; // 0- eV; 1- keV; 
+	LengthUnit = 0; // 0- m; 1- mm;
+	PhotEnergyUnit = 0; // 0- eV; 1- keV;
 	ElecFldUnit = 0; // 0- Arb. Units, 1- sqrt(Phot/s/0.1%bw/mm^2)
 }
 
@@ -172,18 +172,18 @@ srTSRWRadStructAccessData::srTSRWRadStructAccessData(srTWfrSmp* pWfrSmp, bool Al
 srTSRWRadStructAccessData::srTSRWRadStructAccessData(SRWLWfr* pWfr, srTTrjDat* pTrjDat, double* precPar)
 {
 	if(pWfr == 0) throw SRWL_INCORRECT_WFR_STRUCT;
-	
+
 	Initialize();
 	InSRWRadPtrs(*pWfr);
 	m_newExtWfrCreateNotAllowed = true; //since new wavefront creation is not implemented in SRWLIB
 
 	//if(pTrjDat != 0) AuxSetupActions2SR(*pWfr, *pTrjDat, precPar);
-	if(pTrjDat != 0) 
+	if(pTrjDat != 0)
 	{
 		double Robs, RobsAbsErr, xElAtYsrc, zElAtYsrc;
 		int res = 0;
 		if(res = FindAverageDistanceToSource(*pTrjDat, Robs, RobsAbsErr, xElAtYsrc, zElAtYsrc, precPar)) throw res;
-		
+
 		//arPrecPar = array('d', [meth, relPrec, zStartInteg, zEndInteg, npTraj, 0, sampFactNxNyForProp])
 		double NxNzOversamplingFactor = precPar[6];
 		AuxSetupActionsArbSrc(*pWfr, Robs, RobsAbsErr, xElAtYsrc, zElAtYsrc, NxNzOversamplingFactor);
@@ -195,7 +195,7 @@ srTSRWRadStructAccessData::srTSRWRadStructAccessData(SRWLWfr* pWfr, srTTrjDat* p
 srTSRWRadStructAccessData::srTSRWRadStructAccessData(SRWLWfr* pWfr, srTGsnBeam* pGsnBm, double* precPar)
 {
 	if(pWfr == 0) throw SRWL_INCORRECT_WFR_STRUCT;
-	
+
 	Initialize();
 	InSRWRadPtrs(*pWfr);
 	m_newExtWfrCreateNotAllowed = true; //since new wavefront creation is not implemented in SRWLIB
@@ -223,7 +223,7 @@ srTSRWRadStructAccessData::srTSRWRadStructAccessData(SRWLWfr* pWfr, srTGsnBeam* 
 srTSRWRadStructAccessData::srTSRWRadStructAccessData(SRWLWfr* pWfr, double longPosSrc, double* precPar)
 {//Used for setting up spherical wave
 	if(pWfr == 0) throw SRWL_INCORRECT_WFR_STRUCT;
-	
+
 	Initialize();
 	InSRWRadPtrs(*pWfr);
 	m_newExtWfrCreateNotAllowed = true; //since new wavefront creation is not implemented in SRWLIB
@@ -329,7 +329,7 @@ void srTSRWRadStructAccessData::AuxSetupActionsArbSrc(SRWLWfr& srwlWfr, double R
 	//double from_s0ToObsPoint = srwlWfr.zStart - srwlWfr.partBeam.partStatMom1.z;
 	double from_s0ToObsPoint = srwlWfr.mesh.zStart - srwlWfr.partBeam.partStatMom1.z;
 	InitialSetupOf4x4PropMatr(from_s0ToObsPoint);
-	
+
 	//double Robs, RobsAbsErr, xElAtYsrc, zElAtYsrc;
 	//int res = 0;
 	//if(res = FindAverageDistanceToSource(trjDat, Robs, RobsAbsErr, xElAtYsrc, zElAtYsrc, precPar)) throw res;
@@ -340,10 +340,10 @@ void srTSRWRadStructAccessData::AuxSetupActionsArbSrc(SRWLWfr& srwlWfr, double R
 	zc = zElAtYsrc;
 
 	//to conserve these data in view of eventual resizing:
-	srwlWfr.Rx = RobsX; 
+	srwlWfr.Rx = RobsX;
 	srwlWfr.dRx = RobsXAbsErr;
 	srwlWfr.xc = xc;
-	srwlWfr.Ry = RobsZ; 
+	srwlWfr.Ry = RobsZ;
 	srwlWfr.dRy = RobsZAbsErr;
 	srwlWfr.yc = zc;
 
@@ -362,11 +362,11 @@ void srTSRWRadStructAccessData::AuxSetupActionsArbSrc(SRWLWfr& srwlWfr, double R
 			srwlWfr.mesh.nx = nxNew; srwlWfr.mesh.ny = nzNew;
 			//OutSRWRadPtrs(srwlWfr);
 			//(*pgWfrExtModifFunc)(2, pRadInData, 0);
-			if(gpWfrModifFunc != 0) 
+			if(gpWfrModifFunc != 0)
 			{//wavefront resizing from external application!
-				if((*gpWfrModifFunc)(2, &srwlWfr, 0)) throw SRWL_WFR_EXT_MODIF_FAILED; 
+				if((*gpWfrModifFunc)(2, &srwlWfr, 0)) throw SRWL_WFR_EXT_MODIF_FAILED;
 			}
-			else throw SRWL_WFR_EXT_FUNC_NOT_DEFINED; 
+			else throw SRWL_WFR_EXT_FUNC_NOT_DEFINED;
 
 			InSRWRadPtrs(srwlWfr);
 		}
@@ -381,7 +381,7 @@ void srTSRWRadStructAccessData::AuxSetupActions2SR(SRWLWfr& srwlWfr, srTTrjDat& 
 	yStart = srwlWfr.zStart;
 	double from_s0ToObsPoint = srwlWfr.zStart - srwlWfr.partBeam.partStatMom1.z;
 	InitialSetupOf4x4PropMatr(from_s0ToObsPoint);
-	
+
 	double Robs, RobsAbsErr, xElAtYsrc, zElAtYsrc;
 	int res = 0;
 	if(res = FindAverageDistanceToSource(trjDat, Robs, RobsAbsErr, xElAtYsrc, zElAtYsrc, precPar)) throw res;
@@ -392,10 +392,10 @@ void srTSRWRadStructAccessData::AuxSetupActions2SR(SRWLWfr& srwlWfr, srTTrjDat& 
 	zc = zElAtYsrc;
 
 	//to conserve these data in view of eventual resizing:
-	srwlWfr.Rx = RobsX; 
+	srwlWfr.Rx = RobsX;
 	srwlWfr.dRx = RobsXAbsErr;
 	srwlWfr.xc = xc;
-	srwlWfr.Ry = RobsZ; 
+	srwlWfr.Ry = RobsZ;
 	srwlWfr.dRy = RobsZAbsErr;
 	srwlWfr.yc = zc;
 
@@ -412,11 +412,11 @@ void srTSRWRadStructAccessData::AuxSetupActions2SR(SRWLWfr& srwlWfr, srTTrjDat& 
 			srwlWfr.nx = nxNew; srwlWfr.ny = nzNew;
 			//OutSRWRadPtrs(srwlWfr);
 			//(*pgWfrExtModifFunc)(2, pRadInData, 0);
-			if(gpWfrModifFunc != 0) 
+			if(gpWfrModifFunc != 0)
 			{//wavefront resizing from external application!
-				if((*gpWfrModifFunc)(2, &srwlWfr, 0)) throw SRWL_WFR_EXT_MODIF_FAILED; 
+				if((*gpWfrModifFunc)(2, &srwlWfr, 0)) throw SRWL_WFR_EXT_MODIF_FAILED;
 			}
-			else throw SRWL_WFR_EXT_FUNC_NOT_DEFINED; 
+			else throw SRWL_WFR_EXT_FUNC_NOT_DEFINED;
 
 			InSRWRadPtrs(srwlWfr);
 		}
@@ -445,8 +445,8 @@ void srTSRWRadStructAccessData::InSRWRadPtrs(srTSRWRadInData* p, bool DataShould
 	pBaseRadX = p->pBaseRadX; pBaseRadZ = p->pBaseRadZ;
 	wRad = p->wRad; wRadX = p->wRadX; wRadZ = p->wRadZ;
 	hStateRadX = p->hStateRadX; hStateRadZ = p->hStateRadZ;
-	eStep = p->eStep; eStart = p->eStart; 
-	xStep = p->xStep; xStart = p->xStart; 
+	eStep = p->eStep; eStart = p->eStart;
+	xStep = p->xStep; xStart = p->xStart;
 	zStep = p->zStep; zStart = p->zStart;
 	ne = p->ne; nx = p->nx; nz = p->nz;
 
@@ -506,20 +506,20 @@ void srTSRWRadStructAccessData::InSRWRadPtrs(SRWLWfr& srwlWfr)
 	hStateRadX = 0; hStateRadZ = 0;
 
 	//eStart = srwlWfr.eStart;
-	//eStep = (srwlWfr.ne <= 1)? 0 : (srwlWfr.eFin - srwlWfr.eStart)/(srwlWfr.ne - 1); 
-	//xStart = srwlWfr.xStart; 
-	//xStep = (srwlWfr.nx <= 1)? 0 : (srwlWfr.xFin - srwlWfr.xStart)/(srwlWfr.nx - 1); 
+	//eStep = (srwlWfr.ne <= 1)? 0 : (srwlWfr.eFin - srwlWfr.eStart)/(srwlWfr.ne - 1);
+	//xStart = srwlWfr.xStart;
+	//xStep = (srwlWfr.nx <= 1)? 0 : (srwlWfr.xFin - srwlWfr.xStart)/(srwlWfr.nx - 1);
 	//zStart = srwlWfr.yStart;
-	//zStep = (srwlWfr.ny <= 1)? 0 : (srwlWfr.yFin - srwlWfr.yStart)/(srwlWfr.ny - 1); 
+	//zStep = (srwlWfr.ny <= 1)? 0 : (srwlWfr.yFin - srwlWfr.yStart)/(srwlWfr.ny - 1);
 	//ne = srwlWfr.ne; nx = srwlWfr.nx; nz = srwlWfr.ny;
 	//yStart = srwlWfr.zStart; //OC21092011
 
 	SRWLStructRadMesh &mesh = srwlWfr.mesh;
 	eStart = mesh.eStart;
-	eStep = (mesh.ne <= 1)? 0 : (mesh.eFin - mesh.eStart)/(mesh.ne - 1); 
+	eStep = (mesh.ne <= 1)? 0 : (mesh.eFin - mesh.eStart)/(mesh.ne - 1);
 
-	//xStart = mesh.xStart; 
-	//xStep = (mesh.nx <= 1)? 0 : (mesh.xFin - mesh.xStart)/(mesh.nx - 1); 
+	//xStart = mesh.xStart;
+	//xStep = (mesh.nx <= 1)? 0 : (mesh.xFin - mesh.xStart)/(mesh.nx - 1);
 	if(mesh.nx <= 1) //OC170615
 	{
 		xStart = 0.5*(mesh.xStart + mesh.xFin);
@@ -527,12 +527,12 @@ void srTSRWRadStructAccessData::InSRWRadPtrs(SRWLWfr& srwlWfr)
 	}
 	else
 	{
-		xStart = mesh.xStart; 
-		xStep = (mesh.xFin - mesh.xStart)/(mesh.nx - 1); 
+		xStart = mesh.xStart;
+		xStep = (mesh.xFin - mesh.xStart)/(mesh.nx - 1);
 	}
 
 	//zStart = mesh.yStart;
-	//zStep = (mesh.ny <= 1)? 0 : (mesh.yFin - mesh.yStart)/(mesh.ny - 1); 
+	//zStep = (mesh.ny <= 1)? 0 : (mesh.yFin - mesh.yStart)/(mesh.ny - 1);
 	if(mesh.ny <= 1) //OC170615
 	{
 		zStart = 0.5*(mesh.yStart + mesh.yFin);
@@ -541,7 +541,7 @@ void srTSRWRadStructAccessData::InSRWRadPtrs(SRWLWfr& srwlWfr)
 	else
 	{
 		zStart = mesh.yStart;
-		zStep = (mesh.yFin - mesh.yStart)/(mesh.ny - 1); 
+		zStep = (mesh.yFin - mesh.yStart)/(mesh.ny - 1);
 	}
 
 	ne = mesh.ne; nx = mesh.nx; nz = mesh.ny;
@@ -566,8 +566,8 @@ void srTSRWRadStructAccessData::InSRWRadPtrs(SRWLWfr& srwlWfr)
 	ElecFldAngUnit = srwlWfr.unitElFldAng; //OC20112017
 
 	avgPhotEn = srwlWfr.avgPhotEn;
-	LengthUnit = 0; // 0- m; 1- mm; 
-	PhotEnergyUnit = 0; // 0- eV; 1- keV; 
+	LengthUnit = 0; // 0- m; 1- mm;
+	PhotEnergyUnit = 0; // 0- eV; 1- keV;
 
 	avgT = (PresT == 1)? (eStart + 0.5*eStep*(ne - 1)) : 0; //OC101015 //???
 
@@ -640,8 +640,8 @@ void srTSRWRadStructAccessData::OutSRWRadPtrs(srTSRWRadInData* p)
 	p->pBaseRadX = pBaseRadX; p->pBaseRadZ = pBaseRadZ;
 	p->wRad = wRad; p->wRadX = wRadX; p->wRadZ = wRadZ;
 	p->hStateRadX = hStateRadX; p->hStateRadZ = hStateRadZ;
-	p->eStep = eStep; p->eStart = eStart; 
-	p->xStep = xStep; p->xStart = xStart; 
+	p->eStep = eStep; p->eStart = eStart;
+	p->xStep = xStep; p->xStart = xStart;
 	p->zStep = zStep; p->zStart = zStart;
 	p->ne = ne; p->nx = nx; p->nz = nz;
 
@@ -690,16 +690,16 @@ void srTSRWRadStructAccessData::OutSRWRadPtrs(SRWLWfr& srwlWfr)
 	srwlWfr.arExAux = (char*)pBaseRadXaux; srwlWfr.arEyAux = (char*)pBaseRadZaux; //OC151115
 	//p->wRad = wRad; p->wRadX = wRadX; p->wRadZ = wRadZ;
 	//p->hStateRadX = hStateRadX; p->hStateRadZ = hStateRadZ;
-	
-	//srwlWfr.eStart = eStart; srwlWfr.eFin = eStart + eStep*(ne - 1); 
-	//srwlWfr.xStart = xStart; srwlWfr.xFin = xStart + xStep*(nx - 1); 
-	//srwlWfr.yStart = zStart; srwlWfr.yFin = zStart + zStep*(nz - 1); 
+
+	//srwlWfr.eStart = eStart; srwlWfr.eFin = eStart + eStep*(ne - 1);
+	//srwlWfr.xStart = xStart; srwlWfr.xFin = xStart + xStep*(nx - 1);
+	//srwlWfr.yStart = zStart; srwlWfr.yFin = zStart + zStep*(nz - 1);
 	//srwlWfr.ne = ne; srwlWfr.nx = nx; srwlWfr.ny = nz;
 
 	SRWLStructRadMesh &mesh = srwlWfr.mesh;
-	mesh.eStart = eStart; mesh.eFin = eStart + eStep*(ne - 1); 
-	mesh.xStart = xStart; mesh.xFin = xStart + xStep*(nx - 1); 
-	mesh.yStart = zStart; mesh.yFin = zStart + zStep*(nz - 1); 
+	mesh.eStart = eStart; mesh.eFin = eStart + eStep*(ne - 1);
+	mesh.xStart = xStart; mesh.xFin = xStart + xStep*(nx - 1);
+	mesh.yStart = zStart; mesh.yFin = zStart + zStep*(nz - 1);
 	mesh.ne = ne; mesh.nx = nx; mesh.ny = nz;
 
 	srwlWfr.Rx = RobsX; srwlWfr.Ry = RobsZ;
@@ -720,7 +720,7 @@ void srTSRWRadStructAccessData::OutSRWRadPtrs(SRWLWfr& srwlWfr)
 
 	srwlWfr.unitElFld = ElecFldUnit;
 	srwlWfr.avgPhotEn = avgPhotEn;
-	
+
 	OutElectronBeamStruct(srwlWfr.partBeam);
 	//p->wElecBeam = wElecBeam;
 	//p->hStateElecBeam = hStateElecBeam;
@@ -740,9 +740,9 @@ void srTSRWRadStructAccessData::OutSRWRadPtrs(SRWLWfr& srwlWfr)
 	//double *tOutMomX = srwlWfr.arMomX, *tOutMomY = srwlWfr.arMomY;
 	//bool momXareDefined = (srwlWfr.arMomX != 0);
 	//bool momYareDefined = (srwlWfr.arMomY != 0);
-	//for(int i=0; i<LenMomComp; i++) 
+	//for(int i=0; i<LenMomComp; i++)
 	//{
-	//	if(momXareDefined) *(tOutMomX++) = *(tMomX++); 
+	//	if(momXareDefined) *(tOutMomX++) = *(tMomX++);
 	//	if(momYareDefined) *(tOutMomY++) = *(tMomZ++);
 	//}
 	//OC130311
@@ -757,12 +757,12 @@ void srTSRWRadStructAccessData::OutSRWRadPtrs(SRWLWfr& srwlWfr)
 //*************************************************************************
 
 //int srTSRWRadStructAccessData::ModifyWfrNeNxNz(char PolarizComp)
-int srTSRWRadStructAccessData::ModifyWfrNeNxNz(char PolarizComp, bool backupIsReq) 
+int srTSRWRadStructAccessData::ModifyWfrNeNxNz(char PolarizComp, bool backupIsReq)
 {//OC131115
-#if defined(_SRWDLL) || defined(SRWLIB_STATIC) || defined(SRWLIB_SHARED) 
+#if defined(_SRWDLL) || defined(SRWLIB_STATIC) || defined(SRWLIB_SHARED)
 	int res = 0;
 	if(BaseRadWasEmulated) return ReAllocBaseRadAccordingToNeNxNz(PolarizComp);
-	
+
 	if(pgWfrExtModifFunc != 0)
 	{//to be removed!!
 		srTSRWRadInData AuxRadInData;
@@ -796,16 +796,16 @@ int srTSRWRadStructAccessData::ModifyWfrNeNxNz(char PolarizComp, bool backupIsRe
 
 //*************************************************************************
 
-int srTSRWRadStructAccessData::AllocExtIntArray(char type, char dep, char*& pcAlloc) 
+int srTSRWRadStructAccessData::AllocExtIntArray(char type, char dep, char*& pcAlloc)
 {//OC18082018
-#if defined(SRWLIB_STATIC) || defined(SRWLIB_SHARED) 
-	
+#if defined(SRWLIB_STATIC) || defined(SRWLIB_SHARED)
+
 	pcAlloc = 0;
 	if(gpAllocArrayFunc != 0)
 	{
 		char typeAr = 'f';
 		if(type == 4) typeAr = 'd'; //single-e rad. phase
-	
+
 		long long np = GetIntNumPts(dep);
 		if(np > 0)
 		{
@@ -822,7 +822,7 @@ int srTSRWRadStructAccessData::AllocExtIntArray(char type, char dep, char*& pcAl
 
 int srTSRWRadStructAccessData::DeleteWfrBackupData(char PolarizComp)
 {//OC131115
-#if defined(SRWLIB_STATIC) || defined(SRWLIB_SHARED) 
+#if defined(SRWLIB_STATIC) || defined(SRWLIB_SHARED)
 
 	if((gpWfrModifFunc != 0) && (m_pExtWfr != 0))
 	{
@@ -844,7 +844,7 @@ int srTSRWRadStructAccessData::DeleteWfrBackupData(char PolarizComp)
 int srTSRWRadStructAccessData::GetWfrStructNames(srTSRWRadStructWaveNames& Names)
 {
 //#ifdef _SRWDLL
-#if defined(_SRWDLL) || defined(SRWLIB_STATIC) || defined(SRWLIB_SHARED) 
+#if defined(_SRWDLL) || defined(SRWLIB_STATIC) || defined(SRWLIB_SHARED)
 	if(BaseRadWasEmulated) return 0;
 	if(pgWfrExtModifFunc == 0) return SRWL_WFR_EXT_FUNC_NOT_DEFINED;
 
@@ -854,12 +854,12 @@ int srTSRWRadStructAccessData::GetWfrStructNames(srTSRWRadStructWaveNames& Names
 	if((*pgWfrExtModifFunc)(4, &AuxRadInData, 0)) return SRWL_WFR_EXT_MODIF_FAILED;
 
 	strcpy(Names.NameRad, AuxRadInData.NameRad);
-	strcpy(Names.NameRadX, AuxRadInData.NameRadX); 
+	strcpy(Names.NameRadX, AuxRadInData.NameRadX);
 	strcpy(Names.NameRadZ, AuxRadInData.NameRadZ);
 	strcpy(Names.NameElecBeam, AuxRadInData.NameElecBeam);
 	strcpy(Names.NameTrj, AuxRadInData.NameTrj);
 	strcpy(Names.Name4x4PropMatr, AuxRadInData.Name4x4PropMatr);
-	strcpy(Names.NameMomX, AuxRadInData.NameMomX); 
+	strcpy(Names.NameMomX, AuxRadInData.NameMomX);
 	strcpy(Names.NameMomZ, AuxRadInData.NameMomZ);
 	strcpy(Names.NameWfrAuxData, AuxRadInData.NameWfrAuxData);
 	return 0;
@@ -875,7 +875,7 @@ int srTSRWRadStructAccessData::GetWfrStructNames(srTSRWRadStructWaveNames& Names
 int srTSRWRadStructAccessData::DeleteWfrStructWaves(srTSRWRadStructWaveKeys& RadKeys)
 {
 //#ifdef _SRWDLL
-#if defined(_SRWDLL) || defined(SRWLIB_STATIC) || defined(SRWLIB_SHARED) 
+#if defined(_SRWDLL) || defined(SRWLIB_STATIC) || defined(SRWLIB_SHARED)
 	if(BaseRadWasEmulated) return 0;
 	if(pgWfrExtModifFunc == 0) return SRWL_WFR_EXT_FUNC_NOT_DEFINED;
 
@@ -894,7 +894,7 @@ int srTSRWRadStructAccessData::DeleteWfrStructWaves(srTSRWRadStructWaveKeys& Rad
 	AuxRadInData.wWfrAuxData_ = RadKeys.wWfrAuxData_;
 
 	if((*pgWfrExtModifFunc)(0, &AuxRadInData, 0)) return SRWL_WFR_EXT_MODIF_FAILED;
-    
+
 	InSRWRadPtrs(&AuxRadInData);
 	return 0;
 #endif
@@ -909,7 +909,7 @@ int srTSRWRadStructAccessData::DeleteWfrStructWaves(srTSRWRadStructWaveKeys& Rad
 int srTSRWRadStructAccessData::RenameWfrStruct(srTSRWRadStructWaveNames& Names)
 {
 //#ifdef _SRWDLL
-#if defined(_SRWDLL) || defined(SRWLIB_STATIC) || defined(SRWLIB_SHARED) 
+#if defined(_SRWDLL) || defined(SRWLIB_STATIC) || defined(SRWLIB_SHARED)
 	if(BaseRadWasEmulated) return 0;
 	if(pgWfrExtModifFunc == 0) return SRWL_WFR_EXT_FUNC_NOT_DEFINED;
 
@@ -919,12 +919,12 @@ int srTSRWRadStructAccessData::RenameWfrStruct(srTSRWRadStructWaveNames& Names)
 	if(res = (*pgWfrExtModifFunc)(4, &AuxRadInData, 0)) return SRWL_WFR_EXT_MODIF_FAILED;
 
 	strcpy(AuxRadInData.NameRad, Names.NameRad);
-	strcpy(AuxRadInData.NameRadX, Names.NameRadX); 
+	strcpy(AuxRadInData.NameRadX, Names.NameRadX);
 	strcpy(AuxRadInData.NameRadZ, Names.NameRadZ);
 	strcpy(AuxRadInData.NameElecBeam, Names.NameElecBeam);
 	strcpy(AuxRadInData.NameTrj, Names.NameTrj);
 	strcpy(AuxRadInData.Name4x4PropMatr, Names.Name4x4PropMatr);
-	strcpy(AuxRadInData.NameMomX, Names.NameMomX); 
+	strcpy(AuxRadInData.NameMomX, Names.NameMomX);
 	strcpy(AuxRadInData.NameMomZ, Names.NameMomZ);
 	strcpy(AuxRadInData.NameWfrAuxData, Names.NameWfrAuxData);
 
@@ -943,7 +943,7 @@ int srTSRWRadStructAccessData::RenameWfrStruct(srTSRWRadStructWaveNames& Names)
 
 int srTSRWRadStructAccessData::CreateNewWfrStruct(srTSRWRadStructWaveNames& Names)
 {
-#if defined(_SRWDLL) || defined(SRWLIB_STATIC) || defined(SRWLIB_SHARED) 
+#if defined(_SRWDLL) || defined(SRWLIB_STATIC) || defined(SRWLIB_SHARED)
 	if(BaseRadWasEmulated) return 0;
 	int res = 0;
 
@@ -953,12 +953,12 @@ int srTSRWRadStructAccessData::CreateNewWfrStruct(srTSRWRadStructWaveNames& Name
 		OutSRWRadPtrs(&AuxRadInData);
 
 		strcpy(AuxRadInData.NameRad, Names.NameRad);
-		strcpy(AuxRadInData.NameRadX, Names.NameRadX); 
+		strcpy(AuxRadInData.NameRadX, Names.NameRadX);
 		strcpy(AuxRadInData.NameRadZ, Names.NameRadZ);
 		strcpy(AuxRadInData.NameElecBeam, Names.NameElecBeam);
 		strcpy(AuxRadInData.NameTrj, Names.NameTrj);
 		strcpy(AuxRadInData.Name4x4PropMatr, Names.Name4x4PropMatr);
-		strcpy(AuxRadInData.NameMomX, Names.NameMomX); 
+		strcpy(AuxRadInData.NameMomX, Names.NameMomX);
 		strcpy(AuxRadInData.NameMomZ, Names.NameMomZ);
 		strcpy(AuxRadInData.NameWfrAuxData, Names.NameWfrAuxData);
 
@@ -1124,7 +1124,7 @@ void srTSRWRadStructAccessData::EstimateOversamplingFactors(double& estimOverSam
 {
 	//const int SmallestN = 8;
 	//double WavelengthIn_m = (pWfrSmp->TreatLambdaAsEnergyIn_eV)? 1.239854E-06/(pWfrSmp->LambStart) : 1.E-06*(pWfrSmp->LambEnd);
-	
+
 	//double WavelengthIn_m = 1.239854E-06/eStart;
 	double WavelengthIn_m = 1.239842E-06/eStart;
 	CGenMathFFT2D FFT;
@@ -1221,7 +1221,7 @@ void srTSRWRadStructAccessData::CopyStatMomData(double* pInMomX, double* pInMomZ
 void srTSRWRadStructAccessData::CopyElectronBeamData(double* pInElecBeam) //OC26112019 (related to SRW port to IGOR XOP8 on Mac)
 //void srTSRWRadStructAccessData::CopyElectronBeamData(DOUBLE* pInElecBeam)
 {
-	if((pInElecBeam != 0) && (pElecBeam != 0)) 
+	if((pInElecBeam != 0) && (pElecBeam != 0))
 	{
 		const int LenElecData = 30; // to steer
 		//DOUBLE *tElecBeam = pElecBeam, *tInElecBeam = pInElecBeam;
@@ -1238,7 +1238,7 @@ void srTSRWRadStructAccessData::Copy4x4PropMatrData(double* pIn4x4PropMatr) //OC
 {
 	if((pIn4x4PropMatr != 0) && (p4x4PropMatr != 0))
 	{
-		const int Len4x4PropMatr = 20; //OC fix 16082004 //16; // to steer 
+		const int Len4x4PropMatr = 20; //OC fix 16082004 //16; // to steer
 		//DOUBLE *t4x4PropMatr = p4x4PropMatr, *tIn4x4PropMatr = pIn4x4PropMatr;
 		double *t4x4PropMatr = p4x4PropMatr, *tIn4x4PropMatr = pIn4x4PropMatr; //OC26112019 (related to SRW port to IGOR XOP8 on Mac)
 		for(int i=0; i<Len4x4PropMatr; i++) *(t4x4PropMatr++) = *(tIn4x4PropMatr++);
@@ -1266,7 +1266,7 @@ void srTSRWRadStructAccessData::CopyWfrAuxData(double* pInWfrAuxData) //OC261120
 srTSRWRadStructAccessData::srTSRWRadStructAccessData(srTSRWRadStructAccessData* pInRadStruct)
 {// copies all data/substructures for internal use only
 	Initialize();
-	
+
 	if(pInRadStruct == 0) return;
 	srTSRWRadStructAccessData& InRadStruct = *pInRadStruct;
 
@@ -1323,7 +1323,7 @@ srTSRWRadStructAccessData::srTSRWRadStructAccessData(srTSRWRadStructAccessData* 
 	AllowAutoSwitchToPropInUnderSamplingMode = InRadStruct.AllowAutoSwitchToPropInUnderSamplingMode;
 	InvUnderSamplingThreshold = InRadStruct.InvUnderSamplingThreshold;
 
-	if(InRadStruct.pResAfter != 0) 
+	if(InRadStruct.pResAfter != 0)
 	{
 		pResAfter = new srTRadResize(*InRadStruct.pResAfter);
 		ResAfterWasEmulated = true;
@@ -1334,7 +1334,7 @@ srTSRWRadStructAccessData::srTSRWRadStructAccessData(srTSRWRadStructAccessData* 
 	LengthUnit = InRadStruct.LengthUnit;
 	PhotEnergyUnit = InRadStruct.PhotEnergyUnit;
 
-	if(InRadStruct.pElecBeam != 0) 
+	if(InRadStruct.pElecBeam != 0)
 	{
 		const int LenElecData = 30; // to steer
 		//pElecBeam = new DOUBLE[LenElecData << 1];
@@ -1399,7 +1399,7 @@ srTSRWRadStructAccessData::srTSRWRadStructAccessData(srTSRWRadStructAccessData* 
 	AuxLong2 = InRadStruct.AuxLong2;
 	AuxLong3 = InRadStruct.AuxLong3;
 	AuxLong4 = InRadStruct.AuxLong4;
-	
+
 	WfrQuadTermCanBeTreatedAtResizeX = InRadStruct.WfrQuadTermCanBeTreatedAtResizeX; // is used at the time of one resize only
 	WfrQuadTermCanBeTreatedAtResizeZ = InRadStruct.WfrQuadTermCanBeTreatedAtResizeZ;
 
@@ -1506,42 +1506,42 @@ void srTSRWRadStructAccessData::Initialize()
 
 	wRadX = wRadZ = NIL;
 	BaseRadWasEmulated = false;
-	
+
 	UseStartTrToShiftAtChangingRepresToCoord = false;
 	//UseStartTrToShiftAtChangingRepresToTime = false; //OC091115
 	avgT = 0; //OC101115
-	
+
 	DoNotResizeAfter = false;
 	ResAfterWasEmulated = false;
-	
+
 	pElecBeam = 0; wElecBeam = NIL;
 	wTrj = NIL;
 	ElectronBeamEmulated = 0;
-	
+
 	p4x4PropMatr = 0; w4x4PropMatr = NIL;
 	PropMatrWasEmulated = false;
-	
+
 	pMomX = pMomZ = 0;
 	wMomX = wMomZ = NIL;
 	MomWereEmulated = false;
 	MomWereCalcNum = false;
-	
+
 	pWfrAuxData = 0; wWfrAuxData = NIL;
 	WfrAuxDataWasEmulated = false;
-	
+
 	WfrEdgeCorrShouldBeDone = 0; //1; // Turn it on/off manually
 	pResAfter = 0;
-	
+
 	UnderSamplingX = UnderSamplingZ = 1.;
 	AllowAutoSwitchToPropInUnderSamplingMode = 0;
-	
+
 	ElecFldUnit = 1;
-	
+
 	WfrQuadTermCanBeTreatedAtResizeX = false; // is used at the time of one resize only
 	WfrQuadTermCanBeTreatedAtResizeZ = false;
 
 	m_xQuadPhaseTermWasSubtracted = false;
-	m_zQuadPhaseTermWasSubtracted = false; 
+	m_zQuadPhaseTermWasSubtracted = false;
 	m_xLinOnlyPhaseTermWasSubtracted = false;
 	m_zLinOnlyPhaseTermWasSubtracted = false;
 	m_dxcSub = m_dzcSub = 0;
@@ -1567,11 +1567,11 @@ void srTSRWRadStructAccessData::DisposeEmulatedStructs()
 		pResAfter = 0;
 		ResAfterWasEmulated = false;
 	}
-	
+
 	if(ElectronBeamEmulated && (pElecBeam != 0)) delete[] pElecBeam;
 	pElecBeam = 0;
 	ElectronBeamEmulated = 0;
-	
+
 	if(PropMatrWasEmulated)
 	{
 		if(p4x4PropMatr != 0) delete[] p4x4PropMatr;
@@ -1683,7 +1683,7 @@ void srTSRWRadStructAccessData::AllocElectronBeam()
 	pElecBeam = new double[MaxLenElecBeam]; //OC26112019 (related to SRW port to IGOR XOP8 on Mac)
 	if(pElecBeam == 0) throw MEMORY_ALLOCATION_FAILURE;
 	ElectronBeamEmulated = 1;
-	
+
 	//DOUBLE *tElecBeam = pElecBeam;
 	double *tElecBeam = pElecBeam; //OC26112019 (related to SRW port to IGOR XOP8 on Mac)
 	for(int i=0; i<MaxLenElecBeam; i++) *(tElecBeam++) = 0.;
@@ -1700,11 +1700,11 @@ int srTSRWRadStructAccessData::EmulateElectronBeamStruct(srTEbmDat& EbmDat)
 		if(pElecBeam == 0) return MEMORY_ALLOCATION_FAILURE;
 		ElectronBeamEmulated = 1;
 	}
-	
+
 	//DOUBLE *tElecBeam = pElecBeam;
 	double *tElecBeam = pElecBeam; //OC26112019 (related to SRW port to IGOR XOP8 on Mac)
 	for(int i=0; i<50; i++) *(tElecBeam++) = 0.;
-	
+
 	*pElecBeam = EbmDat.Energy;
 	*(pElecBeam + 1) = EbmDat.Current;
 	*(pElecBeam + 2) = EbmDat.x0;
@@ -1712,7 +1712,7 @@ int srTSRWRadStructAccessData::EmulateElectronBeamStruct(srTEbmDat& EbmDat)
 	*(pElecBeam + 4) = EbmDat.z0;
 	*(pElecBeam + 5) = EbmDat.dzds0;
 	*(pElecBeam + 6) = EbmDat.s0;
-	
+
 	*(pElecBeam + 13) = EbmDat.SigmaRelE;
 
 	*(pElecBeam + 20) = EbmDat.Mxx;
@@ -1792,7 +1792,7 @@ int srTSRWRadStructAccessData::EmulateElectronBeamStruct(srTGsnBeam& GsnBeam)
 	//DOUBLE *tElecBeam = pElecBeam;
 	double *tElecBeam = pElecBeam; //OC26112019 (related to SRW port to IGOR XOP8 on Mac)
 	for(int i=0; i<50; i++) *(tElecBeam++) = 0.;
-	
+
     srTEbmDat& EbmDat = GsnBeam.EbmDat;
 
 	*pElecBeam = 1.;
@@ -1819,7 +1819,7 @@ int srTSRWRadStructAccessData::OutElectronBeamStruct(srTEbmDat& EbmDat)
 	EbmDat.z0 = *(pElecBeam + 4);
 	EbmDat.dzds0 = *(pElecBeam + 5);
 	EbmDat.s0 = *(pElecBeam + 6);
-	
+
 	EbmDat.SigmaRelE = *(pElecBeam + 13);
 	EbmDat.Mee = (EbmDat.SigmaRelE)*(EbmDat.SigmaRelE);
 
@@ -1892,7 +1892,7 @@ void srTSRWRadStructAccessData::EstimateAndSetUnderSampling()
 	double HalfWavelength_m = 0.5*1.239842E-06/eStart; // Assumes eStart in eV
 	double HalfLambRx = HalfWavelength_m*RobsX;
 	double HalfLambRz = HalfWavelength_m*RobsZ;
-	
+
 	double xStartRel = xStart - xc;
 	double xEndRel = xStartRel + xStep*(nx - 1);
 	double dxStart = ::fabs(HalfLambRx/xStartRel);
@@ -1901,7 +1901,7 @@ void srTSRWRadStructAccessData::EstimateAndSetUnderSampling()
 	double Nx = ::fabs(xEndRel - xStartRel)/dx + 1.;
 	double TestInvUnderSampX = double(nx)/Nx;
 	if(TestInvUnderSampX <= InvUnderSamplingThreshold) UnderSamplingX = 1./TestInvUnderSampX;
-	
+
 	double zStartRel = zStart - zc;
 	double zEndRel = zStartRel + zStep*(nz - 1);
 	double dzStart = ::fabs(HalfLambRz/zStartRel);
@@ -2074,8 +2074,8 @@ void srTSRWRadStructAccessData::SetObsParamFromWfr(srTWfrSmp& smp)
 
 void srTSRWRadStructAccessData::SetupRadMomentsPtrs(srTMomentsPtrs& MomPtrsX, srTMomentsPtrs& MomPtrsZ)
 {
-	MomPtrsX = OneSetOfMomentsPtrs(pMomX); 
-	MomPtrsZ = OneSetOfMomentsPtrs(pMomZ); 
+	MomPtrsX = OneSetOfMomentsPtrs(pMomX);
+	MomPtrsZ = OneSetOfMomentsPtrs(pMomZ);
 }
 
 //*************************************************************************
@@ -2093,11 +2093,11 @@ void srTSRWRadStructAccessData::SetRadSamplingFromObs(srTWfrSmp& DistrInfoDat)
 	eStart = DistrInfoDat.LambStart;
 	eStep = (DistrInfoDat.nLamb > 1)? (DistrInfoDat.LambEnd - DistrInfoDat.LambStart)/(DistrInfoDat.nLamb - 1) : 0.;
 	ne = DistrInfoDat.nLamb;
-	
+
 	xStart = DistrInfoDat.xStart;
 	xStep = (DistrInfoDat.nx > 1)? (DistrInfoDat.xEnd - DistrInfoDat.xStart)/(DistrInfoDat.nx - 1) : 0.;
 	nx = DistrInfoDat.nx;
-	
+
 	zStart = DistrInfoDat.zStart;
 	zStep = (DistrInfoDat.nz > 1)? (DistrInfoDat.zEnd - DistrInfoDat.zStart)/(DistrInfoDat.nz - 1) : 0.;
 	nz = DistrInfoDat.nz;
@@ -2113,15 +2113,15 @@ void srTSRWRadStructAccessData::SetRadSamplingFromObs(srTWfrSmp& DistrInfoDat)
 		//PresT = 1; //OC191215
 	}
 	//else PresT = 0;
-	
+
 	// To walk around a bug in Igor
 	if(eStep == 0.) { eStep = (eStart != 0.)? (1.e-08)*(::fabs(eStart)) : 1.e-10;}
 	if(xStep == 0.) { xStep = (xStart != 0.)? (1.e-08)*(::fabs(xStart)) : 1.e-10;}
 	if(zStep == 0.) { zStep = (zStart != 0.)? (1.e-08)*(::fabs(zStart)) : 1.e-10;}
 
 	Pres = DistrInfoDat.CoordOrAngPresentation; //0- coord., 1- ang.
-	LengthUnit = DistrInfoDat.CoordUnits; // 0- m; 1- mm; 
-	PhotEnergyUnit = 0; // 0- eV; 1- keV; 
+	LengthUnit = DistrInfoDat.CoordUnits; // 0- m; 1- mm;
+	PhotEnergyUnit = 0; // 0- eV; 1- keV;
 
 	//DistrInfoDat.PhotonEnergyWavelengthUnits; // 0- keV, 1- eV, 2- Ang, 3- nm, 4- micron
 }
@@ -2163,7 +2163,7 @@ void srTSRWRadStructAccessData::AllocWfrAux()
 
 int srTSRWRadStructAccessData::FindAverageDistanceToSource(srTTrjDat& TrjDat, srTWfrSmp& DistrInfoDat, double& Robs, double& RobsAbsErr, double& xElAtYsrc, double& zElAtYsrc, srTParPrecElecFld* pPrecElecFld)
 {// Should be called after the trajectory is already computed!!!
-	
+
 	double sStart = TrjDat.sStart;
 	double sRange = (TrjDat.LenFieldData - 1)*TrjDat.sStep;
 	double sEnd = sStart + sRange;
@@ -2176,11 +2176,11 @@ int srTSRWRadStructAccessData::FindAverageDistanceToSource(srTTrjDat& TrjDat, sr
 		double sEndIntPrec = pPrecElecFld->sEndInt;
 		double sStart0 = sStart, sEnd0 = sEnd;
 		bool SpecLimitsMayBeDefined = (sStartIntPrec < sEndIntPrec);
-		if(SpecLimitsMayBeDefined && (sStartIntPrec > sStart) && (sStartIntPrec < sEnd)) 
+		if(SpecLimitsMayBeDefined && (sStartIntPrec > sStart) && (sStartIntPrec < sEnd))
 		{
 			sStart = sStartIntPrec;
 		}
-		if(SpecLimitsMayBeDefined && (sEndIntPrec > sStart) && (sEndIntPrec < sEnd)) 
+		if(SpecLimitsMayBeDefined && (sEndIntPrec > sStart) && (sEndIntPrec < sEnd))
 		{
 			sEnd = sEndIntPrec;
 		}
@@ -2300,7 +2300,7 @@ int srTSRWRadStructAccessData::FindAverageDistanceToSource(srTTrjDat& TrjDat, sr
 
 	xElAtYsrc = xArr[YsrcIndNo];
 	zElAtYsrc = zArr[YsrcIndNo];
-		
+
 	if(TmpDataStorage != 0) delete[] TmpDataStorage;
 	return 0;
 }
@@ -2309,7 +2309,7 @@ int srTSRWRadStructAccessData::FindAverageDistanceToSource(srTTrjDat& TrjDat, sr
 
 int srTSRWRadStructAccessData::FindAverageDistanceToSource(srTTrjDat& TrjDat, double& Robs, double& RobsAbsErr, double& xElAtYsrc, double& zElAtYsrc, double* precPar)
 {// Should be called after the trajectory is already computed!!!
-	
+
 	double sStart = TrjDat.sStart;
 	double sRange = (TrjDat.LenFieldData - 1)*TrjDat.sStep;
 	double sEnd = sStart + sRange;
@@ -2325,11 +2325,11 @@ int srTSRWRadStructAccessData::FindAverageDistanceToSource(srTTrjDat& TrjDat, do
 		double sStart0 = sStart, sEnd0 = sEnd;
 		bool SpecLimitsMayBeDefined = (sStartIntPrec < sEndIntPrec);
 
-		if(SpecLimitsMayBeDefined && (sStartIntPrec > sStart) && (sStartIntPrec < sEnd)) 
+		if(SpecLimitsMayBeDefined && (sStartIntPrec > sStart) && (sStartIntPrec < sEnd))
 		{
 			sStart = sStartIntPrec;
 		}
-		if(SpecLimitsMayBeDefined && (sEndIntPrec > sStart) && (sEndIntPrec < sEnd)) 
+		if(SpecLimitsMayBeDefined && (sEndIntPrec > sStart) && (sEndIntPrec < sEnd))
 		{
 			sEnd = sEndIntPrec;
 		}
@@ -2456,7 +2456,7 @@ int srTSRWRadStructAccessData::FindAverageDistanceToSource(srTTrjDat& TrjDat, do
 		}
 	}
 
-	double MaxRobsX = (RobsXSt < RobsXFi)? RobsXSt : RobsXFi; 
+	double MaxRobsX = (RobsXSt < RobsXFi)? RobsXSt : RobsXFi;
 	double MaxRobsZ = (RobsZSt < RobsZFi)? RobsZSt : RobsZFi;
 	double MaxRobs = (MinRobsX < MinRobsZ)? MaxRobsX : MaxRobsZ;
 
@@ -2495,7 +2495,7 @@ int srTSRWRadStructAccessData::FindAverageDistanceToSource(srTTrjDat& TrjDat, do
 
 	xElAtYsrc = xArr[YsrcIndNo];
 	zElAtYsrc = zArr[YsrcIndNo];
-		
+
 	if(TmpDataStorage != 0) delete[] TmpDataStorage;
 	return 0;
 }
@@ -2613,7 +2613,7 @@ void srTSRWRadStructAccessData::CheckAndSubtractPhaseTermsLin(double newXc, doub
 	const double minNumOptCycles = 10;
 	double lambda_m = 3.1415926535898/(eStart*2.53384080189E+06);
 	const double twoPi = 2.*3.1415926535898;
-	
+
 	bool xLinPhaseTermCanBeSubtracted = false;
 	double dxcSubNew = newXc - xc;
 	if(RobsX != 0)
@@ -2623,7 +2623,7 @@ void srTSRWRadStructAccessData::CheckAndSubtractPhaseTermsLin(double newXc, doub
 		xLinPhaseTermCanBeSubtracted = (fabs(RobsX) > fabs(RobsXAbsErr)) && (xNumOptCycles > minNumOptCycles) && (fabs(dxcSubNew)/xWfrRange > ratAllowSubtract);
 	}
 	if(!xLinPhaseTermCanBeSubtracted) dxcSubNew = 0;
-	
+
 	bool zLinPhaseTermCanBeSubtracted = false;
 	double dzcSubNew = newZc - zc;
 	if(RobsZ != 0)
@@ -2640,7 +2640,7 @@ void srTSRWRadStructAccessData::CheckAndSubtractPhaseTermsLin(double newXc, doub
 	if(m_xLinOnlyPhaseTermWasSubtracted)
 	{
 		dxc -= m_dxcSub;
-		if(fabs(dxc)/fabs(m_dxcSub) < ratAllowSubtract) 
+		if(fabs(dxc)/fabs(m_dxcSub) < ratAllowSubtract)
 		{
 			dxc = 0; dxcSubNew = m_dxcSub;
 		}
@@ -2654,7 +2654,7 @@ void srTSRWRadStructAccessData::CheckAndSubtractPhaseTermsLin(double newXc, doub
 	if(zLinPhaseTermCanBeSubtracted && m_zLinOnlyPhaseTermWasSubtracted)
 	{
 		dzc -= m_dzcSub;
-		if(fabs(dzc)/fabs(m_dzcSub) < ratAllowSubtract) 
+		if(fabs(dzc)/fabs(m_dzcSub) < ratAllowSubtract)
 		{
 			dzc = 0; dzcSubNew = m_dzcSub;
 		}
@@ -2665,7 +2665,7 @@ void srTSRWRadStructAccessData::CheckAndSubtractPhaseTermsLin(double newXc, doub
 	double zMult = -twoPi*dzc/(lambda_m*RobsZ);
 
 	if((xMult == 0) && (zMult == 0)) return;
-	
+
 	//MultiplyElFieldByPhaseLin(xMult, zMult);
 	MultiplyElFieldByPhaseLin(xMult, zMult, pvGPU); //HG12012024
 }
@@ -2676,10 +2676,10 @@ void srTSRWRadStructAccessData::CheckAndSubtractPhaseTermsLin(double newXc, doub
 void srTSRWRadStructAccessData::CheckAndResetPhaseTermsLin(void* pvGPU) //HG12012024
 {
 	if((!m_xLinOnlyPhaseTermWasSubtracted) && (!m_zLinOnlyPhaseTermWasSubtracted)) return;
-	
+
 	double lambda_m = 3.1415926535898/(eStart*2.53384080189E+06);
 	const double twoPi = 2.*3.1415926535898;
-	
+
 	double xMult = 0, zMult = 0;
 	if(m_xLinOnlyPhaseTermWasSubtracted && (m_dxcSub != 0) && (RobsX != 0))
 	{
@@ -2689,14 +2689,14 @@ void srTSRWRadStructAccessData::CheckAndResetPhaseTermsLin(void* pvGPU) //HG1201
 	{
 		zMult = twoPi*m_dzcSub/(lambda_m*RobsZ);
 	}
-	
+
 	m_xLinOnlyPhaseTermWasSubtracted = false;
 	m_zLinOnlyPhaseTermWasSubtracted = false;
 	m_dxcSub = 0;
 	m_dzcSub = 0;
-	
+
 	if((xMult == 0) && (zMult == 0)) return;
-	
+
 	//MultiplyElFieldByPhaseLin(xMult, zMult);
 	MultiplyElFieldByPhaseLin(xMult, zMult, pvGPU); //HG12012024
 }
@@ -2705,8 +2705,8 @@ void srTSRWRadStructAccessData::CheckAndResetPhaseTermsLin(void* pvGPU) //HG1201
 
 //void srTSRWRadStructAccessData::MirrorFieldData(int sx, int sz)
 void srTSRWRadStructAccessData::MirrorFieldData(int sx, int sz, void* pvGPU) //HG02122023
-{// sx < 0 means mirroring should be done vs x 
- // sz < 0 means mirroring should be done vs z 
+{// sx < 0 means mirroring should be done vs x
+ // sz < 0 means mirroring should be done vs z
 	//long PerX = ne << 1;
 	//long PerZ = PerX*nx;
 	long long PerX = ne << 1;
@@ -2726,7 +2726,7 @@ void srTSRWRadStructAccessData::MirrorFieldData(int sx, int sz, void* pvGPU) //H
 	}
 #endif
 
-	if((sx > 0) && (sz > 0)) return; //no mirroring is necessary 
+	if((sx > 0) && (sz > 0)) return; //no mirroring is necessary
 	else if((sx < 0) && (sz > 0)) //mirroring with respect to x
 	{
 		//long nx_mi_1 = nx - 1;
@@ -3007,7 +3007,7 @@ int srTSRWRadStructAccessData::SetupWfrEdgeCorrData(float* pDataEx, float* pData
 	double xWfrMaxOffsetFromStart = xWfrMax - xStart;
 	long ixWfrMaxLower = long(xWfrMaxOffsetFromStart/xStep + 1.E-13);
 	double xWfrMaxLowerMisfit = xWfrMaxOffsetFromStart - ixWfrMaxLower*xStep;
-	
+
 	char xWfrMinIsBetweenMeshPoints = (xWfrMinLowerMisfit > xAbsTol);
 	char xWfrMaxIsBetweenMeshPoints = (xWfrMaxLowerMisfit > xAbsTol);
 	char xWfrMaxIsSmallerThanDataEnd = (::fabs((xStart + nx*xStep) - xWfrMax) > xAbsTol);
@@ -3028,7 +3028,7 @@ int srTSRWRadStructAccessData::SetupWfrEdgeCorrData(float* pDataEx, float* pData
 	double zWfrMaxOffsetFromStart = zWfrMax - zStart;
 	long izWfrMaxLower = long(zWfrMaxOffsetFromStart/zStep + 1.E-13);
 	double zWfrMaxLowerMisfit = zWfrMaxOffsetFromStart - izWfrMaxLower*zStep;
-	
+
 	char zWfrMinIsBetweenMeshPoints = (zWfrMinLowerMisfit > zAbsTol);
 	char zWfrMaxIsBetweenMeshPoints = (zWfrMaxLowerMisfit > zAbsTol);
 	char zWfrMaxIsSmallerThanDataEnd = (::fabs((zStart + nz*zStep) - zWfrMax) > zAbsTol);
@@ -3334,7 +3334,7 @@ int srTSRWRadStructAccessData::ShiftWfrByInterpolVsXZ(double shiftX, double shif
 	long long nTot = (ne << 1)*((long long)nx)*((long long)nz);
 	float *pAuxBaseRadX = 0;
 	float *pAuxBaseRadZ = 0;
-	if(pBaseRadX != 0) 
+	if(pBaseRadX != 0)
 	{
 		pAuxBaseRadX = new float[nTot];
 		float *tAuxBaseRadX = pAuxBaseRadX;
@@ -3359,7 +3359,7 @@ int srTSRWRadStructAccessData::ShiftWfrByInterpolVsXZ(double shiftX, double shif
 			else PolComp = 'x';
 		}
 		else if(pBaseRadZ != 0) PolComp = 'z';
-		
+
 		TreatQuadPhaseTerm('r', PolComp);  //OC17122019
 		//TreatQuadPhaseTermTerm('r', PolComp);
 		WaveFrontTermWasTreated = true;
@@ -3391,7 +3391,7 @@ int srTSRWRadStructAccessData::ShiftWfrByInterpolVsXZ(double shiftX, double shif
 			float *pEZ_NewStartForX = pAuxBaseRadZ + izPerZ;
 
 			double d_izOld = (z - zStart)/zStep;
-			if((d_izOld < 0) || (d_izOld > nz_mi_1)) 
+			if((d_izOld < 0) || (d_izOld > nz_mi_1))
 			{
 				z += zStep; continue;
 			}
@@ -3429,7 +3429,7 @@ int srTSRWRadStructAccessData::ShiftWfrByInterpolVsXZ(double shiftX, double shif
 				float *pEZ_New = pEZ_NewStartForX + ixPerX_p_Two_ie;
 
 				double d_ixOld = (x - xStart)/xStep;
-				if((d_ixOld < 0) || (d_ixOld > nx_mi_1)) 
+				if((d_ixOld < 0) || (d_ixOld > nx_mi_1))
 				{
 					x += xStep; continue;
 				}
@@ -3456,7 +3456,7 @@ int srTSRWRadStructAccessData::ShiftWfrByInterpolVsXZ(double shiftX, double shif
 				long long ixOld_PerX = ixOld*PerX;
 				long long ixOld_mi_1_PerX = ixOld_mi_1*PerX;
 				long long ixOld_pl_1_PerX = ixOld_pl_1*PerX;
-				
+
 				//long ofstOld_0m1 = ixOld_PerX + izOld_mi_1_PerZ + Two_ie; //offset for the new data
 				//long ofstOld_m10 = ixOld_mi_1_PerX + izOld_PerZ + Two_ie;
 				//long ofstOld_00 = ixOld_PerX + izOld_PerZ + Two_ie;
@@ -3529,13 +3529,13 @@ int srTSRWRadStructAccessData::ShiftWfrByInterpolVsXZ(double shiftX, double shif
 		}
 	}
 
-	if(pBaseRadX != 0) 
+	if(pBaseRadX != 0)
 	{
 		float *tAuxRadX = pAuxBaseRadX, *tRadX = pBaseRadX;
 		//for(long i=0; i<nTot; i++) *(tRadX++) = *(tAuxRadX++);
 		for(long long i=0; i<nTot; i++) *(tRadX++) = *(tAuxRadX++);
 	}
-	if(pBaseRadZ != 0) 
+	if(pBaseRadZ != 0)
 	{
 		float *tAuxRadZ = pAuxBaseRadZ, *tRadZ = pBaseRadZ;
 		//for(long i=0; i<nTot; i++) *(tRadZ++) = *(tAuxRadZ++);
@@ -3543,14 +3543,14 @@ int srTSRWRadStructAccessData::ShiftWfrByInterpolVsXZ(double shiftX, double shif
 	}
 
 	//OC180813: don't correct it here; will be corrected in sep. function
-	xc += shiftX; 
+	xc += shiftX;
 	zc += shiftZ;
 
 	if(WaveFrontTermWasTreated) TreatQuadPhaseTerm('a', PolComp); //OC17122019
 	//if(WaveFrontTermWasTreated) TreatQuadPhaseTermTerm('a', PolComp);
 
 	//OC180813: don't correct it here; will be corrected in sep. function
-	xc -= shiftX; 
+	xc -= shiftX;
 	zc -= shiftZ;
 
 	if(pAuxBaseRadX != 0) delete[] pAuxBaseRadX;
@@ -3603,7 +3603,7 @@ void srTSRWRadStructAccessData::FlipFieldData(bool flipOverX, bool flipOverZ)
 			//long izPerZ = iz*PerZ, BufZ = (nz_mi_1 - iz)*PerZ;
 			long long izPerZ = iz*PerZ, BufZ = (nz_mi_1 - iz)*PerZ;
 			for(long ix=0; ix<nx; ix++)
-			{			
+			{
 				//long ixPerX = ix*PerX;
 				//long offset = izPerZ + ixPerX;
 				long long ixPerX = ix*PerX;
@@ -3874,7 +3874,7 @@ int srTSRWRadStructAccessData::SetRepresCA(char CoordOrAng)
 
 //*************************************************************************
 
-int srTSRWRadStructAccessData::SetRepresFT(char FreqOrTime) 
+int srTSRWRadStructAccessData::SetRepresFT(char FreqOrTime)
 {//set Frequency or Time representation
 // 'f' or 'F' or 0- to freq.; 't' or 'T' or 1- to time
 //Conversions are done assuming intensity units to be:
@@ -3892,7 +3892,7 @@ int srTSRWRadStructAccessData::SetRepresFT(char FreqOrTime)
 
 	const double multConvHz2eV = 4.135667175e-15;
 	//const double multConv_eV2PhperBW = 6.24146e+15;
-	double multConv_eV2PhperBW = 6.24146e+15; 
+	double multConv_eV2PhperBW = 6.24146e+15;
 	if(ElecFldUnit == 2) multConv_eV2PhperBW = 1; //OC170813
 
 	//default- to time:
@@ -4083,7 +4083,7 @@ bool srTSRWRadStructAccessData::CheckIfQuadTermTreatIsBenefit(char cutX_or_Z, ch
 	double prevDerReAfter=0, prevDerImAfter=0;
 	int numDerReSignChange=0, numDerImSignChange=0;
 	int numDerReSignChangeAfter=0, numDerImSignChangeAfter=0;
-	
+
 	const double twoPi = 6.2831853;
 	double phShiftPrev;
 
@@ -4131,7 +4131,7 @@ bool srTSRWRadStructAccessData::CheckIfQuadTermTreatIsBenefit(char cutX_or_Z, ch
 		numDerE_SignChange = numDerImSignChange;
 		numDerE_SignChangeAfter = numDerImSignChangeAfter;
 	}
-	
+
 	return (numDerE_SignChangeAfter <= numDerE_SignChange);
 }
 
@@ -4140,67 +4140,67 @@ bool srTSRWRadStructAccessData::CheckIfQuadTermTreatIsBenefit(char cutX_or_Z, ch
 void srTSRWRadStructAccessData::GetIntMesh(char dep, SRWLRadMesh& mesh) //OC23082018
 {//This assumes center values for the intensity distribution are defined in mesh.eStart, mesh.xStart, mesh.yStart at input
 	mesh.ne = mesh.nx = mesh.ny = 1;
-	if(dep == 0) 
+	if(dep == 0)
 	{
 		mesh.ne = ne;
-		mesh.eStart = eStart; 
+		mesh.eStart = eStart;
 		mesh.eFin = eStart + eStep*(ne - 1);
 		//Keep mesh.xStart, mesh.yStart as they define "central" values of the intensity distribution
 	}
-	else if(dep == 1) 
+	else if(dep == 1)
 	{
 		mesh.nx = nx;
-		mesh.xStart = xStart; 
+		mesh.xStart = xStart;
 		mesh.xFin = xStart + xStep*(nx - 1);
 		//Keep mesh.eStart, mesh.yStart as they define "central" values of the intensity distribution
 	}
-	else if(dep == 2) 
+	else if(dep == 2)
 	{
 		mesh.ny = nz;
-		mesh.yStart = zStart; 
+		mesh.yStart = zStart;
 		mesh.yFin = zStart + zStep*(nz - 1);
 		//Keep mesh.eStart, mesh.xStart as they define "central" values of the intensity distribution
 	}
-	else if(dep == 3) 
+	else if(dep == 3)
 	{
 		mesh.nx = nx;
-		mesh.xStart = xStart; 
+		mesh.xStart = xStart;
 		mesh.xFin = xStart + xStep*(nx - 1);
 		mesh.ny = nz;
-		mesh.yStart = zStart; 
+		mesh.yStart = zStart;
 		mesh.yFin = zStart + zStep*(nz - 1);
 		//Keep mesh.eStart as it defines "central" value of the intensity distribution
 	}
-	else if(dep == 4) 
+	else if(dep == 4)
 	{
 		mesh.ne = ne;
-		mesh.eStart = eStart; 
+		mesh.eStart = eStart;
 		mesh.eFin = eStart + eStep*(ne - 1);
 		mesh.nx = nx;
-		mesh.xStart = xStart; 
+		mesh.xStart = xStart;
 		mesh.xFin = xStart + xStep*(nx - 1);
 		//Keep mesh.yStart as it defines "central" value of the intensity distribution
 	}
-	else if(dep == 5) 
+	else if(dep == 5)
 	{
 		mesh.ne = ne;
-		mesh.eStart = eStart; 
+		mesh.eStart = eStart;
 		mesh.eFin = eStart + eStep*(ne - 1);
 		mesh.ny = nz;
-		mesh.yStart = zStart; 
+		mesh.yStart = zStart;
 		mesh.yFin = zStart + zStep*(nz - 1);
 		//Keep mesh.xStart as it defines "central" value of the intensity distribution
 	}
-	else if(dep == 6) 
+	else if(dep == 6)
 	{
 		mesh.ne = ne;
-		mesh.eStart = eStart; 
+		mesh.eStart = eStart;
 		mesh.eFin = eStart + eStep*(ne - 1);
 		mesh.nx = nx;
-		mesh.xStart = xStart; 
+		mesh.xStart = xStart;
 		mesh.xFin = xStart + xStep*(nx - 1);
 		mesh.ny = nz;
-		mesh.yStart = zStart; 
+		mesh.yStart = zStart;
 		mesh.yFin = zStart + zStep*(nz - 1);
 	}
 }
@@ -4239,7 +4239,7 @@ void srTSRWRadStructAccessData::Resize(SRWLRadMesh& mesh, double* arPar) //OC260
 	double zTol = relTol*zStepNew;
 	//if((nzNew == nz) && (fabs(mesh.yStart - zStart) <= zTol) && (fabs(zStepNew - zStep) <= zTol)) resizeIsReqVsZ = false;
 	if(((nzNew == nz) && (fabs(mesh.yStart - zStart) <= zTol) && (fabs(zStepNew - zStep) <= zTol)) || (nz <= 1)) resizeIsReqVsZ = false;
-	
+
 	if(!(resizeIsReqVsE || resizeIsReqVsX || resizeIsReqVsZ)) return;
 
 	bool resizeIsOnlyVsE = resizeIsReqVsE && (!resizeIsReqVsX) && (!resizeIsReqVsZ);
@@ -4443,7 +4443,7 @@ void srTSRWRadStructAccessData::Resize(SRWLRadMesh& mesh, double* arPar) //OC260
 		if(resizeIsOnlyVsXZ) ResizeCoreXZ(oldMesh, pOldRadX, pOldRadZ, mesh, pNewRadX, pNewRadZ, arPar);
 		else if(resizeIsOnlyVsE) ResizeCoreE(oldMesh, pOldRadX, pOldRadZ, mesh, pNewRadX, pNewRadZ, arPar);
 	}
-	
+
 	if(ModifNeNxNzIsReq)
 	{
 		float *tNewRadX = pNewRadX, *tNewRadZ = pNewRadZ;
@@ -4564,41 +4564,41 @@ void srTSRWRadStructAccessData::ResizeCoreXZ(SRWLRadMesh& oldMesh, float* pOldRa
 	//if(!(interpVsX_isReq || interpVsZ_isReq)) return;
 
 	//long ieStart = 0;
-	//if(newMesh.eStart < oldMesh.eStart) 
-	//{ 
+	//if(newMesh.eStart < oldMesh.eStart)
+	//{
 	//	ieStart = (long)((oldMesh.eStart - newMesh.eStart)/eStepNew - 1.e-13);
 	//	if(newMesh.eStart + (ieStart + 0.1)*eStepNew < oldMesh.eStart) ieStart++;
 	//	if(ieStart < 0) ieStart = 0;
 	//}
 	//long ieFin = neNew_mi_1;
-	//if(oldMesh.eFin < newMesh.eFin) 
-	//{ 
+	//if(oldMesh.eFin < newMesh.eFin)
+	//{
 	//	ieFin = (long)((oldMesh.eFin - newMesh.eStart)/eStepNew + 1.e-13);
 	//	if(ieFin >= newMesh.ne) ieFin = neNew_mi_1;
 	//}
 	long ixStart = 0;
-	if(newMesh.xStart < oldMesh.xStart) 
-	{ 
+	if(newMesh.xStart < oldMesh.xStart)
+	{
 		ixStart = (long)((oldMesh.xStart - newMesh.xStart)/xStepNew - 1.e-13);
 		if(newMesh.xStart + (ixStart + 0.1)*xStepNew < oldMesh.xStart) ixStart++;
 		if(ixStart < 0) ixStart = 0;
 	}
 	long ixFin = nxNew_mi_1;
-	if(oldMesh.xFin < newMesh.xFin) 
-	{ 
+	if(oldMesh.xFin < newMesh.xFin)
+	{
 		ixFin = (long)((oldMesh.xFin - newMesh.xStart)/xStepNew + 1.e-13);
 		if(ixFin >= newMesh.nx) ixFin = nxNew_mi_1;
 	}
 	long izStart = 0;
-	if(newMesh.yStart < oldMesh.yStart) 
-	{ 
+	if(newMesh.yStart < oldMesh.yStart)
+	{
 		izStart = (long)((oldMesh.yStart - newMesh.yStart)/zStepNew - 1.e-13);
 		if(newMesh.yStart + (izStart + 0.1)*zStepNew < oldMesh.yStart) izStart++;
 		if(izStart < 0) izStart = 0;
 	}
 	long izFin = nzNew_mi_1;
-	if(oldMesh.yFin < newMesh.yFin) 
-	{ 
+	if(oldMesh.yFin < newMesh.yFin)
+	{
 		izFin = (long)((oldMesh.yFin - newMesh.yStart)/zStepNew + 1.e-13);
 		if(izFin >= newMesh.ny) izFin = nzNew_mi_1;
 	}
@@ -4623,7 +4623,7 @@ void srTSRWRadStructAccessData::ResizeCoreXZ(SRWLRadMesh& oldMesh, float* pOldRa
 		{
 			if((newMesh.yStart > oldMesh.yStart) && (newMesh.yFin > oldMesh.yStart) && (newMesh.yStart > oldMesh.yFin) && (newMesh.yFin > oldMesh.yFin)) OldNewMeshesDontIntersect = true;
 		}
-		//if((newMesh.xFin < oldMesh.xStart) || (newMesh.xStart > oldMesh.xFin) || 
+		//if((newMesh.xFin < oldMesh.xStart) || (newMesh.xStart > oldMesh.xFin) ||
 		//   (newMesh.yFin < oldMesh.yStart) || (newMesh.yStart > oldMesh.yFin)) OldNewMeshesDontIntersect = true;
 	}
 
@@ -4887,7 +4887,7 @@ void srTSRWRadStructAccessData::ResizeCoreXZ(SRWLRadMesh& oldMesh, float* pOldRa
 		pBaseRadZ = pNewRadZ;
 		xStep= xStepNew; xStart = xStartNew;
 		zStep= zStepNew; zStart = zStartNew;
-		nx = nxNew; 
+		nx = nxNew;
 		nz = nzNew;
 
 		TreatQuadPhaseTerm('a', polComp);
@@ -4897,7 +4897,7 @@ void srTSRWRadStructAccessData::ResizeCoreXZ(SRWLRadMesh& oldMesh, float* pOldRa
 		pBaseRadZ = pOldRadZ;
 		xStep = xStepOld; xStart = xStartOld;
 		zStep = zStepOld; zStart = zStartOld;
-		nx = oldMesh.nx; 
+		nx = oldMesh.nx;
 		nz = oldMesh.ny;
 	}
 }
@@ -4934,15 +4934,15 @@ void srTSRWRadStructAccessData::ResizeCoreE(SRWLRadMesh& oldMesh, float* pOldRad
 	double eTol = relTol*eStepNew;
 
 	long ieStart = 0;
-	if(newMesh.eStart < oldMesh.eStart) 
-	{ 
+	if(newMesh.eStart < oldMesh.eStart)
+	{
 		ieStart = (long)((oldMesh.eStart - newMesh.eStart)/eStepNew - 1.e-13);
 		if(newMesh.eStart + (ieStart + 0.1)*eStepNew < oldMesh.eStart) ieStart++;
 		if(ieStart < 0) ieStart = 0;
 	}
 	long ieFin = neNew_mi_1;
-	if(oldMesh.eFin < newMesh.eFin) 
-	{ 
+	if(oldMesh.eFin < newMesh.eFin)
+	{
 		ieFin = (long)((oldMesh.eFin - newMesh.eStart)/eStepNew + 1.e-13);
 		if(ieFin >= newMesh.ne) ieFin = neNew_mi_1;
 	}
@@ -5308,7 +5308,7 @@ void srTSRWRadStructAccessData::EstimWfrRadCen(double& resR, double& resCen, cha
 	for(long i=0; i<np; i++)
 	{
 		a1 = *(t_arA1++); a2 = *(t_arA2++); b = *(t_arB++);
-		
+
 		AtB1 += a1*b;
 		AtB2 += a2*b;
 		AtA11 += a1*a1; AtA12 += a1*a2;
@@ -5325,7 +5325,7 @@ void srTSRWRadStructAccessData::EstimWfrRadCen(double& resR, double& resCen, cha
 	double u1 = invAtA11*AtB1 + invAtA12*AtB2;
 	double u2 = invAtA21*AtB1 + invAtA22*AtB2;
 
-	resR = 1./u1; 
+	resR = 1./u1;
 	resCen = -u2*resR;
 
 	delete[] arA1;

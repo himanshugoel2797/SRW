@@ -71,7 +71,7 @@ int srTOptCryst::WfrInterpolOnRegGrid(srTSRWRadStructAccessData* pWfr, srTOptCry
 					//	//if((fabs(rx_m10) > dMax) || (fabs(rx_10) > dMax) || (fabs(rz_0m1) > dMax) || (fabs(rz_01) > dMax))
 					//	//if((iz == 1848) && (ix == 442))// && (fabs(x + 0.0047703) < 0.00001))
 					//	if((iz == 748) && (ix == 350))// && (fabs(x + 0.0047703) < 0.00001))
-					//	{ 
+					//	{
 					//		int aha = 1;
 					//	}
 					//}
@@ -84,7 +84,7 @@ int srTOptCryst::WfrInterpolOnRegGrid(srTSRWRadStructAccessData* pWfr, srTOptCry
 					//bool isLeftBordZ = false, isRightBordZ = false;
 
 					long ix0pr = -1, iz0pr = -1;
-					while((ix0 != ix0pr) && (iz0 != iz0pr)) 
+					while((ix0 != ix0pr) && (iz0 != iz0pr))
 					{//This while loop is required for a "tilted/rotated" mesh  (to check how ir works!)
 						ix0pr = ix0; iz0pr = iz0;
 
@@ -238,7 +238,7 @@ int srTOptCryst::WfrInterpolOnRegGrid(srTSRWRadStructAccessData* pWfr, srTOptCry
 									//if((dTest > dMax) && (!candPointFound)) continue;
 									if(dTest > dMax)
 									{
-										if(dTestPrev < dMax) 
+										if(dTestPrev < dMax)
 										{
 											//if(dx < 0) isRightBordZ = true;
 											//else if(dx > 0) isLeftBordZ = true;
@@ -253,7 +253,7 @@ int srTOptCryst::WfrInterpolOnRegGrid(srTSRWRadStructAccessData* pWfr, srTOptCry
 									else
 									{
 										//if(candPointFound) pointFound = true;
-										//if((dTest > dMax) && (dTestPrev < dMax)) 
+										//if((dTest > dMax) && (dTestPrev < dMax))
 										//{
 										//	if(dx < 0) isRightBordZ = true;
 										//	else if(dx > 0) isLeftBordZ = true;
@@ -270,10 +270,10 @@ int srTOptCryst::WfrInterpolOnRegGrid(srTSRWRadStructAccessData* pWfr, srTOptCry
 							}
 						}
 					}
-					//calculate indexes of other points and interpolate 
+					//calculate indexes of other points and interpolate
 					//2 cases are considered: "bi-linear" 2D interpolation based on 4 points and "bi-quadratic" 2D interpolation based on 5 points (mesh can be irregular)
 					const double relTolEqualStep = 1.e-04; //to tune
-					
+
 					if(ix0 < 0) ix0 = 0;
 					else if(ix0 >= nx_mi_1) ix0 = nx_mi_1 - 1;
 					if(iz0 < 0) iz0 = 0;
@@ -331,12 +331,12 @@ int srTOptCryst::WfrInterpolOnRegGrid(srTSRWRadStructAccessData* pWfr, srTOptCry
 					bool rz_01_isNotOK = ((fabs(rz_01) > dMax) || (rz_01 == 0));
 					if(rz_0m1_isNotOK && rz_01_isNotOK) goto SetFieldToZero;
 
-					if(rx_m10_isNotOK) 
+					if(rx_m10_isNotOK)
 					{
 						rx_m10 = -rx_10;
 						ofst_m10 = ofst_00;
 					}
-					else if(rx_10_isNotOK) 
+					else if(rx_10_isNotOK)
 					{
 						rx_10 = -rx_m10;
 						ofst_10 = ofst_00;
@@ -344,23 +344,23 @@ int srTOptCryst::WfrInterpolOnRegGrid(srTSRWRadStructAccessData* pWfr, srTOptCry
 
 					bool rx_0m1_isNotOK = (fabs(rx_0m1) > dMax);
 					bool rx_01_isNotOK = (fabs(rx_01) > dMax);
-					if(rx_0m1_isNotOK) 
+					if(rx_0m1_isNotOK)
 					{
 						rx_0m1 = 0.; //??
 						ofst_0m1 = ofst_00;
 					}
-					if(rx_01_isNotOK) 
+					if(rx_01_isNotOK)
 					{
 						rx_01 = 0.;
 						ofst_01 = ofst_00;
 					}
 
-					if(rz_0m1_isNotOK) 
+					if(rz_0m1_isNotOK)
 					{
 						rz_0m1 = -rz_01;
 						ofst_0m1 = ofst_00;
 					}
-					else if(rz_01_isNotOK) 
+					else if(rz_01_isNotOK)
 					{
 						rz_01 = -rz_0m1;
 						ofst_01 = ofst_00;
@@ -368,12 +368,12 @@ int srTOptCryst::WfrInterpolOnRegGrid(srTSRWRadStructAccessData* pWfr, srTOptCry
 
 					bool rz_m10_isNotOK = (fabs(rz_m10) > dMax);
 					bool rz_10_isNotOK = (fabs(rz_10) > dMax);
-					if(rz_m10_isNotOK) 
+					if(rz_m10_isNotOK)
 					{
 						rz_m10 = 0.;
 						ofst_m10 = ofst_00;
 					}
-					if(rz_10_isNotOK) 
+					if(rz_10_isNotOK)
 					{
 						rz_10 = 0.;
 						ofst_10 = ofst_00;

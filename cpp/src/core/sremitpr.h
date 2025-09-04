@@ -4,7 +4,7 @@
  * Project: Synchrotron Radiation Workshop
  * First release: 
  *
- * Copyright (C) 
+ * Copyright (C) European Synchrotron Radiation Facility, Grenoble, France
  * All Rights Reserved
  *
  * @author O.Chubar
@@ -29,7 +29,7 @@ public:
 
 	static int ComputeRadiation(srTTrjDat&, srTGenOptElemHndl&, srTSRWRadStructAccessData&, double*);
 	
-	//To implement
+	// TODO: Implement methods for coupling single-electron emission with wavefront propagation
 
 };
 

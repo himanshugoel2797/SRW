@@ -4,7 +4,7 @@
  * Project: Synchrotron Radiation Workshop
  * First release: 
  *
- * Copyright (C) 
+ * Copyright (C) European Synchrotron Radiation Facility, Grenoble, France
  * All Rights Reserved
  *
  * @author O.Chubar
@@ -21,7 +21,7 @@ int srTEmitPropag::ComputeRadiation(srTTrjDat& TrjDat, srTGenOptElemHndl& OptEle
 {
 	int result = 0;
 
-	//To implement
+	// TODO: Implement ComputeRadiation method for coupling single-electron emission with wavefront propagation
 
 	//if(result = OptElemHndl.rep->CheckRadStructForPropagation(&Wfr)) return result;
 

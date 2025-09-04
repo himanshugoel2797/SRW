@@ -439,7 +439,7 @@ int srTGenOptElem::PropagateRadiationMeth_2(srTSRWRadStructAccessData* pRadAcces
 		
 		if(pRadDataSingleE != pRadAccessData)
 		{
-			//To implement !!! for structures with (eventually) different nx, nz !!!:
+			// TODO: Implement for structures with (eventually) different nx, nz dimensions
 			if(result = UpdateGenRadStructSliceConstE_Meth_2(pRadDataSingleE, ie, pRadAccessData)) return result;
 			delete pRadDataSingleE;
 			pRadDataSingleE = 0;
