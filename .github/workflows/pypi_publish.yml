@@ -73,8 +73,10 @@ jobs:
         uses: Jimver/cuda-toolkit@v0.2.22
         id: cuda-toolkit
         with:
-          cuda: '12.6.3'
+          cuda: '13.2.0'
           method: 'network'
+          non-cuda-sub-packages: '["libcufft","libcufft-dev","cuda-nvcc","cuda-cudart","cuda-cudart-dev","libcublas","libcublas-dev"]'
+          sub-packages: '["toolkit"]'
 
       # --- Conda and dependencies ---
 

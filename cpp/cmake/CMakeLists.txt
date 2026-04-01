@@ -39,7 +39,10 @@ endif()
 
 # Setup definitions for all targets
 add_definitions(${SRW_DEFINITIONS})
-add_compile_options(-O3 -mfma) #HG01082025
+add_compile_options(-O3)
+if(NOT APPLE OR NOT CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
+    add_compile_options(-mfma)
+endif()
 
 #ext
 #auxgpu
