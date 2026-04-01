@@ -55,6 +55,8 @@ class CMakeBuild(build_ext):
         if 'MODE' in env:
             if env['MODE'] == 'omp':
                 cmake_args += ['-DUSE_OPENMP=ON']
+            elif env['MODE'] == 'cuda':
+                cmake_args += ['-DUSE_CUDA=ON', '-DCUDA_BUILDALL_ARCHS=ON']
         env_cmake_args = os.getenv("CMAKE_ARGS", None)
         if env_cmake_args is not None:
             cmake_args += env_cmake_args.split(" ")
@@ -85,7 +87,9 @@ with open(os.path.join(base_dir, 'requirements.txt')) as requirements_file:
     requirements = [line for line in requirements_file.read().splitlines()
                     if not line.startswith('#')]
 
-setup(name='srwpy',
+package_name = os.environ.get('SRW_PACKAGE_NAME', 'srwpy')
+
+setup(name=package_name,
       version='4.1.1', #'4.1.0', #'4.0.0b1',
       description='This is SRW for Python',
       author='O. Chubar et al.',

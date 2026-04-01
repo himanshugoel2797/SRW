@@ -12,14 +12,17 @@ jobs:
     # pull requests are a duplicate of a branch push if within the same repo.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
 
-    name: ${{ matrix.host-os }} / Python ${{ matrix.python-version }} / OpenMP ${{ matrix.openmp }}
+    name: ${{ matrix.host-os }} / Python ${{ matrix.python-version }} / ${{ matrix.build-mode }}
     runs-on: ${{ matrix.host-os }}
     strategy:
       matrix:
         host-os: ["ubuntu-latest", "macos-latest", "windows-latest"]
-        #python-version: ["3.8", "3.9", "3.10", "3.11"] #HG16062025
         python-version: ["3.10", "3.11", "3.12", "3.13"]
-        openmp: ["off"]
+        build-mode: ["cuda", "cpu", "omp"]
+        exclude:
+          # No CUDA support on macOS
+          - host-os: macos-latest
+            build-mode: cuda
       fail-fast: false
 
     defaults:
@@ -27,14 +30,35 @@ jobs:
         shell: bash -l {0}
 
     steps:
-      #- uses: actions/checkout@v3 #HG16062025
       - uses: actions/checkout@v4
 
-      - name: Set OpenMP mode
-        if: matrix.openmp == 'on'
+      # --- Environment variable setup ---
+
+      - name: Set CUDA build environment
+        if: matrix.build-mode == 'cuda'
         run: |
-          export MODE="omp"
-          echo "MODE=${MODE}" >> $GITHUB_ENV
+          echo "MODE=cuda" >> $GITHUB_ENV
+          echo "SRW_PACKAGE_NAME=srwpy" >> $GITHUB_ENV
+          echo "ARTIFACT_PREFIX=cuda" >> $GITHUB_ENV
+
+      - name: Set OpenMP build environment
+        if: matrix.build-mode == 'omp'
+        run: |
+          echo "MODE=omp" >> $GITHUB_ENV
+          echo "SRW_PACKAGE_NAME=srwpy-omp" >> $GITHUB_ENV
+          echo "ARTIFACT_PREFIX=omp" >> $GITHUB_ENV
+
+      - name: Set CPU build environment (Linux/Windows)
+        if: matrix.build-mode == 'cpu' && runner.os != 'macOS'
+        run: |
+          echo "SRW_PACKAGE_NAME=srwpy-cpu" >> $GITHUB_ENV
+          echo "ARTIFACT_PREFIX=cpu" >> $GITHUB_ENV
+
+      - name: Set CPU build environment (macOS)
+        if: matrix.build-mode == 'cpu' && runner.os == 'macOS'
+        run: |
+          echo "SRW_PACKAGE_NAME=srwpy" >> $GITHUB_ENV
+          echo "ARTIFACT_PREFIX=macos" >> $GITHUB_ENV
 
       - name: Set MacOS Deployment Target
         if: runner.os == 'macOS'
@@ -42,7 +66,18 @@ jobs:
           export MACOSX_DEPLOYMENT_TARGET="10.15"
           echo "MACOSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET}" >> $GITHUB_ENV
 
-      #- uses: conda-incubator/setup-miniconda@v2 #HG16062025
+      # --- CUDA Toolkit ---
+
+      - name: Install CUDA Toolkit
+        if: matrix.build-mode == 'cuda'
+        uses: Jimver/cuda-toolkit@v0.2.22
+        id: cuda-toolkit
+        with:
+          cuda: '12.6.3'
+          method: 'network'
+
+      # --- Conda and dependencies ---
+
       - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: testenv
@@ -63,27 +98,22 @@ jobs:
           arch: x64
 
       - name: Install build requirements with conda
-        if: runner.os != 'Linux'
+        if: runner.os != 'Linux' || matrix.build-mode == 'cuda'
         run: |
           set -vxeuo pipefail
           conda install -y cmake
 
       - name: Install OpenMP for macOS with conda
-        if: runner.os == 'macOS' && matrix.openmp == 'on'
+        if: runner.os == 'macOS' && matrix.build-mode == 'omp'
         run: |
           set -vxeuo pipefail
           conda install -y -c conda-forge llvm-openmp
 
-      # NOTE: This step is not needed for fast tests.
-      # - name: Install mpi4py for Unix with conda
-      #   if: runner.os != 'Windows'
-      #   run: |
-      #     set -vxeuo pipefail
-      #     conda install -y -c conda-forge mpi4py openmpi
+      # --- Build wheels ---
 
+      # Linux CPU and OMP builds use cibuildwheel for manylinux compatibility
       - name: Install cibuildwheel on Linux
-        #HG16062025
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && matrix.build-mode != 'cuda'
         run: |
           set -vxeuo pipefail
           python -m pip install --upgrade pip
@@ -91,20 +121,34 @@ jobs:
           python -m pip install packaging
           python -m pip install setuptools
           echo "CIBW_BEFORE_ALL=pip install cmake" >> $GITHUB_ENV
+          echo "CIBW_ENVIRONMENT=SRW_PACKAGE_NAME=${{ env.SRW_PACKAGE_NAME }} MODE=${{ env.MODE }}" >> $GITHUB_ENV
           PYTH_VER=${{ matrix.python-version }}
           PYTH_VER=${PYTH_VER//.}
           echo "CIBW_BUILD="cp$PYTH_VER-manylinux*"" >> $GITHUB_ENV
 
-      - name: Build wheel on Linux
-        if: runner.os == 'Linux'
+      - name: Build wheel on Linux (cibuildwheel)
+        if: runner.os == 'Linux' && matrix.build-mode != 'cuda'
         run: |
           set -vxeuo pipefail
           python -VV
           python -m cibuildwheel --output-dir dist env/python
           ls -la dist/*
 
+      - name: Build wheel on Linux (CUDA, direct)
+        if: runner.os == 'Linux' && matrix.build-mode == 'cuda'
+        run: |
+          set -vxeuo pipefail
+          cd env/python
+          python -VV
+          python -m pip install packaging
+          python -m pip install setuptools
+          python setup.py bdist_wheel --plat-name manylinux2014_x86_64
+          ls -la dist/*
+          mkdir -p ../../dist
+          cp dist/*.whl ../../dist/
+
       - name: Build wheel on Windows/Mac
-        if: runner.os != 'Linux'
+        if: runner.os == 'Windows' || runner.os == 'macOS'
         run: |
           set -vxeuo pipefail
           cd env/python
@@ -116,13 +160,15 @@ jobs:
           mkdir -p ../../dist
           cp dist/*.whl ../../dist/
 
+      # --- Upload artifacts ---
+
       - name: Publish wheels to GitHub artifacts
-        #uses: actions/upload-artifact@v3 #HG16062025
         uses: actions/upload-artifact@v4
         with:
-          #name: wheels #HG16062025
-          name: srwpy-${{ matrix.host-os }}-Py_${{ matrix.python-version }}-OpenMP_${{ matrix.openmp }}
+          name: ${{ env.ARTIFACT_PREFIX }}-${{ matrix.host-os }}-Py_${{ matrix.python-version }}
           path: dist/*
+
+      # --- Test ---
 
       - name: Install the package and test requirements
         run: |
@@ -144,30 +190,90 @@ jobs:
           cd env/python
           pytest -k fast
 
-  publish-to-pypi:
-    # Hints from:
-    #   - https://github.com/pypa/gh-action-pypi-publish/discussions/28
-    #   - https://github.com/Lightning-AI/lightning/blob/master/.github/workflows/release-pypi.yml
+  publish-srwpy:
+    # Publish srwpy: CUDA wheels (Linux/Windows) + macOS CPU wheels
     if: github.event_name == 'release'
-    name: Publish to PyPI
+    name: Publish srwpy to PyPI
     needs: build-n-publish
     runs-on: ubuntu-latest
     permissions:
       id-token: write
 
     steps:
-      #- uses: actions/checkout@v3 #HG16062025
       - uses: actions/checkout@v4
 
-      - name: Download wheels from GitHub artifacts
-        #uses: actions/download-artifact@v3 #HG16062025
+      - name: Download CUDA wheels
         uses: actions/download-artifact@v4
         with:
-          #name: wheels
+          pattern: cuda-*
           path: dist/
           merge-multiple: true
 
-      - name: Publish wheels to PyPI
+      - name: Download macOS wheels
+        uses: actions/download-artifact@v4
+        with:
+          pattern: macos-*
+          path: dist/
+          merge-multiple: true
+
+      - name: List wheels
+        run: ls -la dist/
+
+      - name: Publish srwpy to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: ./dist/
+
+  publish-srwpy-cpu:
+    # Publish srwpy-cpu: CPU-only wheels for Linux/Windows
+    if: github.event_name == 'release'
+    name: Publish srwpy-cpu to PyPI
+    needs: build-n-publish
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download CPU wheels
+        uses: actions/download-artifact@v4
+        with:
+          pattern: cpu-*
+          path: dist/
+          merge-multiple: true
+
+      - name: List wheels
+        run: ls -la dist/
+
+      - name: Publish srwpy-cpu to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: ./dist/
+
+  publish-srwpy-omp:
+    # Publish srwpy-omp: OpenMP wheels for all platforms
+    if: github.event_name == 'release'
+    name: Publish srwpy-omp to PyPI
+    needs: build-n-publish
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download OpenMP wheels
+        uses: actions/download-artifact@v4
+        with:
+          pattern: omp-*
+          path: dist/
+          merge-multiple: true
+
+      - name: List wheels
+        run: ls -la dist/
+
+      - name: Publish srwpy-omp to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: ./dist/
