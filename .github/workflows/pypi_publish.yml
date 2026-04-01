@@ -68,15 +68,34 @@ jobs:
 
       # --- CUDA Toolkit ---
 
-      - name: Install CUDA Toolkit
-        if: matrix.build-mode == 'cuda'
-        uses: Jimver/cuda-toolkit@v0.2.35
-        id: cuda-toolkit
-        with:
-          cuda: '13.2.0'
-          method: 'network'
-          non-cuda-sub-packages: '["libcufft","libcufft-dev","cuda-nvcc","cuda-cudart","cuda-cudart-dev","libcublas","libcublas-dev"]'
-          sub-packages: '["toolkit"]'
+      - name: Install CUDA Toolkit (Linux)
+        if: matrix.build-mode == 'cuda' && runner.os == 'Linux'
+        run: |
+          set -vxeuo pipefail
+          wget -q https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb
+          sudo dpkg -i cuda-keyring_1.1-1_all.deb
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cuda-nvcc-13-2 \
+            cuda-cudart-dev-13-2 \
+            libcufft-dev-13-2 \
+            libcublas-dev-13-2
+          echo "/usr/local/cuda-13.2/bin" >> $GITHUB_PATH
+          echo "CUDA_PATH=/usr/local/cuda-13.2" >> $GITHUB_ENV
+          echo "CUDA_HOME=/usr/local/cuda-13.2" >> $GITHUB_ENV
+
+      - name: Install CUDA Toolkit (Windows)
+        if: matrix.build-mode == 'cuda' && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $CUDA_VERSION = "13.2.0"
+          $CUDA_VERSION_SHORT = "13.2"
+          $CUDA_URL = "https://developer.download.nvidia.com/compute/cuda/${CUDA_VERSION}/network_installers/cuda_${CUDA_VERSION}_windows_network.exe"
+          Invoke-WebRequest -Uri $CUDA_URL -OutFile cuda_installer.exe
+          Start-Process -FilePath .\cuda_installer.exe -ArgumentList "-s nvcc_${CUDA_VERSION_SHORT} cudart_${CUDA_VERSION_SHORT} cufft_${CUDA_VERSION_SHORT} cufft_dev_${CUDA_VERSION_SHORT} cublas_${CUDA_VERSION_SHORT} cublas_dev_${CUDA_VERSION_SHORT}" -Wait -NoNewWindow
+          echo "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v${CUDA_VERSION_SHORT}\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          echo "CUDA_PATH=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v${CUDA_VERSION_SHORT}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "CUDA_HOME=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v${CUDA_VERSION_SHORT}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       # --- Conda and dependencies ---
 
