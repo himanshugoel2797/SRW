@@ -199,36 +199,39 @@ void* CAuxGPU::_ToDevice(TGPUUsageArg* arg, void* hostPtr, size_t size, int flag
 	if (hostPtr != NULL) //HG21042025
 	{
 		auto close_l = gpuMap.lower_bound(hostPtr);
+		memAllocInfo_t info;
+		bool devMatchFound = false;
+		bool matchFound = false;
 		if (close_l != gpuMap.end())
 		{
-			memAllocInfo_t info = close_l->second;
-			bool devMatchFound = (info.devicePtr <= hostPtr && (char*)info.devicePtr + info.size > hostPtr);
-			bool matchFound = (info.hostPtr <= hostPtr && (char*)info.hostPtr + info.size > hostPtr) | devMatchFound;
-			if (!matchFound)
-			{
-				info = std::prev(close_l)->second;
-				devMatchFound = (info.devicePtr <= hostPtr && (char*)info.devicePtr + info.size > hostPtr);
-				matchFound = (info.hostPtr <= hostPtr && (char*)info.hostPtr + info.size > hostPtr) | devMatchFound;
+			info = close_l->second;
+			devMatchFound = (info.devicePtr <= hostPtr && (char*)info.devicePtr + info.size > hostPtr);
+			matchFound = (info.hostPtr <= hostPtr && (char*)info.hostPtr + info.size > hostPtr) | devMatchFound;
+		}
+		if (!matchFound && close_l != gpuMap.begin()) //HG08042026 Guard std::prev against begin(); also handles close_l == end() (i.e. hostPtr lies in the last cached range)
+		{
+			info = std::prev(close_l)->second;
+			devMatchFound = (info.devicePtr <= hostPtr && (char*)info.devicePtr + info.size > hostPtr);
+			matchFound = (info.hostPtr <= hostPtr && (char*)info.hostPtr + info.size > hostPtr) | devMatchFound;
+		}
+		if (matchFound)
+		{
+			if (devMatchFound)
+				return (char*)hostPtr; //Already on device
+			size_t offset = (char*)hostPtr - (char*)info.hostPtr;
+			void* devPtr = info.devicePtr;
+			hostPtr = info.hostPtr;
+			//if (gpuMap[devPtr].HostToDevUpdated && !dontCopy){
+			if (gpuMap[devPtr].HostToDevUpdated && devPtr != NULL && hostPtr != NULL && !dontCopy){
+				//cudaMemcpyAsync(devPtr, hostPtr, size, cudaMemcpyHostToDevice, memcpy_stream);
+				CUDA_SAFE(cudaMemcpyAsync((char*)devPtr + offset, (char*)hostPtr + offset, size, cudaMemcpyDefault, memcpy_stream)); //HG26072024
+				CUDA_SAFE(cudaEventRecord(gpuMap[devPtr].h2d_event, memcpy_stream));
 			}
-			if (matchFound)
-			{
-				if (devMatchFound)
-					return (char*)hostPtr; //Already on device
-				size_t offset = (char*)hostPtr - (char*)info.hostPtr;
-				void* devPtr = info.devicePtr;
-				hostPtr = info.hostPtr;
-				//if (gpuMap[devPtr].HostToDevUpdated && !dontCopy){
-				if (gpuMap[devPtr].HostToDevUpdated && devPtr != NULL && hostPtr != NULL && !dontCopy){
-					//cudaMemcpyAsync(devPtr, hostPtr, size, cudaMemcpyHostToDevice, memcpy_stream);
-					CUDA_SAFE(cudaMemcpyAsync((char*)devPtr + offset, (char*)hostPtr + offset, size, cudaMemcpyDefault, memcpy_stream)); //HG26072024
-					CUDA_SAFE(cudaEventRecord(gpuMap[devPtr].h2d_event, memcpy_stream));
-				}
-				//#if _DEBUG
-				//		printf("ToDevice: %p -> %p, %d, D2H: %d, H2D: %d\n", hostPtr, devPtr, size, gpuMap[devPtr].DevToHostUpdated, gpuMap[devPtr].HostToDevUpdated); //HG28072023
-				//#endif
-				//gpuMap[devPtr].HostToDevUpdated = false; //HG23102025 Commented-out
-				return (char*)devPtr + offset;
-			}
+			//#if _DEBUG
+			//		printf("ToDevice: %p -> %p, %d, D2H: %d, H2D: %d\n", hostPtr, devPtr, size, gpuMap[devPtr].DevToHostUpdated, gpuMap[devPtr].HostToDevUpdated); //HG28072023
+			//#endif
+			//gpuMap[devPtr].HostToDevUpdated = false; //HG23102025 Commented-out
+			return (char*)devPtr + offset;
 		}
 	}
 
