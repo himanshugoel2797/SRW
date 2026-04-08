@@ -1616,11 +1616,11 @@ EXP int CALL srwlUtiGPUProc(int op, double* arParGPU) //OC20022024
 	{
 		//CAuxGPU::Init();
 		CAuxGPU::Init(&parGPU); //HG02082024
-		//HG07042026 If auto-assignment was requested (arParGPU[1] == -1) and Init resolved a real device,
-		//write the chosen 1-based index back so downstream calls and Fini see the resolved device.
-		if(arParGPU != 0 && arParGPU[0] > 0 && (int)arParGPU[1] == -1)
+		//HG08042026 Init may have wrapped deviceIndex (round-robin) — propagate the resolved
+		//1-based device back to the caller's array so downstream calls and Fini see the same value.
+		if(arParGPU != 0 && arParGPU[0] > 0)
 		{
-			arParGPU[1] = (double)parGPU.deviceIndex; // 0 if CPU fallback, >0 if a slot was acquired
+			arParGPU[1] = (double)parGPU.deviceIndex;
 		}
 		if(arParGPU != 0 && arParGPU[0] > 0 && arParGPU[1] > 0) //HG07022024
 		{

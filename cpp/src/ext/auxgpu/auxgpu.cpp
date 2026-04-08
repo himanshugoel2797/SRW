@@ -17,24 +17,7 @@
 #include <cstdlib>
 #include <new>
 #include <cstring> //HG26072024
-#include <cstdint> //HG07042026
-#include <map>     //HG07042026
-#include <vector>  //HG07042026
-#include <algorithm> //HG07042026
-
-//HG07042026 Cross-platform headers for slot file locking
-#ifdef _WIN32
-#include <windows.h>
-#include <direct.h>
-#include <io.h>
-#else
-#include <sys/file.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <errno.h>
-#endif
+#include <map>
 
 //#ifdef _OFFLOAD_GPU
 #include <cuda_runtime.h>
@@ -48,360 +31,26 @@ static bool GPUAvailabilityTested = false;
 static bool deviceOffloadInitialized = false;
 static int deviceCount = 0;
 
-//HG07042026 Peak device-memory tracking (Option B: account allocations routed through CAuxGPU)
-static size_t g_currentDeviceBytes = 0;
-static size_t g_peakDeviceBytes = 0;
-
-//HG07042026 Map of currently-held auto-assigned slot locks, keyed by 1-based deviceIndex.
-//Necessary because callers (e.g. srwlUtiGPUProc) construct TGPUUsageArg as a local on each call,
-//so the slot handle cannot live on the struct alone across Init/Fini boundaries.
-static std::map<int, intptr_t> g_autoAssignedLocks;
-//HG07042026 Per-process sticky GPU: once a process successfully acquires a slot, remember
-//the device so subsequent AutoAssign calls only try that device. Reset to -1 means "no
-//preference yet", -2 means "tried and failed previously, stay on CPU".
-static int g_stickyGpu = -1;
-
-static void TrackAllocBytes(size_t bytes)
+//HG08042026 Round-robin device wrap. Callers may pass a 1-based deviceIndex larger than the
+//number of installed GPUs (e.g. a per-process rank within the node); we map it onto a real
+//device via ((deviceIndex - 1) % deviceCount) + 1. Returns the (possibly unchanged) 1-based
+//index, or 0 if no GPU is available. Mutates arg->deviceIndex in place so subsequent calls
+//see the resolved value.
+static int WrapDeviceIndex(TGPUUsageArg* arg)
 {
-	g_currentDeviceBytes += bytes;
-	if(g_currentDeviceBytes > g_peakDeviceBytes) g_peakDeviceBytes = g_currentDeviceBytes;
-}
-
-static void TrackFreeBytes(size_t bytes)
-{
-	if(bytes > g_currentDeviceBytes) g_currentDeviceBytes = 0;
-	else g_currentDeviceBytes -= bytes;
-}
-
-//HG07042026 Slot state file format (binary, fixed size)
-#define SRW_GPU_STATE_MAGIC   0x53475055u // 'SGPU'
-#define SRW_GPU_STATE_VERSION 1u
-#define SRW_GPU_MAX_SLOTS     4
-#define SRW_GPU_SAMPLE_TARGET 5
-
-struct SrwGpuStateFile
-{
-	uint32_t magic;
-	uint32_t version;
-	uint32_t numSlots;
-	uint32_t numSamples;
-	uint64_t peakBytes;
-	uint64_t totalBytes;
-	uint32_t samplingDone;
-	uint32_t reserved;
-};
-
-//HG07042026 Cross-platform path / directory helpers for slot files
-static void GetSlotDirPath(char* out, size_t outSize)
-{
-#ifdef _WIN32
-	char tmp[MAX_PATH];
-	DWORD n = GetTempPathA(MAX_PATH, tmp);
-	if(n == 0 || n > MAX_PATH) { _snprintf_s(out, outSize, _TRUNCATE, "C:\\Temp\\srw_gpu_slots"); return; }
-	_snprintf_s(out, outSize, _TRUNCATE, "%ssrw_gpu_slots", tmp);
-#else
-	snprintf(out, outSize, "/tmp/srw_gpu_slots");
-#endif
-}
-
-static void EnsureSlotDir()
-{
-	char dir[512];
-	GetSlotDirPath(dir, sizeof(dir));
-#ifdef _WIN32
-	_mkdir(dir);
-#else
-	mkdir(dir, 0777);
-#endif
-}
-
-static void GetStateFilePath(int gpuIdx, char* out, size_t outSize)
-{
-	char dir[512];
-	GetSlotDirPath(dir, sizeof(dir));
-#ifdef _WIN32
-	_snprintf_s(out, outSize, _TRUNCATE, "%s\\srw_gpu_%d.state", dir, gpuIdx);
-#else
-	snprintf(out, outSize, "%s/srw_gpu_%d.state", dir, gpuIdx);
-#endif
-}
-
-static void GetSlotLockPath(int gpuIdx, int slotIdx, char* out, size_t outSize)
-{
-	char dir[512];
-	GetSlotDirPath(dir, sizeof(dir));
-#ifdef _WIN32
-	_snprintf_s(out, outSize, _TRUNCATE, "%s\\srw_gpu_%d_slot_%d.lock", dir, gpuIdx, slotIdx);
-#else
-	snprintf(out, outSize, "%s/srw_gpu_%d_slot_%d.lock", dir, gpuIdx, slotIdx);
-#endif
-}
-
-//HG07042026 Cross-platform exclusive lock primitives.
-//Returns valid handle (intptr_t) on success, -1 on failure.
-//If blocking==false, fails immediately if the file is already locked.
-static intptr_t LockFileExclusive(const char* path, bool blocking)
-{
-#ifdef _WIN32
-	HANDLE h = CreateFileA(path, GENERIC_READ | GENERIC_WRITE,
-	                       FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
-	                       OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-	if(h == INVALID_HANDLE_VALUE) return -1;
-	OVERLAPPED ov; memset(&ov, 0, sizeof(ov));
-	DWORD flags = LOCKFILE_EXCLUSIVE_LOCK;
-	if(!blocking) flags |= LOCKFILE_FAIL_IMMEDIATELY;
-	if(!LockFileEx(h, flags, 0, MAXDWORD, MAXDWORD, &ov)) { CloseHandle(h); return -1; }
-	return (intptr_t)h;
-#else
-	int fd = open(path, O_RDWR | O_CREAT, 0666);
-	if(fd < 0) return -1;
-	int op = LOCK_EX | (blocking ? 0 : LOCK_NB);
-	if(flock(fd, op) != 0) { close(fd); return -1; }
-	return (intptr_t)fd;
-#endif
-}
-
-static void UnlockAndClose(intptr_t handle)
-{
-	if(handle == -1) return;
-#ifdef _WIN32
-	HANDLE h = (HANDLE)handle;
-	OVERLAPPED ov; memset(&ov, 0, sizeof(ov));
-	UnlockFileEx(h, 0, MAXDWORD, MAXDWORD, &ov);
-	CloseHandle(h);
-#else
-	int fd = (int)handle;
-	flock(fd, LOCK_UN);
-	close(fd);
-#endif
-}
-
-//HG07042026 Read entire state file given an open locked handle.
-//Returns true if a well-formed record was read, false otherwise (caller should re-init).
-static bool ReadStateRaw(intptr_t handle, SrwGpuStateFile* out)
-{
-#ifdef _WIN32
-	HANDLE h = (HANDLE)handle;
-	LARGE_INTEGER zero; zero.QuadPart = 0;
-	SetFilePointerEx(h, zero, NULL, FILE_BEGIN);
-	DWORD nread = 0;
-	if(!ReadFile(h, out, sizeof(SrwGpuStateFile), &nread, NULL)) return false;
-	if(nread != sizeof(SrwGpuStateFile)) return false;
-#else
-	int fd = (int)handle;
-	if(lseek(fd, 0, SEEK_SET) < 0) return false;
-	ssize_t nread = read(fd, out, sizeof(SrwGpuStateFile));
-	if(nread != (ssize_t)sizeof(SrwGpuStateFile)) return false;
-#endif
-	return out->magic == SRW_GPU_STATE_MAGIC && out->version == SRW_GPU_STATE_VERSION;
-}
-
-static void WriteStateRaw(intptr_t handle, const SrwGpuStateFile* in)
-{
-#ifdef _WIN32
-	HANDLE h = (HANDLE)handle;
-	LARGE_INTEGER zero; zero.QuadPart = 0;
-	SetFilePointerEx(h, zero, NULL, FILE_BEGIN);
-	DWORD nwrite = 0;
-	WriteFile(h, in, sizeof(SrwGpuStateFile), &nwrite, NULL);
-	FlushFileBuffers(h);
-#else
-	int fd = (int)handle;
-	lseek(fd, 0, SEEK_SET);
-	ssize_t w = write(fd, in, sizeof(SrwGpuStateFile));
-	(void)w;
-	fsync(fd);
-#endif
-}
-
-//HG07042026 Auto-assign a free GPU slot. Walks every device, opens the per-GPU state file
-//under exclusive lock to read/initialize/calibrate slot count, then tries to grab a slot
-//via per-slot lock files (non-blocking). On success, fills arg->deviceIndex (1-based),
-//arg->slotIdx and arg->slotLockHandle, and returns 0. On failure (all slots locked or
-//no GPU available), sets arg->deviceIndex = 0 and returns -1.
-static int AutoAssignDevice(TGPUUsageArg* arg)
-{
-	if(arg == NULL) return -1;
+	if(arg == NULL) return 0;
+	if(arg->deviceIndex <= 0) return 0;
 	int devCount = 0;
 	if(cudaGetDeviceCount(&devCount) != cudaSuccess || devCount <= 0)
 	{
 		arg->deviceIndex = 0;
-		arg->autoAssigned = 0;
-		return -1;
+		return 0;
 	}
-
-	EnsureSlotDir();
-
-	//HG07042026 Sticky GPU affinity: once this process has successfully acquired a GPU,
-	//all subsequent calls only try that same device. If it's full, fall straight to CPU
-	//instead of migrating to another GPU (avoids ping-ponging context init costs across
-	//devices and lets cudaMalloc reuse the per-process pool).
-	//   g_stickyGpu = -1  -> no preference yet, walk all devices
-	//   g_stickyGpu >= 0  -> only try this device, then CPU fallback on failure
-#ifdef _WIN32
-	int rotOffset = (int)(GetCurrentProcessId());
-#else
-	int rotOffset = (int)getpid();
-#endif
-	rotOffset = ((rotOffset % devCount) + devCount) % devCount;
-
-	int walkStart = 0;
-	int walkCount = devCount;
-	if(g_stickyGpu >= 0 && g_stickyGpu < devCount)
-	{
-		walkStart = g_stickyGpu;
-		walkCount = 1;
-	}
-
-	for(int wi = 0; wi < walkCount; wi++)
-	{
-		int gpu = (walkCount == 1) ? walkStart : ((rotOffset + wi) % devCount);
-		char statePath[512];
-		GetStateFilePath(gpu, statePath, sizeof(statePath));
-
-		//Read/update state under exclusive lock
-		intptr_t stateLock = LockFileExclusive(statePath, true);
-		if(stateLock == -1) continue;
-
-		SrwGpuStateFile st;
-		bool ok = ReadStateRaw(stateLock, &st);
-		if(!ok)
-		{
-			//Initialize a fresh state file for this GPU
-			memset(&st, 0, sizeof(st));
-			st.magic        = SRW_GPU_STATE_MAGIC;
-			st.version      = SRW_GPU_STATE_VERSION;
-			st.numSlots     = 1;
-			st.numSamples   = 0;
-			st.peakBytes    = 0;
-			st.totalBytes   = 0;
-			st.samplingDone = 0;
-			//Cache total memory by switching to the device once
-			if(cudaSetDevice(gpu) == cudaSuccess)
-			{
-				size_t freeB = 0, totalB = 0;
-				if(cudaMemGetInfo(&freeB, &totalB) == cudaSuccess) st.totalBytes = (uint64_t)totalB;
-			}
-			WriteStateRaw(stateLock, &st);
-		}
-
-		//Calibrate slot count once we have enough samples
-		if(!st.samplingDone && st.numSamples >= SRW_GPU_SAMPLE_TARGET && st.peakBytes > 0 && st.totalBytes > 0)
-		{
-			uint64_t newSlots = st.totalBytes / st.peakBytes; //e.g. peak < 50% total -> 2 slots
-			if(newSlots < 1) newSlots = 1;
-			if(newSlots > SRW_GPU_MAX_SLOTS) newSlots = SRW_GPU_MAX_SLOTS;
-			st.numSlots     = (uint32_t)newSlots;
-			st.samplingDone = 1;
-			WriteStateRaw(stateLock, &st);
-		}
-
-		uint32_t numSlots = st.numSlots;
-		UnlockAndClose(stateLock);
-
-		//Try to grab a slot on this GPU
-		for(uint32_t slot = 0; slot < numSlots; slot++)
-		{
-			char lockPath[512];
-			GetSlotLockPath(gpu, (int)slot, lockPath, sizeof(lockPath));
-			intptr_t slotLock = LockFileExclusive(lockPath, false);
-			if(slotLock == -1) continue;
-
-			arg->deviceIndex    = gpu + 1; //1-based, matching existing convention
-			arg->slotIdx        = (int)slot;
-			arg->slotLockHandle = slotLock;
-			arg->autoAssigned   = 1;
-			//Persist the lock handle so Fini can find it even if it constructs a fresh TGPUUsageArg
-			g_autoAssignedLocks[arg->deviceIndex] = slotLock;
-			//HG07042026 Lock this process to the chosen device for all future calls
-			g_stickyGpu = gpu;
-			//Reset peak counter for this run's measurement
-			g_currentDeviceBytes = 0;
-			g_peakDeviceBytes    = 0;
-			//HG07042026 Visibility: report which slot was acquired on which GPU.
-			//Use stdout (not stderr) so ordering is consistent with Python prints in the same log file.
-			fprintf(stdout, "[AuxGPU] acquired GPU %d slot %u/%u\n",
-			        arg->deviceIndex, (unsigned)slot, (unsigned)numSlots);
-			fflush(stdout);
-			return 0;
-		}
-	}
-
-	//All slots on all GPUs are taken -> CPU fallback
-	arg->deviceIndex    = 0;
-	arg->autoAssigned   = 0;
-	arg->slotIdx        = -1;
-	arg->slotLockHandle = -1;
-	//HG07042026 Visibility: report fallback so the user knows the calc went to CPU
-	fprintf(stdout, "[AuxGPU] no free slots across %d GPU(s) -> CPU fallback\n", devCount);
-	fflush(stdout);
-	return -1;
+	int wrapped = ((arg->deviceIndex - 1) % devCount) + 1;
+	arg->deviceIndex = wrapped;
+	return wrapped;
 }
 
-//HG07042026 Release the slot held by an auto-assigned arg. Updates per-GPU state file
-//with this run's peak memory if calibration is still in progress, then drops the lock.
-static void ReleaseAutoAssignedSlot(TGPUUsageArg* arg)
-{
-	if(arg == NULL) return;
-	if(arg->deviceIndex <= 0)
-	{
-		arg->autoAssigned = 0;
-		arg->slotLockHandle = -1;
-		return;
-	}
-
-	//Find the lock handle either on the struct (direct C++ caller path) or in the global map
-	//(C/Python pipeline path where the struct is reconstructed each call).
-	intptr_t handle = arg->slotLockHandle;
-	std::map<int, intptr_t>::iterator it = g_autoAssignedLocks.find(arg->deviceIndex);
-	if(it != g_autoAssignedLocks.end())
-	{
-		handle = it->second;
-		g_autoAssignedLocks.erase(it);
-	}
-	if(handle == -1) return; //device wasn't auto-assigned
-
-	int gpu = arg->deviceIndex - 1;
-	char statePath[512];
-	GetStateFilePath(gpu, statePath, sizeof(statePath));
-
-	intptr_t stateLock = LockFileExclusive(statePath, true);
-	if(stateLock != -1)
-	{
-		SrwGpuStateFile st;
-		if(ReadStateRaw(stateLock, &st))
-		{
-			if(!st.samplingDone)
-			{
-				if((uint64_t)g_peakDeviceBytes > st.peakBytes) st.peakBytes = (uint64_t)g_peakDeviceBytes;
-				st.numSamples++;
-				//HG07042026 Flip samplingDone here (instead of waiting for the next AutoAssign visit)
-				//so calibration scripts terminate as soon as the last sample is collected.
-				if(st.numSamples >= SRW_GPU_SAMPLE_TARGET && st.peakBytes > 0 && st.totalBytes > 0)
-				{
-					uint64_t newSlots = st.totalBytes / st.peakBytes;
-					if(newSlots < 1) newSlots = 1;
-					if(newSlots > SRW_GPU_MAX_SLOTS) newSlots = SRW_GPU_MAX_SLOTS;
-					st.numSlots     = (uint32_t)newSlots;
-					st.samplingDone = 1;
-				}
-				WriteStateRaw(stateLock, &st);
-			}
-		}
-		UnlockAndClose(stateLock);
-	}
-
-	UnlockAndClose(handle);
-	//HG07042026 Visibility: report slot release plus the peak observed during this run
-	fprintf(stdout, "[AuxGPU] released GPU %d, peak %.1f MiB\n",
-	        arg->deviceIndex, (double)g_peakDeviceBytes / (1024.0 * 1024.0));
-	fflush(stdout);
-	arg->slotLockHandle = -1;
-	arg->slotIdx        = -1;
-	arg->autoAssigned   = 0;
-	g_currentDeviceBytes = 0;
-	g_peakDeviceBytes    = 0;
-}
 
 //#ifdef _OFFLOAD_GPU
 //typedef struct
@@ -459,7 +108,10 @@ bool CAuxGPU::GPUEnabled(TGPUUsageArg *arg)
 	if (arg == NULL)
 		return false;
 	if (arg->deviceIndex > 0) {
-		if (arg->deviceIndex <= deviceCount)
+		//HG08042026 Round-robin wrap so callers can pass any positive index (e.g. local rank)
+		if (deviceCount <= 0) cudaGetDeviceCount(&deviceCount);
+		WrapDeviceIndex(arg);
+		if (arg->deviceIndex > 0 && arg->deviceIndex <= deviceCount)
 		{
 			//if (memcpy_stream_initialized && current_device != arg->deviceIndex) //HG02082024 (commented-out)
 			//{
@@ -597,7 +249,6 @@ void* CAuxGPU::_ToDevice(TGPUUsageArg* arg, void* hostPtr, size_t size, int flag
 			err = cudaMalloc(&devicePtr, size);
 			if (err != cudaSuccess) pinOnHost = true; //HG26072024 If allocation still fails, try pinning on host
 		}
-		if (err == cudaSuccess) TrackAllocBytes(size); //HG07042026 account device-resident allocation
 	}
 	if (hostPtr != NULL && pinOnHost) //Fallback to pinning host memory directly
 	{
@@ -744,7 +395,6 @@ void* CAuxGPU::_ToHostAndFree(TGPUUsageArg* arg, void* devicePtr, int flags, siz
 		{
 			CUDA_SAFE(cudaMemcpyAsync(hostPtr, devicePtr, size, cudaMemcpyDefault, memcpy_stream)); //HG26072024 only copy if not using pinned memory
 			CUDA_SAFE(cudaFreeAsync(devicePtr, memcpy_stream)); //HG26072024 Doing the async free here is  slightly more efficient and eliminates a potential use-after-free
-			TrackFreeBytes(info.size); //HG07042026
 			CUDA_SAFE(cudaEventSynchronize(info.d2h_event)); // we can't treat host memory as valid until the copy is complete
 		}
 		else
@@ -760,7 +410,6 @@ void* CAuxGPU::_ToHostAndFree(TGPUUsageArg* arg, void* devicePtr, int flags, siz
 		{
 			CUDA_SAFE(cudaStreamWaitEvent(0, info.d2h_event)); //HG26072024 H2D events are meaningless when the memory is on host
 			CUDA_SAFE(cudaFreeAsync(devicePtr, 0));
-			TrackFreeBytes(info.size); //HG07042026
 		}
 		else
 		{
@@ -939,22 +588,14 @@ void CAuxGPU::Init(TGPUUsageArg* arg) //HG02082024
 //#ifdef _OFFLOAD_GPU
 	if (arg == NULL) //HG02082024
 		return;
-	//HG07042026 Auto-assignment: caller passed deviceIndex == -1, walk available GPUs and grab a slot
-	if (arg->autoAssigned && arg->deviceIndex < 0)
-	{
-		if (!GPUAvailable())
-		{
-			arg->deviceIndex = 0;
-			arg->autoAssigned = 0;
-			return;
-		}
-		AutoAssignDevice(arg);
-		//If AutoAssignDevice returned -1, deviceIndex is now 0 -> CPU fallback (continues into early return below)
-	}
 	if (arg->deviceIndex <= 0)
 		return;
 	cudaGetDeviceCount(&deviceCount);
-	if (arg->deviceIndex > deviceCount) //HG02082024
+	//HG08042026 Round-robin wrap: callers may pass any positive deviceIndex (e.g. a per-process
+	//rank within the node) and we map it onto a real device via modulo. This replaces the old
+	//slot/profiling auto-assignment system with a stateless, deterministic scheme.
+	WrapDeviceIndex(arg);
+	if (arg->deviceIndex <= 0 || arg->deviceIndex > deviceCount)
 		return;
 	if (streams.find(arg->deviceIndex) == streams.end())
 	{
@@ -1021,9 +662,6 @@ void CAuxGPU::Fini(TGPUUsageArg* arg) //HG02082024
 	if (updated | freed)
 		CUDA_SAFE(cudaStreamSynchronize(0));
 	gpuMap.clear();
-
-	//HG07042026 If this run was auto-assigned, persist the peak (during calibration) and release the slot lock
-	ReleaseAutoAssignedSlot(arg);
 //#if _DEBUG
 //	printf("Fini: %d\n", gpuMap.size());
 //#endif

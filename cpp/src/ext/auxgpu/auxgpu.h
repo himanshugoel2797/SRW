@@ -15,7 +15,6 @@
 #define __UTIGPU_H
 
 #include <cstdarg>
-#include <cstdint> //HG07042026 for intptr_t
 #include <cstdlib>
 #include <stdio.h>
 #include <typeinfo>
@@ -34,24 +33,20 @@
 //typedef struct
 struct TGPUUsageArg //OC18022024
 {
-	int deviceIndex;        // <=0: CPU, >0: 1-based device index. -1 from caller requests auto-assignment.
-	int autoAssigned;       //HG07042026 1 if device was auto-assigned and the held slot must be released in Fini
-	int slotIdx;            //HG07042026 0-based slot index within deviceIndex (only valid if autoAssigned==1)
-	intptr_t slotLockHandle;//HG07042026 POSIX fd or Windows HANDLE for the held slot lock; -1 if none
+	// <=0: CPU. >0: 1-based device index; values larger than the number of available GPUs are
+	// wrapped via ((deviceIndex - 1) % deviceCount) + 1, so callers can pass a per-process
+	// rank directly and get a deterministic round-robin assignment without any external state.
+	int deviceIndex;
 
 	TGPUUsageArg(void* pvGPU=0) //OC18022024
 	{
 		deviceIndex = -1;
-		autoAssigned = 0;       //HG07042026
-		slotIdx = -1;           //HG07042026
-		slotLockHandle = -1;    //HG07042026
 		if(pvGPU == 0) return;
 		double *arParGPU = (double*)pvGPU;
 		int nPar = (int)arParGPU[0];
 		if(nPar > 0)
 		{
 			deviceIndex = (int)arParGPU[1];
-			if(deviceIndex == -1) autoAssigned = 1; //HG07042026 caller asked for auto-assignment
 		}
 		//continue here for future params
 	}
