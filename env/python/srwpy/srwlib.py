@@ -8730,6 +8730,33 @@ def srwl_wfr_cmd(_csd, _n_modes, _awfr=None, _alg=None): #OC21062021
     return cohModes, eigVals
 
 #**********************Main Partially-Coherent Emission and Propagaiton simulation function
+def _srwl_resolve_local_rank(): #HG08042026
+    """Probe environment for a node-local process rank, returning a 1-based index suitable
+    for passing as the GPU device index to PropagElecField. Falls back through:
+      SLURM_LOCALID -> OMPI_COMM_WORLD_LOCAL_RANK -> MPI_LOCALRANKID -> PMI_LOCAL_RANK
+      -> mpi4py (rank within node-local sub-communicator) -> os.getpid()
+    The auxgpu round-robin wrap takes care of mapping the value onto an actual device, so
+    the returned integer can exceed the number of installed GPUs without harm.
+    """
+    import os
+    for var in ('SLURM_LOCALID', 'OMPI_COMM_WORLD_LOCAL_RANK', 'MPI_LOCALRANKID', 'PMI_LOCAL_RANK'):
+        v = os.environ.get(var)
+        if v is not None:
+            try: return int(v) + 1 #1-based for auxgpu
+            except ValueError: pass
+    try:
+        from mpi4py import MPI
+        comm = MPI.COMM_WORLD
+        try:
+            #Split by shared-memory node so the resulting rank is node-local
+            node_comm = comm.Split_type(MPI.COMM_TYPE_SHARED)
+            return node_comm.Get_rank() + 1
+        except Exception:
+            return comm.Get_rank() + 1
+    except Exception:
+        pass
+    return os.getpid() + 1 #last-resort fallback; auxgpu will mod by deviceCount
+
 def srwl_wfr_emit_prop_multi_e(_e_beam, _mag, _mesh, _sr_meth, _sr_rel_prec, _n_part_tot, _n_part_avg_proc=1, _n_save_per=100,
                                _file_path=None, _sr_samp_fact=-1, _opt_bl=None, _pres_ang=0, _char=0, _x0=0, _y0=0, _e_ph_integ=0,
                                #_rand_meth=1, _tryToUseMPI=True):
@@ -8745,7 +8772,8 @@ def srwl_wfr_emit_prop_multi_e(_e_beam, _mag, _mesh, _sr_meth, _sr_rel_prec, _n_
                                #_rand_meth=1, _tryToUseMPI=True, _wr=0., _wre=0., _det=None, _me_approx=0, _file_bkp=False, _rand_opt=False, _file_form='ascii', _n_mpi=1): #OC02032021
                                #_rand_meth=1, _tryToUseMPI=True, _wr=0., _wre=0., _det=None, _me_approx=0, _file_bkp=False, _rand_opt=False, _file_form='ascii', _n_mpi=1, _del_aux_files=False): #OC02032021
                                #_rand_meth=1, _tryToUseMPI=True, _wr=0., _wre=0., _det=None, _me_approx=0, _file_bkp=False, _rand_opt=False, _file_form='ascii', _n_mpi=1, _n_cm=1000, _del_aux_files=False): #OC27062021
-                               _rand_meth=1, _tryToUseMPI=True, _wr=0., _wre=0., _det=None, _me_approx=0, _file_bkp=False, _rand_opt=False, _file_form='ascii', _n_mpi=1, _n_cm=1000, _ms=0, _del_aux_files=False): #OC22112022
+                               _rand_meth=1, _tryToUseMPI=True, _wr=0., _wre=0., _det=None, _me_approx=0, _file_bkp=False, _rand_opt=False, _file_form='ascii', _n_mpi=1, _n_cm=1000, _ms=0, _del_aux_files=False,
+                               _gpu_idx=None): #HG08042026 (added _gpu_idx)
     """
     Calculate Stokes Parameters of Emitted (and Propagated, if beamline is defined) Partially-Coherent SR.
     :param _e_beam: Finite-Emittance e-beam (SRWLPartBeam type)
@@ -8795,6 +8823,15 @@ def srwl_wfr_emit_prop_multi_e(_e_beam, _mag, _mesh, _sr_meth, _sr_rel_prec, _n_
     :param _ms: index of the first wavefront / coherent mode to start computation
     :param _del_aux_files: delete (or not) auxiliary files (applies to different types of calculations)
    """
+
+    #HG08042026 Resolve GPU device index for PropagElecField calls inside this function.
+    # _gpu_idx == None  -> no GPU param passed (CPU or library default)
+    # _gpu_idx == -1    -> auto-detect node-local rank from SLURM/MPI/mpi4py/pid
+    # _gpu_idx >= 1     -> pass through directly (auxgpu wraps mod deviceCount)
+    if _gpu_idx is not None and int(_gpu_idx) == -1:
+        _gpu_idx = _srwl_resolve_local_rank()
+    elif _gpu_idx is not None:
+        _gpu_idx = int(_gpu_idx)
 
     doMutual = 0 #OC30052017
     #if((_char >= 2) and (_char <= 4)): doMutual = 1
@@ -9586,7 +9623,7 @@ def srwl_wfr_emit_prop_multi_e(_e_beam, _mag, _mesh, _sr_meth, _sr_rel_prec, _n_
             #sys.stdout.flush()
             #END DEBUG
 
-            srwl.PropagElecField(wfr, _opt_bl)
+            srwl.PropagElecField(wfr, _opt_bl, None, _gpu_idx) #HG08042026
 
         #DEBUG
         #print('completed (lasted', round(time.time() - t0, 6), 's)') #DEBUG
@@ -10308,7 +10345,7 @@ def srwl_wfr_emit_prop_multi_e(_e_beam, _mag, _mesh, _sr_meth, _sr_rel_prec, _n_
                         #    sys.stdout.flush()
                         #END DEBUG
 
-                        srwl.PropagElecField(wfr, _opt_bl) #propagate Electric Field emitted by the electron
+                        srwl.PropagElecField(wfr, _opt_bl, None, _gpu_idx) #HG08042026 propagate Electric Field emitted by the electron
 
                         if(_det is not None): srwl.ResizeElecFieldMesh(wfr, meshRes, [0, 1]) #OC01082022
 
@@ -11203,7 +11240,7 @@ def srwl_wfr_emit_prop_multi_e(_e_beam, _mag, _mesh, _sr_meth, _sr_rel_prec, _n_
                 else:
                     srwl.CalcElecFieldSR(wfr, 0, _mag, arPrecParSR) #It's unfortunate to calculate this here, but we need to know Rx, Ry, etc.
 
-                if(_opt_bl is not None): srwl.PropagElecField(wfr, _opt_bl) #OC05102021 (for cases when CMD has to be done after propagation)
+                if(_opt_bl is not None): srwl.PropagElecField(wfr, _opt_bl, None, _gpu_idx) #OC05102021 (for cases when CMD has to be done after propagation) #HG08042026
                 #OC05102021: furthemore, wfr.arEx, wfr.arEy are necessary for receiving E-field data from workers and accumulating CSD from it
 
                 if(_det is not None): srwl.ResizeElecFieldMesh(wfr, meshRes, [0, 1]) #OC05102021
