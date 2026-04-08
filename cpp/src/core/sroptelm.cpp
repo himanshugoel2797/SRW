@@ -4766,7 +4766,7 @@ int srTGenOptElem::RadResizeCore_OnlyLargerRange(srTSRWRadStructAccessData& OldR
 	TGPUUsageArg parGPU(pvGPU);
 	if(CAuxGPU::GPUEnabled(&parGPU))
 	{
-		return RadResizeCore_OnlyLargerRangeE_GPU(OldRadAccessData, NewRadAccessData, PolComp, &parGPU);
+		return RadResizeCore_OnlyLargerRange_GPU(OldRadAccessData, NewRadAccessData, PolComp, &parGPU);
 	}
 #endif
 

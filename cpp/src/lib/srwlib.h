@@ -1039,6 +1039,15 @@ EXP int CALL srwlUtiGPUProc(int op, double* arParGPU=0); //OC19022024
 //EXP int CALL srwlUtiGPUProc(int op, void* pvGpu=0);
 
 /**
+ * Queries memory usage of the GPU associated with arParGPU.
+ * @param [out] arMemInfo array of size 2 to receive [freeBytes, totalBytes]
+ * @param [in] arParGPU optional GPU utilization related parameters
+ * @return integer error (>0) or warning (<0) code
+ * @see ...
+ */
+EXP int CALL srwlUtiGPUMemInfo(double* arMemInfo, double* arParGPU=0); //HG07042026
+
+/**
  * Checks if GPU offloading is available
  * @return	true if available
  * @see ...

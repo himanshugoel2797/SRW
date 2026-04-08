@@ -15,6 +15,7 @@
 #define __UTIGPU_H
 
 #include <cstdarg>
+#include <cstdint> //HG07042026 for intptr_t
 #include <cstdlib>
 #include <stdio.h>
 #include <typeinfo>
@@ -33,18 +34,28 @@
 //typedef struct
 struct TGPUUsageArg //OC18022024
 {
-	int deviceIndex; // -1 means no device, TODO
+	int deviceIndex;        // <=0: CPU, >0: 1-based device index. -1 from caller requests auto-assignment.
+	int autoAssigned;       //HG07042026 1 if device was auto-assigned and the held slot must be released in Fini
+	int slotIdx;            //HG07042026 0-based slot index within deviceIndex (only valid if autoAssigned==1)
+	intptr_t slotLockHandle;//HG07042026 POSIX fd or Windows HANDLE for the held slot lock; -1 if none
 
 	TGPUUsageArg(void* pvGPU=0) //OC18022024
 	{
 		deviceIndex = -1;
+		autoAssigned = 0;       //HG07042026
+		slotIdx = -1;           //HG07042026
+		slotLockHandle = -1;    //HG07042026
 		if(pvGPU == 0) return;
 		double *arParGPU = (double*)pvGPU;
 		int nPar = (int)arParGPU[0];
-		if(nPar > 0) deviceIndex = (int)arParGPU[1];
+		if(nPar > 0)
+		{
+			deviceIndex = (int)arParGPU[1];
+			if(deviceIndex == -1) autoAssigned = 1; //HG07042026 caller asked for auto-assignment
+		}
 		//continue here for future params
 	}
-}; 
+};
 //} TGPUUsageArg; //OC18022024 (commented-out)
 
 //#ifdef _OFFLOAD_GPU //HG23102025
@@ -152,6 +163,15 @@ public:
 	static bool GPUAvailable(); //CheckGPUAvailable etc
 	static bool GPUEnabled(TGPUUsageArg *arg);
 	static void SetGPUStatus(bool enabled);
+
+	/**
+	*  Query the GPU memory usage for the device associated with arg
+	*  @param [in] arg pointer to a GPU usage argument structure
+	*  @param [out] freeBytes free memory on the device in bytes
+	*  @param [out] totalBytes total memory on the device in bytes
+	*  @return 0 on success, -1 on error (e.g. GPU not available)
+	*/
+	static int GetGPUMemoryUsage(TGPUUsageArg* arg, size_t* freeBytes, size_t* totalBytes); //HG07042026
 
 	/**
 	*  Get the GPU/device number associated with arg

@@ -171,7 +171,7 @@ opSmp_Det = SRWLOptD(distSmp_Det)
 #[10]: New Horizontal wavefront Center position after Shift
 #[11]: New Vertical wavefront Center position after Shift
 #           [0][1][2] [3][4] [5] [6] [7]  [8]  [9][10][11] 
-ppSmp =     [0, 0, 1., 0, 0, 1., 55., 1., 55.,  0, 0, 0]
+ppSmp =     [0, 0, 1., 0, 0, 1., 55. * 4, 1., 55. * 4,  0, 0, 0]
 ppSmp_Det = [0, 0, 1., 3, 0, 1., 1.,  1.,  1.,  0, 0, 0]
 ppFin =     [0, 0, 1., 0, 0, 1., 1.,  1.,  1.,  0, 0, 0]
 
@@ -212,10 +212,12 @@ for it in range(len(listObjBrownian)):
     #Duplicating Initial Wavefront to perform its Propagaton
     wfrP = deepcopy(wfr)
 
-    print('   Propagating Wavefront ... ', end='')
+    #print('   Propagating Wavefront ... ', end='')
+    print('   Propagating Wavefront ... ', end='', flush=True) #HG07042026
     t = time.time()
-    srwl.PropagElecField(wfrP, opBL)
-    print('done in', round(time.time() - t), 's')
+    #srwl.PropagElecField(wfrP, opBL)
+    srwl.PropagElecField(wfrP, opBL, None, 0 if os.environ.get('SRW_FORCE_CPU') == '1' else -1) #HG07042026 auto-assign GPU unless SRW_FORCE_CPU=1
+    print('done in', round(time.time() - t), 's', flush=True) #HG07042026
 
     print('   Extracting, Projecting the Propagated Wavefront Intensity on Detector and Saving it to file ... ', end='')
     t = time.time()
@@ -256,10 +258,10 @@ for it in range(len(listObjBrownian)):
 
     print('done')
 
-if(arDetFrames is not None): #Saving simulated Detector data file
-    print('   Saving all Detector data to another file (that can be used in subsequent processing) ... ', end='')
-    srwl_uti_save_intens_hdf5_exp(arDetFrames, mesh1, os.path.join(os.getcwd(), strDataFolderName, strIntPropOutFileNameDet), 
-        _exp_type = 'XPCS', _dt = timeStep, _dist_smp = distSmp_Det, _bm_size_x = GsnBm.sigX*2.35, _bm_size_y = GsnBm.sigY*2.35)
-    print('done')
+#if(arDetFrames is not None): #Saving simulated Detector data file
+#    print('   Saving all Detector data to another file (that can be used in subsequent processing) ... ', end='')
+#    srwl_uti_save_intens_hdf5_exp(arDetFrames, mesh1, os.path.join(os.getcwd(), strDataFolderName, strIntPropOutFileNameDet), 
+#        _exp_type = 'XPCS', _dt = timeStep, _dist_smp = distSmp_Det, _bm_size_x = GsnBm.sigX*2.35, _bm_size_y = GsnBm.sigY*2.35)
+#    print('done')
 
 uti_plot_show() #Show all plots created

@@ -1616,6 +1616,12 @@ EXP int CALL srwlUtiGPUProc(int op, double* arParGPU) //OC20022024
 	{
 		//CAuxGPU::Init();
 		CAuxGPU::Init(&parGPU); //HG02082024
+		//HG07042026 If auto-assignment was requested (arParGPU[1] == -1) and Init resolved a real device,
+		//write the chosen 1-based index back so downstream calls and Fini see the resolved device.
+		if(arParGPU != 0 && arParGPU[0] > 0 && (int)arParGPU[1] == -1)
+		{
+			arParGPU[1] = (double)parGPU.deviceIndex; // 0 if CPU fallback, >0 if a slot was acquired
+		}
 		if(arParGPU != 0 && arParGPU[0] > 0 && arParGPU[1] > 0) //HG07022024
 		{
 			//Check if any GPU is available
@@ -1640,6 +1646,27 @@ EXP int CALL srwlUtiGPUProc(int op, double* arParGPU) //OC20022024
 		CErrWarn::AddWarningMessage(&gVectWarnNos, GPU_COMPUTATION_FAILED);
 
 #endif //HG07022024
+	return 0;
+}
+
+EXP int CALL srwlUtiGPUMemInfo(double* arMemInfo, double* arParGPU) //HG07042026
+{
+	if(arMemInfo == 0) return -1;
+	arMemInfo[0] = 0;
+	arMemInfo[1] = 0;
+#ifdef _OFFLOAD_GPU
+	TGPUUsageArg parGPU(arParGPU);
+	size_t freeBytes = 0, totalBytes = 0;
+	if(CAuxGPU::GetGPUMemoryUsage(&parGPU, &freeBytes, &totalBytes) != 0)
+	{
+		CErrWarn::AddWarningMessage(&gVectWarnNos, GPU_COMPUTATION_FAILED);
+		return 0;
+	}
+	arMemInfo[0] = (double)freeBytes;
+	arMemInfo[1] = (double)totalBytes;
+#else
+	CErrWarn::AddWarningMessage(&gVectWarnNos, GPU_COMPUTATION_FAILED);
+#endif
 	return 0;
 }
 

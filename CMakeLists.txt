@@ -27,14 +27,14 @@ set(CMAKE_BUILD_TYPE Release)
 option(USE_OPENMP "Activate OpenMP build" OFF)
 
 # Option for CUDA build, OFF by default.
-option(USE_CUDA "Activate CUDA build" OFF)
+option(USE_CUDA "Activate CUDA build" ON)
 option(CUDA_BUILDALL_ARCHS "Enable CUDA compilation for all major architectures" OFF)
 
 # Option for C client library to be built or not - See cpp/env/cmake/CMakeLists.txt
 option(BUILD_CLIENT_C "Activate C Client library build" OFF)
 
 # Option for Python client library to be built or not - See cpp/env/cmake/CMakeLists.txt
-option(BUILD_CLIENT_PYTHON "Activate Python Client library build" OFF)
+option(BUILD_CLIENT_PYTHON "Activate Python Client library build" ON)
 
 # Option for Igor Pro client library to be built or not - See cpp/env/cmake/CMakeLists.txt
 option(BUILD_CLIENT_IGOR "Activate Igor Pro Client library build" OFF)

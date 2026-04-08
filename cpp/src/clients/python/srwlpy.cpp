@@ -114,6 +114,7 @@ static const char strEr_BadArg_UtiUndFindMagFldInterpInds[] = "Incorrect argumen
 static const char strEr_BadArg_UtiIntInf[] = "Incorrect arguments for function analyzing intensity distributions";
 static const char strEr_BadArg_UtiIntProc[] = "Incorrect arguments for function performing misc. operations on intensity distributions";
 static const char strEr_BadArg_UtiVer[] = "Incorrect arguments for function returning SRW version number";
+static const char strEr_BadArg_UtiGPUMemInfo[] = "Incorrect arguments for function returning GPU memory usage information";
 
 /************************************************************************//**
  * Global objects to be used across different function calls
@@ -5980,6 +5981,44 @@ static PyObject* srwlpy_UtiVer(PyObject *self, PyObject *args)
 }
 
 /************************************************************************//**
+ * Returns GPU memory usage as a tuple (freeBytes, totalBytes)
+ ***************************************************************************/
+static PyObject* srwlpy_UtiGPUMemInfo(PyObject *self, PyObject *args)
+{
+	PyObject *oResMemInfo = 0;
+	try
+	{
+		PyObject *oParGPU = 0;
+		if(!PyArg_ParseTuple(args, "|O:UtiGPUMemInfo", &oParGPU)) throw strEr_BadArg_UtiGPUMemInfo;
+
+		double arParGPU[2] = {0., 0.};
+		double *parGPUPtr = 0;
+		if((oParGPU != 0) && (oParGPU != Py_None))
+		{
+			int nPar = (int)PyList_Size(oParGPU);
+			if(nPar > 2) nPar = 2;
+			for(int i = 0; i < nPar; i++)
+			{
+				PyObject *o = PyList_GetItem(oParGPU, (Py_ssize_t)i);
+				if(o != 0) arParGPU[i] = PyFloat_AsDouble(o);
+			}
+			parGPUPtr = arParGPU;
+		}
+
+		double arMemInfo[2] = {0., 0.};
+		ProcRes(srwlUtiGPUMemInfo(arMemInfo, parGPUPtr));
+
+		oResMemInfo = Py_BuildValue("(dd)", arMemInfo[0], arMemInfo[1]);
+		Py_XINCREF(oResMemInfo); //?
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oResMemInfo;
+}
+
+/************************************************************************//**
  * Python C API stuff: module & method definition2, etc.
  ***************************************************************************/
 
@@ -6025,6 +6064,7 @@ static PyMethodDef srwlpy_methods[] = {
 	{"UtiUndFromMagFldTab", srwlpy_UtiUndFromMagFldTab, METH_VARARGS, "UtiUndFromMagFldTab() Attempts to create periodic undulator structure from tabulated magnetic field"},
 	{"UtiUndFindMagFldInterpInds", srwlpy_UtiUndFindMagFldInterpInds, METH_VARARGS, "UtiUndFindMagFldInterpInds() Finds indexes of undulator gap and phase values and associated magnetic fields requiired to be used in field interpolation based on gap and phase"},
 	{"UtiVer", srwlpy_UtiVer, METH_VARARGS, "UtiVerNo() Returns version number / ID of SRW for Python"},
+	{"UtiGPUMemInfo", srwlpy_UtiGPUMemInfo, METH_VARARGS, "UtiGPUMemInfo() Returns GPU memory usage as a tuple (freeBytes, totalBytes)"},
 	{NULL, NULL}
 };
 

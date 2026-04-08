@@ -23,6 +23,7 @@ except:
 #from uti_plot import * #required for plotting
 import copy
 import os
+import sys #HG07042026 ensure sys is in scope regardless of which import branch above succeeded
 import time
 
 print('SRWLIB Python Example # 17:')
@@ -190,19 +191,23 @@ srwl_uti_save_intens_ascii(
     ['Photon Energy', 'Horizontal Position', 'Vertical Position', 'Intensity'], _arUnits=['eV', 'm', 'm', 'ph/s/.1%bw/mm^2'])
 
 #***********Wavefront Propagation
-print('   Propagating wavefront ... ', end='')
-tryUsingGPU = 1 #0 #Set to 1 if GPU should be used, 0 otherwise #OC21032024
-if(tryUsingGPU): print('trying to use GPU ... ', end='')
+#HG07042026 Force a stdout flush so AuxGPU C-side prints land in chronological order in the log.
+sys.stdout.flush() #HG07042026
+print('   Propagating wavefront ... ', flush=True) #HG07042026 newline + flush so subsequent [AuxGPU] lines are clearly delimited
+#tryUsingGPU = 0 #0 #Set to 1 if GPU should be used, 0 otherwise #OC21032024
+tryUsingGPU = -1 #HG07042026 -1 = auto-assign GPU slot via AuxGPU, 0 = CPU, N>0 = explicit device index
 t = time.time()
 srwl.PropagElecField(wfr, opBL, None, tryUsingGPU)
 #srwl.PropagElecField(wfr, opBL)
-print('done in', round(time.time() - t), 's')
+sys.stdout.flush() #HG07042026
+print('   ... wavefront propagation done in', round(time.time() - t), 's', flush=True) #HG07042026
 
 print('   Extracting, projecting propagated wavefront intensity on detector and saving it to file ... ', end='')
 t = time.time()
 mesh1 = deepcopy(wfr.mesh)
 arI1 = array('f', [0]*mesh1.nx*mesh1.ny) #"flat" array to take 2D intensity data
-srwl.CalcIntFromElecField(arI1, wfr, 6, 0, 3, mesh1.eStart, 0, 0, None, None, tryUsingGPU) #extracts intensity (eventually using GPU)
+#srwl.CalcIntFromElecField(arI1, wfr, 6, 0, 3, mesh1.eStart, 0, 0, None, None, tryUsingGPU) #extracts intensity (eventually using GPU)
+srwl.CalcIntFromElecField(arI1, wfr, 6, 0, 3, mesh1.eStart, 0, 0, None, None, 0) #HG07042026 keep CalcIntFromElecField on CPU; only PropagElecField drives the auto-assign path
 #srwl.CalcIntFromElecField(arI1, wfr, 6, 0, 3, mesh1.eStart, 0, 0) #extracts intensity
 
 stkDet = det.treat_int(arI1, _mesh = mesh1) #"Projecting" intensity on detector (by interpolation)
