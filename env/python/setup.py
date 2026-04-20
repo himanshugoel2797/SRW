@@ -52,14 +52,17 @@ class CMakeBuild(build_ext):
             '-DCMAKE_RUNTIME_OUTPUT_DIRECTORY=' + extdir,
             '-DPython_EXECUTABLE=' + sys.executable]
         env = os.environ.copy()
-        if 'MODE' in env:
-            if env['MODE'] == 'omp':
-                cmake_args += ['-DUSE_OPENMP=ON']
-            elif env['MODE'] == 'cuda':
-                cmake_args += ['-DUSE_CUDA=ON', '-DCUDA_BUILDALL_ARCHS=ON']
         env_cmake_args = os.getenv("CMAKE_ARGS", None)
         if env_cmake_args is not None:
             cmake_args += env_cmake_args.split(" ")
+        # Apply mode-derived flags last so they override any values leaked via
+        # CMAKE_ARGS or cached from a prior configure.
+        mode = env.get('MODE', '').strip()
+        use_openmp = 'ON' if mode == 'omp' else 'OFF'
+        use_cuda = 'ON' if mode == 'cuda' else 'OFF'
+        cmake_args += ['-DUSE_OPENMP=' + use_openmp, '-DUSE_CUDA=' + use_cuda]
+        if mode == 'cuda':
+            cmake_args += ['-DCUDA_BUILDALL_ARCHS=ON']
         if os.name == 'nt':
             # We need makefile generator that does not support multi-configuration builds
             # otherwise windows will output a Release or Debug folder in which the artifacts

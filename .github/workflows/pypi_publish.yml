@@ -51,12 +51,14 @@ jobs:
       - name: Set CPU build environment (Linux/Windows)
         if: matrix.build-mode == 'cpu' && runner.os != 'macOS'
         run: |
+          echo "MODE=cpu" >> $GITHUB_ENV
           echo "SRW_PACKAGE_NAME=srwpy-cpu" >> $GITHUB_ENV
           echo "ARTIFACT_PREFIX=cpu" >> $GITHUB_ENV
 
       - name: Set CPU build environment (macOS)
         if: matrix.build-mode == 'cpu' && runner.os == 'macOS'
         run: |
+          echo "MODE=cpu" >> $GITHUB_ENV
           echo "SRW_PACKAGE_NAME=srwpy" >> $GITHUB_ENV
           echo "ARTIFACT_PREFIX=macos" >> $GITHUB_ENV
 
@@ -92,7 +94,7 @@ jobs:
           $CUDA_VERSION_SHORT = "13.2"
           $CUDA_URL = "https://developer.download.nvidia.com/compute/cuda/${CUDA_VERSION}/network_installers/cuda_${CUDA_VERSION}_windows_network.exe"
           Invoke-WebRequest -Uri $CUDA_URL -OutFile cuda_installer.exe
-          Start-Process -FilePath .\cuda_installer.exe -ArgumentList "-s nvcc_${CUDA_VERSION_SHORT} cudart_${CUDA_VERSION_SHORT} cufft_${CUDA_VERSION_SHORT} cufft_dev_${CUDA_VERSION_SHORT} cublas_${CUDA_VERSION_SHORT} cublas_dev_${CUDA_VERSION_SHORT}" -Wait -NoNewWindow
+          Start-Process -FilePath .\cuda_installer.exe -ArgumentList "-s nvcc_${CUDA_VERSION_SHORT} cudart_${CUDA_VERSION_SHORT} cudart_dev_${CUDA_VERSION_SHORT} cufft_${CUDA_VERSION_SHORT} cufft_dev_${CUDA_VERSION_SHORT} cublas_${CUDA_VERSION_SHORT} cublas_dev_${CUDA_VERSION_SHORT}" -Wait -NoNewWindow
           echo "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v${CUDA_VERSION_SHORT}\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           echo "CUDA_PATH=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v${CUDA_VERSION_SHORT}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           echo "CUDA_HOME=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v${CUDA_VERSION_SHORT}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
