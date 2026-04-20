@@ -270,7 +270,12 @@ if (UNIX)
 endif()
 
 if(USE_CUDA) #HG01082025
-    target_link_libraries(srw auxgpu cudart_static cudadevrt cufft rt)
+    target_link_libraries(srw auxgpu cudart_static cudadevrt cufft)
+    if(UNIX AND NOT APPLE)
+        # librt: POSIX realtime extensions (clock_gettime, shm_open). Linux
+        # only; macOS folds these into libSystem and Windows has no analogue.
+        target_link_libraries(srw rt)
+    endif()
     set_target_properties(srw PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
     target_include_directories(srw PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../src/ext/auxgpu>
