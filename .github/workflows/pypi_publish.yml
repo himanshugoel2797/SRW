@@ -117,7 +117,9 @@ jobs:
         if: matrix.build-mode == 'cuda' && runner.os == 'Windows'
         shell: bash -l {0}
         run: |
-          set -vxeuo pipefail
+          # conda's activate/deactivate hooks reference unbound vars, so keep
+          # -u disabled for this step.
+          set -vxeo pipefail
           conda install -y -c nvidia/label/cuda-13.2.0 cuda-toolkit
           CUDA_ROOT="$CONDA_PREFIX/Library"
           test -f "$CUDA_ROOT/bin/nvcc.exe" || { echo "nvcc.exe missing after install"; ls -la "$CUDA_ROOT/bin" || true; exit 1; }
