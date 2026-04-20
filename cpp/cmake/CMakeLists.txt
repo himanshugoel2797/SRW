@@ -39,9 +39,19 @@ endif()
 
 # Setup definitions for all targets
 add_definitions(${SRW_DEFINITIONS})
-add_compile_options(-O3)
-if(NOT APPLE OR NOT CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
+if(NOT MSVC)
+    add_compile_options(-O3)
+endif()
+if(NOT MSVC AND NOT (APPLE AND CMAKE_SYSTEM_PROCESSOR MATCHES "arm64"))
     add_compile_options(-mfma)
+endif()
+
+# CCCL (shipped with CUDA 12+) rejects MSVC's traditional preprocessor.
+if(USE_CUDA AND MSVC)
+    add_compile_options(
+        $<$<COMPILE_LANGUAGE:CXX>:/Zc:preprocessor>
+        $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/Zc:preprocessor>
+    )
 endif()
 
 #ext
