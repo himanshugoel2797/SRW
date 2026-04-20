@@ -86,19 +86,6 @@ jobs:
           echo "CUDA_PATH=/usr/local/cuda-13.2" >> $GITHUB_ENV
           echo "CUDA_HOME=/usr/local/cuda-13.2" >> $GITHUB_ENV
 
-      - name: Install CUDA Toolkit (Windows)
-        if: matrix.build-mode == 'cuda' && runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $CUDA_VERSION = "13.2.0"
-          $CUDA_VERSION_SHORT = "13.2"
-          $CUDA_URL = "https://developer.download.nvidia.com/compute/cuda/${CUDA_VERSION}/network_installers/cuda_${CUDA_VERSION}_windows_network.exe"
-          Invoke-WebRequest -Uri $CUDA_URL -OutFile cuda_installer.exe
-          Start-Process -FilePath .\cuda_installer.exe -ArgumentList "-s nvcc_${CUDA_VERSION_SHORT} cudart_${CUDA_VERSION_SHORT} cudart_dev_${CUDA_VERSION_SHORT} cufft_${CUDA_VERSION_SHORT} cufft_dev_${CUDA_VERSION_SHORT} cublas_${CUDA_VERSION_SHORT} cublas_dev_${CUDA_VERSION_SHORT}" -Wait -NoNewWindow
-          echo "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v${CUDA_VERSION_SHORT}\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          echo "CUDA_PATH=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v${CUDA_VERSION_SHORT}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          echo "CUDA_HOME=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v${CUDA_VERSION_SHORT}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
       # --- Conda and dependencies ---
 
       - uses: conda-incubator/setup-miniconda@v3
@@ -125,6 +112,21 @@ jobs:
         run: |
           set -vxeuo pipefail
           conda install -y cmake
+
+      - name: Install CUDA Toolkit (Windows)
+        if: matrix.build-mode == 'cuda' && runner.os == 'Windows'
+        shell: bash -l {0}
+        run: |
+          set -vxeuo pipefail
+          conda install -y -c nvidia/label/cuda-13.2.0 cuda-toolkit
+          CUDA_ROOT="$CONDA_PREFIX/Library"
+          test -f "$CUDA_ROOT/bin/nvcc.exe" || { echo "nvcc.exe missing after install"; ls -la "$CUDA_ROOT/bin" || true; exit 1; }
+          "$CUDA_ROOT/bin/nvcc.exe" --version
+          WIN_CUDA_PATH=$(cygpath -w "$CUDA_ROOT")
+          echo "CUDA_PATH=$WIN_CUDA_PATH" >> "$GITHUB_ENV"
+          echo "CUDA_HOME=$WIN_CUDA_PATH" >> "$GITHUB_ENV"
+          echo "CUDAToolkit_ROOT=$WIN_CUDA_PATH" >> "$GITHUB_ENV"
+          cygpath -w "$CUDA_ROOT/bin" >> "$GITHUB_PATH"
 
       - name: Install OpenMP for macOS with conda
         if: runner.os == 'macOS' && matrix.build-mode == 'omp'
