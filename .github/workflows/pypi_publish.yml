@@ -43,6 +43,7 @@ jobs:
       - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: testenv
+          add-pip-as-python-dependency: true
           allow-softlinks: true
           auto-activate-base: false
           auto-update-conda: false
@@ -51,7 +52,6 @@ jobs:
           python-version: ${{ matrix.python-version }}
           show-channel-urls: true
           use-only-tar-bz2: false
-          packages: pip
 
       - name: Set up Visual Studio shell
         if: runner.os == 'Windows'
@@ -85,11 +85,11 @@ jobs:
         run: |
           set -vxeuo pipefail
           python -m pip install --upgrade "pip<25"
-          python -m pip install "cibuildwheel==2.21.3" "packaging==24.2" "setuptools<76"
+          python -m pip install "cibuildwheel>=2.23" "packaging==24.2" "setuptools<76"
           echo "CIBW_BEFORE_ALL=pip install cmake" >> "$GITHUB_ENV"
           PYTH_VER=${{ matrix.python-version }}
           PYTH_VER=${PYTH_VER//.}
-          echo "CIBW_BUILD=cp${PYTH_VER}-manylinux*" >> "$GITHUB_ENV"
+          echo "CIBW_BUILD=cp${PYTH_VER}-*" >> "$GITHUB_ENV"
 
       - name: Install Python build tooling on Windows/Mac
         if: runner.os != 'Linux'
