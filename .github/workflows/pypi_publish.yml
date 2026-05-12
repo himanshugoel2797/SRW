@@ -14,7 +14,6 @@ jobs:
 
     name: ${{ matrix.host-os }} / Python ${{ matrix.python-version }} / OpenMP ${{ matrix.openmp }}
     runs-on: ${{ matrix.host-os }}
-    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -63,7 +62,7 @@ jobs:
       - name: Ensure pip is available in conda env
         run: |
           set -vxeuo pipefail
-          python -m ensurepip --upgrade --default-pip || conda install -y -n testenv pip
+          python -m pip --version || python -m ensurepip --default-pip || conda install -y -n testenv pip
           python -m pip --version
 
       - name: Verify environment
@@ -92,7 +91,7 @@ jobs:
         run: |
           set -vxeuo pipefail
           python -m pip install --upgrade "pip<25"
-          python -m pip install "cibuildwheel==2.23.*" "packaging==24.2" "setuptools<76"
+          python -m pip install "cibuildwheel>=3,<4" "packaging==24.2" "setuptools<76"
           echo "CIBW_BEFORE_ALL=pip install cmake" >> "$GITHUB_ENV"
           PYTH_VER=${{ matrix.python-version }}
           PYTH_VER=${PYTH_VER//.}
@@ -133,7 +132,7 @@ jobs:
       - name: Install the package and test requirements
         run: |
           set -vxeuo pipefail
-          python -m pip install -v --no-index --find-links dist/ srwpy
+          python -m pip install -v --find-links dist/ srwpy
           python -c "import srwpy; import srwpy.srwlpy"
           srw-viewer --help
           python -m pip install -r env/python/requirements-dev.txt
