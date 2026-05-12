@@ -91,7 +91,7 @@ jobs:
         run: |
           set -vxeuo pipefail
           python -m pip install --upgrade "pip<25"
-          python -m pip install "cibuildwheel>=3,<4" "packaging==24.2" "setuptools<76"
+          python -m pip install "cibuildwheel>=2.23,<4" "packaging==24.2" "setuptools<76"
           echo "CIBW_BEFORE_ALL=pip install cmake" >> "$GITHUB_ENV"
           PYTH_VER=${{ matrix.python-version }}
           PYTH_VER=${PYTH_VER//.}
