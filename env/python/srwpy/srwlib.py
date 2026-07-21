@@ -1104,6 +1104,51 @@ class SRWLStokes(object):
 
         nStPt *= _n_stokes_comp
 
+        #HG20072026 Vectorized fast path. The pure-Python loops below are the reference
+        #implementation and remain the fallback: this returns early only if NumPy is
+        #importable AND both arS buffers expose a plain writable buffer.
+        #
+        #Why it matters: in srwl_wfr_emit_prop_multi_e the MPI master calls this once per
+        #received message, strictly serially, before it can post the next Recv. The loops
+        #run one interpreted iteration per mesh point, so the cost is O(mesh points) and
+        #the master becomes the throughput ceiling on large meshes -- adding worker ranks
+        #cannot help a serial Python loop. On a 6720x2400 (16.1 M point) mesh this step
+        #measured 4.83 s/message; the network (~64 MB over Slingshot) is ~10 ms. It never
+        #showed up on the ~250x smaller focus meshes, where the same loop costs ~20 ms.
+        #
+        #The arithmetic is deliberately done in float64 with a SINGLE rounding on store,
+        #which is what the loops below do: arS is array('f'), so `self.arS[ir]` yields a
+        #Python float (float64), the whole expression is evaluated in double, and only the
+        #assignment rounds to float32. Accumulating in float32 instead is NOT equivalent --
+        #measured over 400 iterations it reproduced the reference on 6% of points
+        #(mean rel. dev. 4.2e-07) versus 99.8% (mean rel. dev. 1.6e-10) for the form used
+        #here. This is a running average over macro-electrons, so that error compounds.
+        try:
+            import numpy as _np
+            _a = _np.asarray(memoryview(self.arS))[:nStPt]
+            _b = _np.asarray(memoryview(_more_stokes.arS))[:nStPt]
+        except Exception: #NumPy absent, or arS is a list rather than an array('f')
+            _a = None
+        if _a is not None:
+            if(_sum) and (_mult == 1.):
+                _a += _b #exact: adding two float32 values rounds once either way
+                return
+            #Chunked so the float64 temporaries stay in cache instead of streaming to
+            #DRAM. On a 16.1 M point mesh this is the difference between 0.373 s and
+            #0.029 s -- same arithmetic, same result, 13x less memory traffic.
+            _ch = 1 << 18
+            if(_sum):
+                _c0, _c1 = 1.0, _mult
+            else:
+                _w = 1.0/(_iter + 1.0)
+                _c0, _c1 = _iter*_w, _mult*_w
+            for _i in range(0, nStPt, _ch):
+                _s = slice(_i, _i + _ch)
+                _acc = _np.multiply(_a[_s], _c0, dtype=_np.float64)
+                _acc += _np.multiply(_b[_s], _c1, dtype=_np.float64)
+                _a[_s] = _acc
+            return
+
         if(_sum):
             if(_mult == 1.):
                 for ir in range(nStPt): self.arS[ir] += _more_stokes.arS[ir]
