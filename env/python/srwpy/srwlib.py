@@ -9474,6 +9474,10 @@ def srwl_wfr_emit_prop_multi_e(_e_beam, _mag, _mesh, _sr_meth, _sr_rel_prec, _n_
     #0 disables the session entirely, which is the pre-existing behaviour.
     sessDevCSD = indGPU if ((_gpu_f != 0) and (nGPU == 1) and (indGPU > 0)) else 0
 
+    #HG20072026 Device for the GPU undulator-source integral (srwl.CalcElecFieldSR optional last arg).
+    #Same single-GPU guard as sessDevCSD; 0 keeps the pre-existing CPU behaviour.
+    srcDevSR = indGPU if ((_gpu_f != 0) and (nGPU == 1) and (indGPU > 0)) else 0
+
     useGsnBmSrc = False
     usePtSrc = False #OC16102017
     if(isinstance(_mag, SRWLGsnBm)):
@@ -9642,11 +9646,11 @@ def srwl_wfr_emit_prop_multi_e(_e_beam, _mag, _mesh, _sr_meth, _sr_rel_prec, _n_
             #t0 = time.time(); #DEBUG
 
             #print('DEBUG: wfr.mesh:', wfr.mesh)
-            srwl.CalcElecFieldSR(wfr, 0, _mag, arPrecParSR)
+            srwl.CalcElecFieldSR(wfr, 0, _mag, arPrecParSR, srcDevSR) #HG20072026 added srcDevSR
 
             if(wfr2 is not None):
                 #print('DEBUG: wfr2.mesh:', wfr2.mesh)
-                srwl.CalcElecFieldSR(wfr2, 0, _mag, arPrecParSR) #OC30052017
+                srwl.CalcElecFieldSR(wfr2, 0, _mag, arPrecParSR, srcDevSR) #OC30052017 #HG20072026 added srcDevSR
             
             #print('completed (lasted', round(time.time() - t0, 6), 's)') #DEBUG
             #print('DEBUG MESSAGE: CalcElecFieldSR called (rank:', rank,')')
@@ -10402,8 +10406,8 @@ def srwl_wfr_emit_prop_multi_e(_e_beam, _mag, _mesh, _sr_meth, _sr_rel_prec, _n_
                         #print('zStart=', wfr.mesh.zStart)
                         #END DEBUG
                     
-                        srwl.CalcElecFieldSR(wfr, 0, _mag, arPrecParSR) #calculate Electric Field emitted by current electron
-                        if(wfr2 is not None): srwl.CalcElecFieldSR(wfr2, 0, _mag, arPrecParSR) #OC30052017
+                        srwl.CalcElecFieldSR(wfr, 0, _mag, arPrecParSR, srcDevSR) #calculate Electric Field emitted by current electron #HG20072026 added srcDevSR
+                        if(wfr2 is not None): srwl.CalcElecFieldSR(wfr2, 0, _mag, arPrecParSR, srcDevSR) #OC30052017 #HG20072026 added srcDevSR
 
                         #DEBUG OC10102021
                         #if(rank == 203): 

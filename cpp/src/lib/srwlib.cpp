@@ -453,7 +453,7 @@ SRWLPrtTrj* SetupTrjFromMagFld(SRWLParticle* pPartInitCond, SRWLMagFldC* pMagFld
 
 //-------------------------------------------------------------------------
 
-EXP int CALL srwlCalcElecFieldSR(SRWLWfr* pWfr, SRWLPrtTrj* pTrj, SRWLMagFldC* pMagFld, double* precPar, int nPrecPar)
+EXP int CALL srwlCalcElecFieldSR(SRWLWfr* pWfr, SRWLPrtTrj* pTrj, SRWLMagFldC* pMagFld, double* precPar, int nPrecPar, double* arParGPU) //HG20072026 added arParGPU
 {
 	if((pWfr == 0) || (precPar == 0)) return SRWL_INCORRECT_PARAM_FOR_SR_COMP;
 
@@ -468,7 +468,7 @@ EXP int CALL srwlCalcElecFieldSR(SRWLWfr* pWfr, SRWLPrtTrj* pTrj, SRWLMagFldC* p
 	if((!trjIsDefined) && (!fldIsDefined)) return SRWL_INCORRECT_PARAM_FOR_SR_COMP;
 	int locErNo = 0;
 
-	try 
+	try
 	{
 		if(!trjIsDefined) pTrj = SetupTrjFromMagFld(&(pWfr->partBeam.partStatMom1), pMagFld, precPar); //OC23022020
 		//{
@@ -500,6 +500,13 @@ EXP int CALL srwlCalcElecFieldSR(SRWLWfr* pWfr, SRWLPrtTrj* pTrj, SRWLMagFldC* p
 		//}
 		else pWfr->partBeam.partStatMom1 = pTrj->partInitCond;
 
+		//HG20072026 Initialize GPU if requested (same bracket as srwlCalcIntFromElecField). This must come
+		//AFTER the trajectory setup: on a build without CUDA it queues a "GPU not compiled in" warning, and
+		//srwlCalcPartTraj's internal UtiWarnCheck() would otherwise throw that warning mid-setup and abort
+		//the whole computation (and, before the null guard below, crash on cleanup).
+		if(getenv("SRW_RADINT_GPU_VERBOSE") != 0) { fprintf(stderr, "srwlCalcElecFieldSR: arParGPU=%p nPrecPar=%d\n", (void*)arParGPU, nPrecPar); fflush(stderr); }
+		srwlUtiGPUProc(1, arParGPU);
+
 		srTTrjDat trjData(pTrj); //this calculates interpolating structure required for SR calculation
 		trjData.EbmDat.SetCurrentAndMom2(pWfr->partBeam.Iavg, pWfr->partBeam.arStatMom2, 21);
 
@@ -517,16 +524,17 @@ EXP int CALL srwlCalcElecFieldSR(SRWLWfr* pWfr, SRWLPrtTrj* pTrj, SRWLMagFldC* p
 		srTParPrecElecFld precElecFld((int)precPar[0], precPar[1], precPar[2], precPar[3], precPar[6], false, calcTerminTerms);
 
         srTRadInt RadInt;
-		RadInt.ComputeElectricFieldFreqDomain(&trjData, &auxSmp, &precElecFld, &wfr, 0);
+		RadInt.ComputeElectricFieldFreqDomain(&trjData, &auxSmp, &precElecFld, &wfr, 0, (void*)arParGPU); //HG20072026 added arParGPU (enables the GPU Auto1 path; 0 = CPU as before)
 		wfr.OutSRWRadPtrs(*pWfr);
 		UtiWarnCheck();
 	}
-	catch(int erNo) 
+	catch(int erNo)
 	{
 		locErNo = erNo;
 		//return erNo;
 	}
-	if(!trjIsDefined)
+	srwlUtiGPUProc(0, arParGPU); //HG20072026 (to free GPU)
+	if((!trjIsDefined) && (pTrj != 0)) //HG20072026 added pTrj null guard: pre-existing latent null-deref when SetupTrjFromMagFld throws
 	{
 		if(pTrj->arX != 0) { delete[] pTrj->arX; pTrj->arX = 0;}
 		if(pTrj->arXp != 0) { delete[] pTrj->arXp; pTrj->arXp = 0;}

@@ -36,6 +36,7 @@ void srTRadInt::Initialize()
 	DistrInfoDat.Initialize();
 
 	TrjDatPtr = 0;
+	m_pvGPUUsageParams = 0; //HG20072026
 	IntegSubdArray = 0; LenIntegSubdArray = 0;
 	RadDistrPhotonFluxHorPol = RadDistrPhotonFluxVerPol = 0; 
 	RadDistrFieldFourierHorPol = RadDistrFieldFourierVerPol = 0;
@@ -318,6 +319,16 @@ int srTRadInt::ComputeTotalRadDistrDirectOut(srTSRWRadStructAccessData& SRWRadSt
 
 	char FinalResAreSymOverX = 0, FinalResAreSymOverZ = 0;
 	AnalizeFinalResultsSymmetry(FinalResAreSymOverX, FinalResAreSymOverZ);
+
+#ifdef _OFFLOAD_GPU //HG20072026 GPU path for the Auto1 radiation integral, parallel over observation points
+	if(getenv("SRW_RADINT_GPU_VERBOSE") != 0) { fprintf(stderr, "srradint: dispatch check, m_pvGPUUsageParams=%p\n", m_pvGPUUsageParams); fflush(stderr); }
+	if(m_pvGPUUsageParams != 0)
+	{
+		int resGPU = ComputeTotalRadDistrDirectOutGPU(SRWRadStructAccessData, m_pvGPUUsageParams, FinalResAreSymOverX, FinalResAreSymOverZ);
+		if(getenv("SRW_RADINT_GPU_VERBOSE") != 0) { fprintf(stderr, "srradint: GPU path returned %d\n", resGPU); fflush(stderr); }
+		if(resGPU >= 0) return resGPU; //0: handled on GPU (possibly with per-point CPU fallback); >0: error; -1: fall through to the CPU loop below
+	}
+#endif
 
 	double xc = TrjDatPtr->EbmDat.x0;
 	double zc = TrjDatPtr->EbmDat.z0;
@@ -3548,12 +3559,13 @@ int srTRadInt::RadInterpolationOnePointXZ(srTEFourierVect* pEwVect, int ixOffset
 
 //*************************************************************************
 
-void srTRadInt::ComputeElectricFieldFreqDomain(srTTrjDat* pTrjDat, srTWfrSmp* pWfrSmp, srTParPrecElecFld* pPrecElecFld, srTSRWRadStructAccessData* pWfr, char showProgressInd)
+void srTRadInt::ComputeElectricFieldFreqDomain(srTTrjDat* pTrjDat, srTWfrSmp* pWfrSmp, srTParPrecElecFld* pPrecElecFld, srTSRWRadStructAccessData* pWfr, char showProgressInd, void* pvGPU) //HG20072026 added pvGPU
 {
 	if((pTrjDat == 0) || (pWfrSmp == 0) || (pPrecElecFld == 0) || (pWfr == 0)) throw INCORRECT_PARAMS_SR_COMP;
 	int res = 0;
 
 	Initialize();
+	m_pvGPUUsageParams = pvGPU; //HG20072026 (must be set after Initialize(), which resets it)
 
 	DistrInfoDat = *pWfrSmp;
 	DistrInfoDat.EnsureZeroTransverseRangesForSinglePoints();

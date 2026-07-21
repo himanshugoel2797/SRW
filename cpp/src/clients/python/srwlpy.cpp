@@ -4751,7 +4751,8 @@ static PyObject* srwlpy_CalcPartTrajFromKickMatr(PyObject *self, PyObject *args)
  ***************************************************************************/
 static PyObject* srwlpy_CalcElecFieldSR(PyObject *self, PyObject *args)
 {
-	PyObject *oWfr=0, *oPartTraj=0, *oMagFldCnt=0, *oPrecPar=0;
+	PyObject *oWfr=0, *oPartTraj=0, *oMagFldCnt=0, *oPrecPar=0, *oDev=0; //HG20072026 added oDev
+	double *arGPUParam=0; //HG20072026
 	vector<Py_buffer> vBuf;
 	//SRWLMagFldC magCnt = {0,0,0,0,0,0}; //just zero pointers
 	SRWLMagFldC magCnt = {0,0,0,0,0,0,0,0,0,0}; //just zero pointers
@@ -4763,7 +4764,7 @@ static PyObject* srwlpy_CalcElecFieldSR(PyObject *self, PyObject *args)
 
 	try
 	{
-		if(!PyArg_ParseTuple(args, "OOOO:CalcElecFieldSR", &oWfr, &oPartTraj, &oMagFldCnt, &oPrecPar)) throw strEr_BadArg_CalcElecFieldSR;
+		if(!PyArg_ParseTuple(args, "OOOO|O:CalcElecFieldSR", &oWfr, &oPartTraj, &oMagFldCnt, &oPrecPar, &oDev)) throw strEr_BadArg_CalcElecFieldSR; //HG20072026 added optional oDev
 		if((oWfr == 0) || (oPartTraj == 0) || (oMagFldCnt == 0) || (oPrecPar == 0)) throw strEr_BadArg_CalcElecFieldSR;
 
 		ParseSructSRWLWfr(&wfr, oWfr, &vBuf, gmWfrPyPtr);
@@ -4790,7 +4791,8 @@ static PyObject* srwlpy_CalcElecFieldSR(PyObject *self, PyObject *args)
 		int nPrecPar = 7;
 		CopyPyListElemsToNumArray(oPrecPar, 'd', pPrecPar, nPrecPar);
 
-		ProcRes(srwlCalcElecFieldSR(&wfr, pTrj, pMagCnt, arPrecPar, nPrecPar));
+		ParseDeviceParam(oDev, arGPUParam); //HG20072026
+		ProcRes(srwlCalcElecFieldSR(&wfr, pTrj, pMagCnt, arPrecPar, nPrecPar, arGPUParam)); //HG20072026 added arGPUParam
 		UpdatePyWfr(oWfr, &wfr);
 	}
 	catch(const char* erText) 
@@ -4800,6 +4802,7 @@ static PyObject* srwlpy_CalcElecFieldSR(PyObject *self, PyObject *args)
 		oWfr = 0;
 	}
 
+	if(arGPUParam != 0) delete[] arGPUParam; //HG20072026
 	if(pMagCnt != 0) DeallocMagCntArrays(pMagCnt);
 	//ReleasePyBuffers(vBuf); //OC20122023 (commented-out)
 	EraseElementFromMap(&wfr, gmWfrPyPtr);
