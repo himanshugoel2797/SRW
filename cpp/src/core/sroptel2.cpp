@@ -52,21 +52,34 @@ int srTGenOptElem::PropagateRadiationMeth_0(srTSRWRadStructAccessData* pRadAcces
 
 	int result=0;
 
-#ifdef _OFFLOAD_GPU
-	TGPUUsageArg parGPU(pvGPU); //HG31072024 Try to pin the wavefront data instead of uploading to save GPU memory for the actual propagation
-	bool large_memory = false;
-	if(CAuxGPU::GPUEnabled(&parGPU))
-	{
-		if(pRadAccessData->ne * pRadAccessData->nx * pRadAccessData->nz * 2 * sizeof(float) > 4ull * 1024 * 1024 * 1024)
-		{
-			large_memory = true;
-			pRadAccessData->pBaseRadX = CAuxGPU::ToHostAndFree(&parGPU, pRadAccessData->pBaseRadX, 2*pRadAccessData->ne*pRadAccessData->nx*pRadAccessData->nz);
-			pRadAccessData->pBaseRadZ = CAuxGPU::ToHostAndFree(&parGPU, pRadAccessData->pBaseRadZ, 2*pRadAccessData->ne*pRadAccessData->nx*pRadAccessData->nz);
-			CAuxGPU::ToDevice(&parGPU, pRadAccessData->pBaseRadX, 2*pRadAccessData->ne*pRadAccessData->nx*pRadAccessData->nz, CAuxGPU::PIN_ON_HOST);
-			CAuxGPU::ToDevice(&parGPU, pRadAccessData->pBaseRadZ, 2*pRadAccessData->ne*pRadAccessData->nx*pRadAccessData->nz, CAuxGPU::PIN_ON_HOST);
-		}
-	}
-#endif
+	//HG15072026 REMOVED: a pre-emptive "if the wavefront is > 4 GiB, pin it on host"
+	//heuristic (HG31072024). Memory-placement policy belongs in CAuxGPU, and CAuxGPU
+	//already implements it BETTER -- reactively rather than by prediction
+	//(auxgpu.cpp _ToDevice): it tries cudaMallocAsync, then cudaMalloc, and falls
+	//back to cudaHostRegister/mapped-host ONLY if the allocation actually fails. It
+	//also has its own size guard (size >= 0.3*total_mem).
+	//
+	//The removed heuristic was wrong three ways:
+	//  1. It guessed instead of trying. 4 GiB is hardcoded and never consults the
+	//     device; on a 40 GB A100 it fired at ~10 % of capacity.
+	//  2. The penalty is enormous and discontinuous: a pinned wavefront is read by
+	//     the GPU kernel over PCIe at ~2.1 GB/s vs ~865 GB/s resident. Measured
+	//     zone_plate 23168^2 (3.999 GiB/array) = 19.99 ms vs 23296^2 (4.043 GiB) =
+	//     8609.56 ms -- a 431x cliff across a 1.1 % mesh change. The production XPP
+	//     pipeline runs at 28672^2, on the wrong side of it, costing ~4.4x per slice.
+	//  3. It EVICTED to pin: ToHostAndFree() on data that may already have been
+	//     resident, then re-mapped it as host memory -- actively making things worse
+	//     before anything had failed.
+	//
+	//Note srTDriftSpace overrides PropagateRadiationMeth_0 and never reached this
+	//branch, which is why drift alone scaled linearly and every other element did not.
+	//See simulation_work/ptycho_perf_paper/bench/CLIFF_ROOT_CAUSE.md.
+	//
+	//If a case is ever found where CAuxGPU's reactive fallback is NOT sufficient (a
+	//real OOM instead of a graceful pin), fix it IN CAuxGPU where the policy lives --
+	//do not reintroduce a per-element guess here.
+	//(The local TGPUUsageArg parGPU existed only for the removed block -- every other
+	// call site in this function passes pvGPU straight through. Its ctor is pure.)
 
 #ifndef _WITH_OMP //OC31102018
 
@@ -206,13 +219,14 @@ int srTGenOptElem::PropagateRadiationMeth_0(srTSRWRadStructAccessData* pRadAcces
 	if((pRadDataSingleE != 0) && (pRadDataSingleE != pRadAccessData)) delete pRadDataSingleE;
 	if((pPrevRadDataSingleE != 0) && (pPrevRadDataSingleE != pRadAccessData)) delete pPrevRadDataSingleE;
 
-#ifdef _OFFLOAD_GPU //HG31072024
-	if(CAuxGPU::GPUEnabled(&parGPU) && large_memory)
-	{
-		pRadAccessData->pBaseRadX = CAuxGPU::ToHostAndFree(&parGPU, pRadAccessData->pBaseRadX, 2*pRadAccessData->ne*pRadAccessData->nx*pRadAccessData->nz);
-		pRadAccessData->pBaseRadZ = CAuxGPU::ToHostAndFree(&parGPU, pRadAccessData->pBaseRadZ, 2*pRadAccessData->ne*pRadAccessData->nx*pRadAccessData->nz);
-	}
-#endif
+	//HG15072026 REMOVED with the pre-emptive pin above: this was its matching
+	//cleanup, gated on `large_memory`. It force-migrated the wavefront back to the
+	//host at the end of EVERY large propagation, so a chain of elements paid a full
+	//D2H + H2D round trip between each one -- the opposite of what CAuxGPU is for
+	//(it keeps the field resident across a container and downloads once at the end;
+	//ToDevice returns "already on device", auxgpu.cpp:169).
+	//CAuxGPU::ToHostAndFree already handles unregistering pinned host memory
+	//(auxgpu.cpp:347,362) for whatever it chose to pin, so nothing here is leaked.
 
 #else //OC31102018: modified by SY at parallelizing SRW via OpenMP
 //#ifdef SWITCH_OFF //OCTEST

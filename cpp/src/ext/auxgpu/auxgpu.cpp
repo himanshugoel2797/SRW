@@ -58,7 +58,10 @@ static void CheckGPUAvailability()
 	{
 		isGPUAvailable = false;
 		GPUAvailabilityTested = true;
-		int deviceCount = 0;
+		//HG15072026 the local `int deviceCount = 0;` that used to be here SHADOWED the
+		//file-static deviceCount (auxgpu.cpp:31), so the static stayed 0 forever and
+		//GPUEnabled()'s `arg->deviceIndex <= deviceCount` test (auxgpu.cpp:89) rejected
+		//every device unless Init() happened to run first. Write the static.
 		if (cudaGetDeviceCount(&deviceCount) != cudaSuccess)
 			return;
 
