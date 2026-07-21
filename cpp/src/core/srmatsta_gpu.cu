@@ -27,6 +27,7 @@
 #include <thrust/device_ptr.h>
 #include <thrust/execution_policy.h>
 #include <thrust/partition.h>
+#include <thrust/iterator/transform_iterator.h> //HG20072026
 
 #include <stdio.h>
 #include <iostream>
@@ -35,6 +36,13 @@
 #include "srradmnp.h"
 
 const int PerThreadSum = 16;
+
+//HG20072026 Widens the scanned values to double so the prefix sums match the CPU's
+//`double Sum` accumulator (srmatsta.cpp:404).
+template<class T> struct CastToDouble
+{
+    __host__ __device__ double operator()(const T& v) const { return (double)v; }
+};
 
 template<class T>
 __global__ void IntegrateOverX_Kernel(T* data, int ixStart, int ixEnd, double xStep, int Nx, int Ny, double* AuxArrIntOverX)
@@ -113,11 +121,20 @@ int IntegrateOverY_GPU_base(T* p0, int iyStart, int iyEnd, double yStep, long Nx
 template <class T>
 int PrefixSum_GPU(T* data, int len, double step, double RelPowLevel, double IntegratedIntens, int *leftIndex, int *rightIndex, TGPUUsageArg* pGPU)
 {
+    //HG20072026 The running sums are accumulated in DOUBLE, matching the CPU
+    //(srTAuxMatStat::FindLimit1DLeft, srmatsta.cpp:404, uses `double Sum = 0.`).
+    //They used to be scanned in T -- float32 for an intensity array -- and over a few
+    //hundred points that drifts enough to cross the power threshold at a DIFFERENT
+    //INDEX than the CPU. Those indices are the integration limits for
+    //ComputeRadMoments, so a one-bin difference shifted the second-order moments by
+    //~1.3%, and srTDriftSpace then amplified that into a ~12% field error. Proven
+    //causally: grafting the CPU moments into the GPU-propagated wavefront before the
+    //drift dropped the discrepancy from 1.2e-01 to 6.2e-07.
     data = CAuxGPU::ToDevice(pGPU, data, len);
-    T* sum = new T[len * 2];
-    T* sum_l = CAuxGPU::ToDevice<T>(pGPU, sum, len * 2, CAuxGPU::DONT_COPY);
-    T* sum_r = sum_l + len;
-    
+    double* sum = new double[len * 2];
+    double* sum_l = CAuxGPU::ToDevice<double>(pGPU, sum, len * 2, CAuxGPU::DONT_COPY);
+    double* sum_r = sum_l + len;
+
     CAuxGPU::EnsureDeviceMemoryReady(pGPU, data, sum_l);
 
     auto stream0 = CAuxGPU::GetComputeStream(pGPU, 0);
@@ -128,24 +145,34 @@ int PrefixSum_GPU(T* data, int len, double step, double RelPowLevel, double Inte
     CAuxGPU::SyncComputeStream(pGPU, 0, stream0);
     CAuxGPU::SyncComputeStream(pGPU, 0, stream1);
 
-    thrust::inclusive_scan(async_policy0, data, data + len, sum_l);
-    thrust::reverse_copy(async_policy1, data, data + len, sum_r);
+    CastToDouble<T> toD; //HG20072026 widen on the way into the scan, not after it
+    thrust::inclusive_scan(async_policy0,
+        thrust::make_transform_iterator(data, toD),
+        thrust::make_transform_iterator(data + len, toD), sum_l);
+    thrust::reverse_copy(async_policy1,
+        thrust::make_transform_iterator(data, toD),
+        thrust::make_transform_iterator(data + len, toD), sum_r);
     thrust::exclusive_scan(async_policy1, sum_r, sum_r + len, sum_r);
     CAuxGPU::SyncComputeStream(pGPU, stream0, 0);
     CAuxGPU::SyncComputeStream(pGPU, stream1, 0);
     CAuxGPU::MarkUpdatedBatch(pGPU, CAuxGPU::DEVICE, data, sum_l);
     sum_l = CAuxGPU::ToHostAndFree(pGPU, sum_l);
     sum_r = sum_l + len;
-    T* a00 = sum_l;
-    T* a10 = sum_r;
+    double* a00 = sum_l;
+    double* a10 = sum_r;
+    //HG20072026 `>` not `>=`, to match the CPU test (`if(Sum > IntToStop)`,
+    //srmatsta.cpp:412). With the sums now agreeing to double precision the boundary
+    //case is reachable, so the comparison has to agree too.
+    const double thresh = IntegratedIntens / step * (1. - RelPowLevel) * 0.25;
     for (int i = 0; i < len; i++)
     {
-        if (a00 == sum_l && sum_l[i] >= IntegratedIntens / step * (1. - RelPowLevel) * 0.25) a00 = sum_l + i;
-        if (a10 == sum_r && sum_r[i] >= IntegratedIntens / step * (1. - RelPowLevel) * 0.25) a10 = sum_r + i;
+        if (a00 == sum_l && sum_l[i] > thresh) a00 = sum_l + i;
+        if (a10 == sum_r && sum_r[i] > thresh) a10 = sum_r + i;
         if (a00 != sum_l && a10 != sum_r) break;
     }
     *leftIndex = (int)(a00 - sum_l);
     *rightIndex = (int)(len - (a10 - sum_r));
+    delete[] sum; //HG20072026 was leaked on every call
     return 0;
 }
 
