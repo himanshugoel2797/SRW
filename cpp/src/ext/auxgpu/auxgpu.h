@@ -149,6 +149,29 @@ public:
 	//static void Fini();
 	static void Fini(TGPUUsageArg *arg); //HG02082024
 
+	/**
+	* HG20072026 Persistent-session control.
+	*
+	* Every srwl* entry point brackets itself with Init()/Fini(), and Fini() copies
+	* back and frees ALL device allocations. That is correct for a one-shot call, but
+	* it is fatal for anything the client calls in a loop over the same buffer: the
+	* buffer round-trips host<->device on every single call. Measured on the 4D CSD
+	* accumulation (srwlCalcIntFromElecField with intType=8, called once per
+	* macro-electron): a 64x64 mesh spent 0.128 ms in the kernel and 23 ms moving
+	* 268 MB of CSD back and forth, making the "GPU" path 3.3x SLOWER than CPU.
+	*
+	* Between BeginSession() and EndSession() the internal Fini() calls are
+	* suppressed, so device buffers stay resident across entry points. EndSession()
+	* performs the real Fini(), which is what copies results back to the host --
+	* results are unchanged, they simply arrive once at the end instead of N times.
+	*
+	* Nesting is reference-counted. Sessions are strictly opt-in: with no session
+	* open the behaviour is exactly as before.
+	*/
+	static void BeginSession(TGPUUsageArg *arg); //HG20072026
+	static void EndSession(TGPUUsageArg *arg); //HG20072026
+	static bool SessionActive(); //HG20072026
+
 	static bool GPUAvailable(); //CheckGPUAvailable etc
 	static bool GPUEnabled(TGPUUsageArg *arg);
 	static void SetGPUStatus(bool enabled);

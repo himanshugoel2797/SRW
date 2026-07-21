@@ -5955,6 +5955,49 @@ static PyObject* srwlpy_UtiUndFindMagFldInterpInds(PyObject *self, PyObject *arg
 }
 
 /************************************************************************//**
+ * HG20072026 Opens/closes a persistent GPU session.
+ *
+ * UtiGPUProc(_op, _dev), with _op = 2 to open and 3 to close.
+ *
+ * Every srwl* entry point brackets itself with an internal GPU Init/Fini, and Fini
+ * copies back and frees every device allocation. For a client that calls into SRW
+ * in a loop over the same buffer -- above all the per-macro-electron 4D CSD
+ * accumulation -- that means the buffer round-trips host<->device on every call. On
+ * a 64x64 mesh this measured 0.128 ms of kernel against 23 ms of memcpy, making the
+ * GPU path 3.3x slower than CPU.
+ *
+ * Inside a session the internal Fini is suppressed, so buffers stay device-resident
+ * across calls; closing the session performs the real Fini, which is what copies
+ * results back. The computed result is unchanged -- it simply arrives once at the
+ * end rather than once per iteration. Sessions nest (reference-counted) and are
+ * strictly opt-in.
+ *
+ * The close MUST run, or results stay on the device and memory is never freed; use
+ * try/finally on the Python side.
+ ***************************************************************************/
+static PyObject* srwlpy_UtiGPUProc(PyObject *self, PyObject *args)
+{
+	try
+	{
+		int op = 0;
+		PyObject *oDev = 0;
+		if(!PyArg_ParseTuple(args, "i|O:UtiGPUProc", &op, &oDev)) throw strEr_BadArg_UtiVer;
+
+		double *arGPUParam = 0;
+		ParseDeviceParam(oDev, arGPUParam);
+		ProcRes(srwlUtiGPUProc(op, arGPUParam));
+		if(arGPUParam != 0) delete[] arGPUParam;
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+		return 0;
+	}
+	Py_INCREF(Py_None);
+	return Py_None;
+}
+
+/************************************************************************//**
  * Returns version number / ID of SRW for Python
  ***************************************************************************/
 static PyObject* srwlpy_UtiVer(PyObject *self, PyObject *args)
@@ -6024,6 +6067,7 @@ static PyMethodDef srwlpy_methods[] = {
 	{"UtiIntProc", srwlpy_UtiIntProc, METH_VARARGS, "UtiIntProc() Performs misc. operations on one or two intensity distributions"},
 	{"UtiUndFromMagFldTab", srwlpy_UtiUndFromMagFldTab, METH_VARARGS, "UtiUndFromMagFldTab() Attempts to create periodic undulator structure from tabulated magnetic field"},
 	{"UtiUndFindMagFldInterpInds", srwlpy_UtiUndFindMagFldInterpInds, METH_VARARGS, "UtiUndFindMagFldInterpInds() Finds indexes of undulator gap and phase values and associated magnetic fields requiired to be used in field interpolation based on gap and phase"},
+	{"UtiGPUProc", srwlpy_UtiGPUProc, METH_VARARGS, "UtiGPUProc(_op, _dev) Opens (_op=2) or closes (_op=3) a persistent GPU session, keeping device buffers resident across calls"}, //HG20072026
 	{"UtiVer", srwlpy_UtiVer, METH_VARARGS, "UtiVerNo() Returns version number / ID of SRW for Python"},
 	{NULL, NULL}
 };

@@ -29,6 +29,7 @@ static bool isGPUEnabled = false;
 static bool GPUAvailabilityTested = false;
 static bool deviceOffloadInitialized = false;
 static int deviceCount = 0;
+static int sessionDepth = 0; //HG20072026 >0 suppresses Fini() so device buffers stay resident across entry points
 
 //#ifdef _OFFLOAD_GPU
 //typedef struct
@@ -575,12 +576,42 @@ void CAuxGPU::Init(TGPUUsageArg* arg) //HG02082024
 }
 
 //void CAuxGPU::Fini() 
+//HG20072026 See the comment on BeginSession() in auxgpu.h. While a session is open the
+//caller has taken responsibility for the lifetime of the device buffers, so Fini() must
+//not tear them down -- EndSession() calls Fini() again with the depth back at 0.
+void CAuxGPU::BeginSession(TGPUUsageArg* arg) //HG20072026
+{
+	if (arg == NULL || arg->deviceIndex <= 0)
+		return;
+	if (sessionDepth == 0)
+		Init(arg);
+	sessionDepth++;
+}
+
+void CAuxGPU::EndSession(TGPUUsageArg* arg) //HG20072026
+{
+	if (arg == NULL || arg->deviceIndex <= 0)
+		return;
+	if (sessionDepth == 0)
+		return; //unbalanced EndSession; ignore rather than corrupt the depth
+	sessionDepth--;
+	if (sessionDepth == 0)
+		Fini(arg); //the real teardown: this is what copies results back to the host
+}
+
+bool CAuxGPU::SessionActive() //HG20072026
+{
+	return sessionDepth > 0;
+}
+
 void CAuxGPU::Fini(TGPUUsageArg* arg) //HG02082024
 {
 //#ifdef _OFFLOAD_GPU
 	if (arg == NULL) //HG02082024
 		return;
 	if (arg->deviceIndex == 0)
+		return;
+	if (sessionDepth > 0) //HG20072026 a session owns the buffers; do not copy back or free here
 		return;
 	SetGPUStatus(false); //HG30112023 Disable GPU
 
