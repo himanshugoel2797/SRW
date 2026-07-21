@@ -123,13 +123,12 @@ int PrefixSum_GPU(T* data, int len, double step, double RelPowLevel, double Inte
 {
     //HG20072026 The running sums are accumulated in DOUBLE, matching the CPU
     //(srTAuxMatStat::FindLimit1DLeft, srmatsta.cpp:404, uses `double Sum = 0.`).
-    //They used to be scanned in T -- float32 for an intensity array -- and over a few
-    //hundred points that drifts enough to cross the power threshold at a DIFFERENT
-    //INDEX than the CPU. Those indices are the integration limits for
-    //ComputeRadMoments, so a one-bin difference shifted the second-order moments by
-    //~1.3%, and srTDriftSpace then amplified that into a ~12% field error. Proven
-    //causally: grafting the CPU moments into the GPU-propagated wavefront before the
-    //drift dropped the discrepancy from 1.2e-01 to 6.2e-07.
+    //They used to be scanned in T -- float32 for an intensity array -- which can cross
+    //the power threshold at a different index than the CPU's double accumulator.
+    //NOTE: this widening alone did NOT fix the ~1.3% second-order-moment gap (measured
+    //bit-for-bit unmoved by it). The actual one-bin window shift was the CPU's float32
+    //coordinate round-trip, replicated in FindIntensityLimitsInds_GPU below. This
+    //change is CPU-parity hardening of the scan itself.
     data = CAuxGPU::ToDevice(pGPU, data, len);
     double* sum = new double[len * 2];
     double* sum_l = CAuxGPU::ToDevice<double>(pGPU, sum, len * 2, CAuxGPU::DONT_COPY);
@@ -233,19 +232,42 @@ int srTAuxMatStat::FindIntensityLimitsInds_GPU(CHGenObj& hRad, int ie, double Re
         {
             pf0 = CAuxGPU::ToDevice(&parGPU, (float*)ExtractedWaveData.pWaveData, Nx*Ny);
             CAuxGPU::EnsureDeviceMemoryReady(&parGPU, pf0);
-            IntegratedIntens = thrust::reduce(thrust::device, pf0, pf0 + Nx*Ny) * xStep*yStep;
+            //HG20072026 Accumulate in double (the CPU IntegrateSimple sums into `double Sum`),
+            //then collapse through float32: the CPU stores the total in `float AuxArrF[0]` and
+            //derives every power threshold from that value (srmatsta.cpp:622,466).
+            CastToDouble<float> toD;
+            IntegratedIntens = thrust::reduce(thrust::device,
+                thrust::make_transform_iterator(pf0, toD),
+                thrust::make_transform_iterator(pf0 + Nx*Ny, toD), 0., thrust::plus<double>());
+            IntegratedIntens = (double)((float)(IntegratedIntens * xStep*yStep));
             IntegrateOverX_GPU_base<float>(pf0, IndLims[0], IndLims[1], xStep, Nx, Ny, AuxArrIntOverX, &parGPU);
-        } 
+        }
         else
         {
             pd0 = CAuxGPU::ToDevice(&parGPU, (double*)ExtractedWaveData.pWaveData, Nx*Ny);
             CAuxGPU::EnsureDeviceMemoryReady(&parGPU, pd0);
-            IntegratedIntens = thrust::reduce(thrust::device, pd0, pd0 + Nx*Ny) * xStep*yStep;
+            IntegratedIntens = thrust::reduce(thrust::device, pd0, pd0 + Nx*Ny, 0., thrust::plus<double>());
+            IntegratedIntens = (double)((float)(IntegratedIntens * xStep*yStep)); //HG20072026 see above
             IntegrateOverX_GPU_base<double>(pd0, IndLims[0], IndLims[1], xStep, Nx, Ny, AuxArrIntOverX, &parGPU);
         }
 
         //Find the limits of integration over X
         PrefixSum_GPU<double>(AuxArrIntOverX, Ny, yStep, RelPow, IntegratedIntens, &IndLims[2], &IndLims[3], &parGPU);
+
+        //HG20072026 CPU parity: FindIntensityLimits2D (srmatsta.cpp:501) fails out with
+        //INCORRECT_ARGUMENTS if the vertical window is degenerate, and the caller then keeps
+        //the full-range limits it initialized. Reproduce that, or the two paths pick
+        //different windows for pathological wavefronts.
+        if(IndLims[3] <= IndLims[2])
+        {
+            IndLims[0] = 0; IndLims[1] = Rad->nx - 1;
+            IndLims[2] = 0; IndLims[3] = Rad->nz - 1;
+            CAuxGPU::ToHostAndFree(&parGPU, AuxArrIntOverX);
+            CAuxGPU::ToHostAndFree(&parGPU, AuxArrIntOverY);
+            CAuxGPU::ToHostAndFree(&parGPU, RadExtract.pExtractedData);
+            delete[] RadExtract.pExtractedData;
+            return INCORRECT_ARGUMENTS;
+        }
 
         //Integrate Y over the limits of integration over X
         if (*(ExtractedWaveData.WaveType) == 'f') IntegrateOverY_GPU_base<float>(pf0, IndLims[2], IndLims[3], yStep, Nx, Ny, AuxArrIntOverY, &parGPU);
@@ -253,6 +275,34 @@ int srTAuxMatStat::FindIntensityLimitsInds_GPU(CHGenObj& hRad, int ie, double Re
 
         //Find the limits of integration over Y
         PrefixSum_GPU<double>(AuxArrIntOverY, Nx, xStep, RelPow, IntegratedIntens, &IndLims[0], &IndLims[1], &parGPU);
+
+        //HG20072026 THE ~1.3% SECOND-ORDER MOMENT GAP LIVED HERE (KNOWN_ISSUES.md #1).
+        //The CPU does not use its scanned integer limits directly: FindIntensityLimits2D
+        //stores them as float32 COORDINATES (AuxArrF[1..4] in FindIntensityLimitsInds), and
+        //the indices are re-derived as (int)((coordF - start)*1.0000001/step). Half a float
+        //ulp of the coordinate can outweigh the 1.0000001 fudge (e.g. ix=22, x~3.3e-4 m,
+        //step~3.1e-6 m: ulp/2/step ~ 4.6e-6 > 22*1e-7), so the CPU lands one bin BELOW the
+        //index its own scan found. This GPU path kept the exact integers, so its 90%-power
+        //window could exclude an edge column the CPU includes; with the x^2 weighting that
+        //made the second-order moments differ ~1.3%, which srTDriftSpace amplified to ~12%
+        //of peak after an aperture+drift. Replicate the CPU's float round-trip and clamps
+        //bit-for-bit so both paths select the same window.
+        {
+            double xStartWave = ExtractedWaveData.DimStartValues[0];
+            double yStartWave = ExtractedWaveData.DimStartValues[1];
+            float xLoF = (float)(xStartWave + xStep*IndLims[0]);
+            float xHiF = (float)(xStartWave + xStep*IndLims[1]);
+            float yLoF = (float)(yStartWave + yStep*IndLims[2]);
+            float yHiF = (float)(yStartWave + yStep*IndLims[3]);
+            IndLims[0] = (int)((xLoF - Rad->xStart)*1.0000001/Rad->xStep);
+            if(IndLims[0] < 0) IndLims[0] = 0;
+            IndLims[1] = (int)((xHiF - Rad->xStart)*1.0000001/Rad->xStep);
+            if(IndLims[1] >= Rad->nx) IndLims[1] = Rad->nx - 1;
+            IndLims[2] = (int)((yLoF - Rad->zStart)*1.0000001/Rad->zStep);
+            if(IndLims[2] < 0) IndLims[2] = 0;
+            IndLims[3] = (int)((yHiF - Rad->zStart)*1.0000001/Rad->zStep);
+            if(IndLims[3] >= Rad->nz) IndLims[3] = Rad->nz - 1;
+        }
 
         //The integer limits of integration over X and Y are now in ixBounds_d and iyBounds_d respectively
         CAuxGPU::ToHostAndFree(&parGPU, AuxArrIntOverX);
