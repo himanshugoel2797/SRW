@@ -9462,7 +9462,17 @@ def srwl_wfr_emit_prop_multi_e(_e_beam, _mag, _mesh, _sr_meth, _sr_rel_prec, _n_
                 nGPU = len(res.stdout.strip().split("\n"))
         except:
             pass
+        if(nGPU <= 0): raise Exception("GPU use was requested (_gpu_f != 0) but no NVIDIA GPU could be detected via nvidia-smi") #HG20072026 (was ZeroDivisionError on the next line)
         indGPU = rank%nGPU + 1
+
+    #HG20072026 Device used for the persistent GPU session around the 4D CSD accumulation
+    #loop below. Deliberately captured ONCE here and never re-derived from the per-iteration
+    #`tryUsingGPUforWfr`: that variable is reset every iteration and `indGPU` is incremented
+    #and wrapped (round-robin over all local GPUs), so consecutive wavefronts can land on
+    #different devices. CAuxGPU's session depth and allocation map are global rather than
+    #per-device, so a session is only well defined while the device is constant.
+    #0 disables the session entirely, which is the pre-existing behaviour.
+    sessDevCSD = indGPU if ((_gpu_f != 0) and (nGPU == 1) and (indGPU > 0)) else 0
 
     useGsnBmSrc = False
     usePtSrc = False #OC16102017
@@ -10073,413 +10083,311 @@ def srwl_wfr_emit_prop_multi_e(_e_beam, _mag, _mesh, _sr_meth, _sr_rel_prec, _n_
             lenArToSend = 2*lenHalfArToSend
             arElFldToSend = array('f', [0]*lenArToSend)
         
-        for i in range(nPartPerProc): #loop over macro-electrons
+        #HG20072026 Persistent GPU session around the macro-electron loop.
+        #The 4D CSD accumulator resStokes.arS is written by CalcIntFromElecField once per
+        #macro-electron. Without a session each of those calls is bracketed by CAuxGPU
+        #Init/Fini, and Fini copies the WHOLE CSD back to the host and frees it -- so a
+        #2 GiB CSD round-tripped host<->device every iteration for a ~4 ms kernel, making
+        #the GPU path slower than the CPU one. Inside a session the copy-back happens once,
+        #at the close. Measured 391 ms -> 4.0 ms per macro-electron at nxnz=16384.
+        #
+        #Restricted to _char in {6,61,7} with nProc == 1, and that restriction is load-bearing:
+        # - other _char values accumulate into resStokes on the HOST via
+        #   SRWLStokes.avg_update_* / wfr.calc_stokes, which would read a stale buffer;
+        # - with nProc > 1 the master's receive loop writes wfr.arEx[:] from the host each
+        #   iteration, which a session would make invisible to the device.
+        #The close MUST run, hence try/finally: without it results stay on the GPU and the
+        #host buffer keeps whatever it had.
+        useCSDSession = (sessDevCSD > 0) and ((_char == 6) or (_char == 61) or (_char == 7)) and (nProc == 1) #HG20072026
+        if(useCSDSession): srwl.UtiGPUProc(2, sessDevCSD) #HG20072026 open
+        try: #HG20072026
+            for i in range(nPartPerProc): #loop over macro-electrons
 
-            if((_me_approx == 0) and (not doPropCM)): #OC04112020
-            #if(_me_approx == 0): #OC05042017 #General method
+                if((_me_approx == 0) and (not doPropCM)): #OC04112020
+                #if(_me_approx == 0): #OC05042017 #General method
                 
-                if(_rand_meth == 1):
-                    for ir in range(5): #to expend to 6D eventually
-                        randAr[ir] = random.gauss(0, 1)
-                elif(_rand_meth == 2):
-                    if(nProc > 1):
-                        #iArg = i*(nProc - 1) + rank - rankMaster #OC02032021: not necessary, since rank is unique
-                        iArg = i*(nProc - 1) + rank
-                        a1 = srwl_uti_math_seq_halton(iArg, 2)
-                        a2 = srwl_uti_math_seq_halton(iArg, 3)
-                        a3 = srwl_uti_math_seq_halton(iArg, 5)
-                        a4 = srwl_uti_math_seq_halton(iArg, 7)
-                        a5 = srwl_uti_math_seq_halton(iArg, 11) #?
-                    elif(nProc == 1):
-                        i_p_1 = i + 1
-                        a1 = srwl_uti_math_seq_halton(i_p_1, 2)
-                        a2 = srwl_uti_math_seq_halton(i_p_1, 3)
-                        a3 = srwl_uti_math_seq_halton(i_p_1, 5)
-                        a4 = srwl_uti_math_seq_halton(i_p_1, 7)
-                        a5 = srwl_uti_math_seq_halton(i_p_1, 11) #?
-                    twoPi = 2*pi
-                    twoPi_a2 = twoPi*a2
-                    twoPi_a4 = twoPi*a4
-                    m2_log_a1 = -2.0*log(a1)
-                    m2_log_a3 = -2.0*log(a3)
-                    randAr[0] = sqrt(m2_log_a1)*cos(twoPi_a2)
-                    randAr[1] = sqrt(m2_log_a1)*sin(twoPi_a2)
-                    randAr[2] = sqrt(m2_log_a3)*cos(twoPi_a4)
-                    randAr[3] = sqrt(m2_log_a3)*sin(twoPi_a4)
-                    randAr[4] = sqrt(m2_log_a1)*cos(twoPi*a3) #or just random.gauss(0,1) depends on cases #why not using a5?
-                    randAr[5] = a5
-                elif(_rand_meth == 3):
-                    #to program LPtau sequences here
-                    continue
+                    if(_rand_meth == 1):
+                        for ir in range(5): #to expend to 6D eventually
+                            randAr[ir] = random.gauss(0, 1)
+                    elif(_rand_meth == 2):
+                        if(nProc > 1):
+                            #iArg = i*(nProc - 1) + rank - rankMaster #OC02032021: not necessary, since rank is unique
+                            iArg = i*(nProc - 1) + rank
+                            a1 = srwl_uti_math_seq_halton(iArg, 2)
+                            a2 = srwl_uti_math_seq_halton(iArg, 3)
+                            a3 = srwl_uti_math_seq_halton(iArg, 5)
+                            a4 = srwl_uti_math_seq_halton(iArg, 7)
+                            a5 = srwl_uti_math_seq_halton(iArg, 11) #?
+                        elif(nProc == 1):
+                            i_p_1 = i + 1
+                            a1 = srwl_uti_math_seq_halton(i_p_1, 2)
+                            a2 = srwl_uti_math_seq_halton(i_p_1, 3)
+                            a3 = srwl_uti_math_seq_halton(i_p_1, 5)
+                            a4 = srwl_uti_math_seq_halton(i_p_1, 7)
+                            a5 = srwl_uti_math_seq_halton(i_p_1, 11) #?
+                        twoPi = 2*pi
+                        twoPi_a2 = twoPi*a2
+                        twoPi_a4 = twoPi*a4
+                        m2_log_a1 = -2.0*log(a1)
+                        m2_log_a3 = -2.0*log(a3)
+                        randAr[0] = sqrt(m2_log_a1)*cos(twoPi_a2)
+                        randAr[1] = sqrt(m2_log_a1)*sin(twoPi_a2)
+                        randAr[2] = sqrt(m2_log_a3)*cos(twoPi_a4)
+                        randAr[3] = sqrt(m2_log_a3)*sin(twoPi_a4)
+                        randAr[4] = sqrt(m2_log_a1)*cos(twoPi*a3) #or just random.gauss(0,1) depends on cases #why not using a5?
+                        randAr[5] = a5
+                    elif(_rand_meth == 3):
+                        #to program LPtau sequences here
+                        continue
 
-                #DEBUG
-                #if(i == 0):
-                #    randAr = array('d', [0,0,0,0,0])
-                #if(i == 1):
-                #    randAr = array('d', [0,0,0,-2,0])
-                #END DEBUG
+                    #DEBUG
+                    #if(i == 0):
+                    #    randAr = array('d', [0,0,0,0,0])
+                    #if(i == 1):
+                    #    randAr = array('d', [0,0,0,-2,0])
+                    #END DEBUG
 
-                auxPXp = SigQX*randAr[0]
-                auxPX = SigPX*randAr[1] + AX*auxPXp/GX
-                wfr.partBeam.partStatMom1.x = elecX0 + auxPX
-                wfr.partBeam.partStatMom1.xp = elecXp0 + auxPXp
-                auxPYp = SigQY*randAr[2]
-                auxPY = SigPY*randAr[3] + AY*auxPYp/GY
-                wfr.partBeam.partStatMom1.y = elecY0 + auxPY
-                wfr.partBeam.partStatMom1.yp = elecYp0 + auxPYp
-                #wfr.partBeam.partStatMom1.gamma = (elecEn0 + elecAbsEnSpr*randAr[4])/0.51099890221e-03 #Relative Energy
-                #wfr.partBeam.partStatMom1.gamma = elecGamma0*(1 + elecAbsEnSpr*randAr[4]/elecE0)
-                wfr.partBeam.partStatMom1.gamma = elecGamma0*(1 + elecRelEnSpr*randAr[4]) #OC28122016
+                    auxPXp = SigQX*randAr[0]
+                    auxPX = SigPX*randAr[1] + AX*auxPXp/GX
+                    wfr.partBeam.partStatMom1.x = elecX0 + auxPX
+                    wfr.partBeam.partStatMom1.xp = elecXp0 + auxPXp
+                    auxPYp = SigQY*randAr[2]
+                    auxPY = SigPY*randAr[3] + AY*auxPYp/GY
+                    wfr.partBeam.partStatMom1.y = elecY0 + auxPY
+                    wfr.partBeam.partStatMom1.yp = elecYp0 + auxPYp
+                    #wfr.partBeam.partStatMom1.gamma = (elecEn0 + elecAbsEnSpr*randAr[4])/0.51099890221e-03 #Relative Energy
+                    #wfr.partBeam.partStatMom1.gamma = elecGamma0*(1 + elecAbsEnSpr*randAr[4]/elecE0)
+                    wfr.partBeam.partStatMom1.gamma = elecGamma0*(1 + elecRelEnSpr*randAr[4]) #OC28122016
 
-                if(wfr2 is not None): #OC30052017
-                    wfr2.partBeam.partStatMom1.x = elecX0 + auxPX
-                    wfr2.partBeam.partStatMom1.xp = elecXp0 + auxPXp
-                    wfr2.partBeam.partStatMom1.y = elecY0 + auxPY
-                    wfr2.partBeam.partStatMom1.yp = elecYp0 + auxPYp
-                    wfr2.partBeam.partStatMom1.gamma = elecGamma0*(1 + elecRelEnSpr*randAr[4]) #OC28122016
+                    if(wfr2 is not None): #OC30052017
+                        wfr2.partBeam.partStatMom1.x = elecX0 + auxPX
+                        wfr2.partBeam.partStatMom1.xp = elecXp0 + auxPXp
+                        wfr2.partBeam.partStatMom1.y = elecY0 + auxPY
+                        wfr2.partBeam.partStatMom1.yp = elecYp0 + auxPYp
+                        wfr2.partBeam.partStatMom1.gamma = elecGamma0*(1 + elecRelEnSpr*randAr[4]) #OC28122016
+
+                    #Consider taking into account other 2nd order moments?
+
+                elif((_me_approx == 1) and (not doPropCM)): #OC04112020
+                #elif(_me_approx == 1): #OC05042017 #Numerical integration only over electron energy
+
+                    if(_rand_meth == 1):
+                        randAr[0] = random.gauss(0, 1)
+                    elif(_rand_meth == 2):
+                        if(nProc > 1):
+                            iArg = i*(nProc - 1) + rank
+                            a1 = srwl_uti_math_seq_halton(iArg, 2)
+                            a2 = srwl_uti_math_seq_halton(iArg, 3)
+                            #a3 = srwl_uti_math_seq_halton(iArg, 5)
+                            #a4 = srwl_uti_math_seq_halton(iArg, 7)
+                            #a5 = srwl_uti_math_seq_halton(iArg, 11) #?
+                        elif(nProc == 1):
+                            i_p_1 = i + 1
+                            a1 = srwl_uti_math_seq_halton(i_p_1, 2)
+                            a2 = srwl_uti_math_seq_halton(i_p_1, 3)
+                            #a3 = srwl_uti_math_seq_halton(i_p_1, 5)
+                            #a4 = srwl_uti_math_seq_halton(i_p_1, 7)
+                            #a5 = srwl_uti_math_seq_halton(i_p_1, 11) #?
+                        twoPi = 2*pi
+                        twoPi_a2 = twoPi*a2
+                        #twoPi_a4 = twoPi*a4
+                        m2_log_a1 = -2.0*log(a1)
+                        #m2_log_a3 = -2.0*log(a3)
+                        randAr[0] = sqrt(m2_log_a1)*cos(twoPi_a2)
+                        #randAr[1] = sqrt(m2_log_a1)*sin(twoPi_a2)
+                        #randAr[2] = sqrt(m2_log_a3)*cos(twoPi_a4)
+                        #randAr[3] = sqrt(m2_log_a3)*sin(twoPi_a4)
+                        #randAr[4] = sqrt(m2_log_a1)*cos(twoPi*a3) #or just random.gauss(0,1) depends on cases #why not using a5?
+                        #randAr[5] = a5
+                    elif(_rand_meth == 3):
+                        #to program LPtau sequences here
+                        continue
+
+                    wfr.partBeam.partStatMom1.x = elecX0
+                    wfr.partBeam.partStatMom1.xp = elecXp0
+                    wfr.partBeam.partStatMom1.y = elecY0
+                    wfr.partBeam.partStatMom1.yp = elecYp0
+                    wfr.partBeam.partStatMom1.gamma = elecGamma0*(1 + elecRelEnSpr*randAr[0]) #OC05042017
+                    if(wfr2 is not None): #OC30052017
+                        wfr2.partBeam.partStatMom1.x = elecX0
+                        wfr2.partBeam.partStatMom1.xp = elecXp0
+                        wfr2.partBeam.partStatMom1.y = elecY0
+                        wfr2.partBeam.partStatMom1.yp = elecYp0
+                        wfr2.partBeam.partStatMom1.gamma = elecGamma0*(1 + elecRelEnSpr*randAr[0])
+
+                if not doPropCM: #OC04112020
+                    #OC06042017 (added for _me_approx == 1 and possibly other future methods)
+                    wfr.partBeam.arStatMom2[0] = elecSigXe2 #<(x-x0)^2>
+                    wfr.partBeam.arStatMom2[1] = elecMXXp #<(x-x0)*(xp-xp0)>
+                    wfr.partBeam.arStatMom2[2] = elecSigXpe2 #<(xp-xp0)^2>
+                    wfr.partBeam.arStatMom2[3] = elecSigYe2 #<(y-y0)^2>
+                    wfr.partBeam.arStatMom2[4] = elecMYYp #<(y-y0)*(yp-yp0)>
+                    wfr.partBeam.arStatMom2[5] = elecSigYpe2 #<(yp-yp0)^2>
+                    wfr.partBeam.arStatMom2[10] = elecRelEnSpr*elecRelEnSpr #<(E-E0)^2>/E0^2
+                    if(wfr2 is not None): #OC30052017
+                        wfr2.partBeam.arStatMom2[0] = elecSigXe2 #<(x-x0)^2>
+                        wfr2.partBeam.arStatMom2[1] = elecMXXp #<(x-x0)*(xp-xp0)>
+                        wfr2.partBeam.arStatMom2[2] = elecSigXpe2 #<(xp-xp0)^2>
+                        wfr2.partBeam.arStatMom2[3] = elecSigYe2 #<(y-y0)^2>
+                        wfr2.partBeam.arStatMom2[4] = elecMYYp #<(y-y0)*(yp-yp0)>
+                        wfr2.partBeam.arStatMom2[5] = elecSigYpe2 #<(yp-yp0)^2>
+                        wfr2.partBeam.arStatMom2[10] = elecRelEnSpr*elecRelEnSpr #<(E-E0)^2>/E0^2
 
                 #Consider taking into account other 2nd order moments?
 
-            elif((_me_approx == 1) and (not doPropCM)): #OC04112020
-            #elif(_me_approx == 1): #OC05042017 #Numerical integration only over electron energy
+                #reset mesh, because it may be modified by CalcElecFieldSR and PropagElecField
+                #print('Numbers of points (before re-setting): nx=', wfr.mesh.nx, ' ny=', wfr.mesh.ny) #DEBUG
+                curWfrMesh = wfr.mesh #OC02042016
+                newWfrMesh = _mesh if(_opt_bl is not None) else meshRes #OC16012017
 
-                if(_rand_meth == 1):
-                    randAr[0] = random.gauss(0, 1)
-                elif(_rand_meth == 2):
-                    if(nProc > 1):
-                        iArg = i*(nProc - 1) + rank
-                        a1 = srwl_uti_math_seq_halton(iArg, 2)
-                        a2 = srwl_uti_math_seq_halton(iArg, 3)
-                        #a3 = srwl_uti_math_seq_halton(iArg, 5)
-                        #a4 = srwl_uti_math_seq_halton(iArg, 7)
-                        #a5 = srwl_uti_math_seq_halton(iArg, 11) #?
-                    elif(nProc == 1):
-                        i_p_1 = i + 1
-                        a1 = srwl_uti_math_seq_halton(i_p_1, 2)
-                        a2 = srwl_uti_math_seq_halton(i_p_1, 3)
-                        #a3 = srwl_uti_math_seq_halton(i_p_1, 5)
-                        #a4 = srwl_uti_math_seq_halton(i_p_1, 7)
-                        #a5 = srwl_uti_math_seq_halton(i_p_1, 11) #?
-                    twoPi = 2*pi
-                    twoPi_a2 = twoPi*a2
-                    #twoPi_a4 = twoPi*a4
-                    m2_log_a1 = -2.0*log(a1)
-                    #m2_log_a3 = -2.0*log(a3)
-                    randAr[0] = sqrt(m2_log_a1)*cos(twoPi_a2)
-                    #randAr[1] = sqrt(m2_log_a1)*sin(twoPi_a2)
-                    #randAr[2] = sqrt(m2_log_a3)*cos(twoPi_a4)
-                    #randAr[3] = sqrt(m2_log_a3)*sin(twoPi_a4)
-                    #randAr[4] = sqrt(m2_log_a1)*cos(twoPi*a3) #or just random.gauss(0,1) depends on cases #why not using a5?
-                    #randAr[5] = a5
-                elif(_rand_meth == 3):
-                    #to program LPtau sequences here
-                    continue
+                #if((curWfrMesh.ne != _mesh.ne) or (curWfrMesh.nx != _mesh.nx) or (curWfrMesh.ny != _mesh.ny)):
+                #    wfr.allocate(_mesh.ne, _mesh.nx, _mesh.ny)
+                if((curWfrMesh.ne != newWfrMesh.ne) or (curWfrMesh.nx != newWfrMesh.nx) or (curWfrMesh.ny != newWfrMesh.ny)):  #OC16012017
+                    #DEBUG
+                    #print('curWfrMesh: nx=', curWfrMesh.nx, ' ny=', curWfrMesh.ny)
+                    #print('newWfrMesh: nx=', newWfrMesh.nx, ' ny=', newWfrMesh.ny)
+                    #END DEBUG
+                    wfr.allocate(newWfrMesh.ne, newWfrMesh.nx, newWfrMesh.ny)
 
-                wfr.partBeam.partStatMom1.x = elecX0
-                wfr.partBeam.partStatMom1.xp = elecXp0
-                wfr.partBeam.partStatMom1.y = elecY0
-                wfr.partBeam.partStatMom1.yp = elecYp0
-                wfr.partBeam.partStatMom1.gamma = elecGamma0*(1 + elecRelEnSpr*randAr[0]) #OC05042017
+                if(_opt_bl is None): wfr.mesh.set_from_other(meshRes) #OC16012017
+                else: wfr.mesh.set_from_other(_mesh)
+
                 if(wfr2 is not None): #OC30052017
-                    wfr2.partBeam.partStatMom1.x = elecX0
-                    wfr2.partBeam.partStatMom1.xp = elecXp0
-                    wfr2.partBeam.partStatMom1.y = elecY0
-                    wfr2.partBeam.partStatMom1.yp = elecYp0
-                    wfr2.partBeam.partStatMom1.gamma = elecGamma0*(1 + elecRelEnSpr*randAr[0])
+                    curWfrMesh2 = wfr2.mesh
+                    newWfrMesh2 = _mesh if(_opt_bl is not None) else meshRes2
 
-            if not doPropCM: #OC04112020
-                #OC06042017 (added for _me_approx == 1 and possibly other future methods)
-                wfr.partBeam.arStatMom2[0] = elecSigXe2 #<(x-x0)^2>
-                wfr.partBeam.arStatMom2[1] = elecMXXp #<(x-x0)*(xp-xp0)>
-                wfr.partBeam.arStatMom2[2] = elecSigXpe2 #<(xp-xp0)^2>
-                wfr.partBeam.arStatMom2[3] = elecSigYe2 #<(y-y0)^2>
-                wfr.partBeam.arStatMom2[4] = elecMYYp #<(y-y0)*(yp-yp0)>
-                wfr.partBeam.arStatMom2[5] = elecSigYpe2 #<(yp-yp0)^2>
-                wfr.partBeam.arStatMom2[10] = elecRelEnSpr*elecRelEnSpr #<(E-E0)^2>/E0^2
-                if(wfr2 is not None): #OC30052017
-                    wfr2.partBeam.arStatMom2[0] = elecSigXe2 #<(x-x0)^2>
-                    wfr2.partBeam.arStatMom2[1] = elecMXXp #<(x-x0)*(xp-xp0)>
-                    wfr2.partBeam.arStatMom2[2] = elecSigXpe2 #<(xp-xp0)^2>
-                    wfr2.partBeam.arStatMom2[3] = elecSigYe2 #<(y-y0)^2>
-                    wfr2.partBeam.arStatMom2[4] = elecMYYp #<(y-y0)*(yp-yp0)>
-                    wfr2.partBeam.arStatMom2[5] = elecSigYpe2 #<(yp-yp0)^2>
-                    wfr2.partBeam.arStatMom2[10] = elecRelEnSpr*elecRelEnSpr #<(E-E0)^2>/E0^2
+                    if((curWfrMesh2.ne != newWfrMesh2.ne) or (curWfrMesh2.nx != newWfrMesh2.nx) or (curWfrMesh2.ny != newWfrMesh2.ny)):
+                        wfr2.allocate(newWfrMesh2.ne, newWfrMesh2.nx, newWfrMesh2.ny)
 
-            #Consider taking into account other 2nd order moments?
+                    if(_opt_bl is None): wfr2.mesh.set_from_other(meshRes2)
+                    else: wfr2.mesh.set_from_other(_mesh)
 
-            #reset mesh, because it may be modified by CalcElecFieldSR and PropagElecField
-            #print('Numbers of points (before re-setting): nx=', wfr.mesh.nx, ' ny=', wfr.mesh.ny) #DEBUG
-            curWfrMesh = wfr.mesh #OC02042016
-            newWfrMesh = _mesh if(_opt_bl is not None) else meshRes #OC16012017
-
-            #if((curWfrMesh.ne != _mesh.ne) or (curWfrMesh.nx != _mesh.nx) or (curWfrMesh.ny != _mesh.ny)):
-            #    wfr.allocate(_mesh.ne, _mesh.nx, _mesh.ny)
-            if((curWfrMesh.ne != newWfrMesh.ne) or (curWfrMesh.nx != newWfrMesh.nx) or (curWfrMesh.ny != newWfrMesh.ny)):  #OC16012017
-                #DEBUG
-                #print('curWfrMesh: nx=', curWfrMesh.nx, ' ny=', curWfrMesh.ny)
-                #print('newWfrMesh: nx=', newWfrMesh.nx, ' ny=', newWfrMesh.ny)
-                #END DEBUG
-                wfr.allocate(newWfrMesh.ne, newWfrMesh.nx, newWfrMesh.ny)
-
-            if(_opt_bl is None): wfr.mesh.set_from_other(meshRes) #OC16012017
-            else: wfr.mesh.set_from_other(_mesh)
-
-            if(wfr2 is not None): #OC30052017
-                curWfrMesh2 = wfr2.mesh
-                newWfrMesh2 = _mesh if(_opt_bl is not None) else meshRes2
-
-                if((curWfrMesh2.ne != newWfrMesh2.ne) or (curWfrMesh2.nx != newWfrMesh2.nx) or (curWfrMesh2.ny != newWfrMesh2.ny)):
-                    wfr2.allocate(newWfrMesh2.ne, newWfrMesh2.nx, newWfrMesh2.ny)
-
-                if(_opt_bl is None): wfr2.mesh.set_from_other(meshRes2)
-                else: wfr2.mesh.set_from_other(_mesh)
-
-            if(_e_ph_integ == 1):
-                if(_rand_meth == 1):
-                    ePh = random.uniform(_mesh.eStart, _mesh.eFin)
-                else:
-                    ePh = _mesh.eStart + (_mesh.eFin - _mesh.eStart)*randAr[5]
+                if(_e_ph_integ == 1):
+                    if(_rand_meth == 1):
+                        ePh = random.uniform(_mesh.eStart, _mesh.eFin)
+                    else:
+                        ePh = _mesh.eStart + (_mesh.eFin - _mesh.eStart)*randAr[5]
                     
-                wfr.mesh.eStart = ePh
-                wfr.mesh.eFin = ePh
-                wfr.mesh.ne = 1
+                    wfr.mesh.eStart = ePh
+                    wfr.mesh.eFin = ePh
+                    wfr.mesh.ne = 1
+                    if(wfr2 is not None):
+                        wfr2.mesh.eStart = ePh
+                        wfr2.mesh.eFin = ePh
+                        wfr2.mesh.ne = 1
+
+                wfr.presCA = 0 #presentation/domain: 0- coordinates, 1- angles
+                wfr.presFT = 0 #presentation/domain: 0- frequency (photon energy), 1- time
                 if(wfr2 is not None):
-                    wfr2.mesh.eStart = ePh
-                    wfr2.mesh.eFin = ePh
-                    wfr2.mesh.ne = 1
+                    wfr2.presCA = 0 #presentation/domain: 0- coordinates, 1- angles
+                    wfr2.presFT = 0 #presentation/domain: 0- frequency (photon energy), 1- time
 
-            wfr.presCA = 0 #presentation/domain: 0- coordinates, 1- angles
-            wfr.presFT = 0 #presentation/domain: 0- frequency (photon energy), 1- time
-            if(wfr2 is not None):
-                wfr2.presCA = 0 #presentation/domain: 0- coordinates, 1- angles
-                wfr2.presFT = 0 #presentation/domain: 0- frequency (photon energy), 1- time
-
-            if(nProc == 1):
-                if(useGsnBmSrc): print('i=', i, 'Gaussian Beam Coord.: x=', wfr.partBeam.partStatMom1.x, 'x\'=', wfr.partBeam.partStatMom1.xp, 'y=', wfr.partBeam.partStatMom1.y, 'y\'=', wfr.partBeam.partStatMom1.yp)
-                elif(usePtSrc): print('i=', i, 'Point Source Coord.: x=', wfr.partBeam.partStatMom1.x, 'y=', wfr.partBeam.partStatMom1.y)
-                #elif(doPropCM): print('Mode:', iMode) #OC09112020
-                #elif(doPropCM): print('Mode:', i) #OC04112020
-                elif(doPropCM): print('Mode:', i + iModeStart) #OC221122
-                else: print('i=', i, 'Electron Coord.: x=', wfr.partBeam.partStatMom1.x, 'x\'=', wfr.partBeam.partStatMom1.xp, 'y=', wfr.partBeam.partStatMom1.y, 'y\'=', wfr.partBeam.partStatMom1.yp, 'E=',  wfr.partBeam.partStatMom1.gamma*0.51099890221e-03)
+                if(nProc == 1):
+                    if(useGsnBmSrc): print('i=', i, 'Gaussian Beam Coord.: x=', wfr.partBeam.partStatMom1.x, 'x\'=', wfr.partBeam.partStatMom1.xp, 'y=', wfr.partBeam.partStatMom1.y, 'y\'=', wfr.partBeam.partStatMom1.yp)
+                    elif(usePtSrc): print('i=', i, 'Point Source Coord.: x=', wfr.partBeam.partStatMom1.x, 'y=', wfr.partBeam.partStatMom1.y)
+                    #elif(doPropCM): print('Mode:', iMode) #OC09112020
+                    #elif(doPropCM): print('Mode:', i) #OC04112020
+                    elif(doPropCM): print('Mode:', i + iModeStart) #OC221122
+                    else: print('i=', i, 'Electron Coord.: x=', wfr.partBeam.partStatMom1.x, 'x\'=', wfr.partBeam.partStatMom1.xp, 'y=', wfr.partBeam.partStatMom1.y, 'y\'=', wfr.partBeam.partStatMom1.yp, 'E=',  wfr.partBeam.partStatMom1.gamma*0.51099890221e-03)
                 
-                if(_e_ph_integ == 1): print('Eph=', wfr.mesh.eStart)
+                    if(_e_ph_integ == 1): print('Eph=', wfr.mesh.eStart)
 
-            #DEBUG OC16102021
-            #print('Rank:', rank, 'i=', i, 'Electron Coord.: x=', wfr.partBeam.partStatMom1.x, 'x\'=', wfr.partBeam.partStatMom1.xp, 'y=', wfr.partBeam.partStatMom1.y, 'y\'=', wfr.partBeam.partStatMom1.yp, 'E=',  wfr.partBeam.partStatMom1.gamma*0.51099890221e-03)
-            #print('DEBUG: re-defining macro-electron initial conditions: OLD values:')
-            #print('i=', i, 'Electron Coord.: x=', wfr.partBeam.partStatMom1.x, 'x\'=', wfr.partBeam.partStatMom1.xp, 'y=', wfr.partBeam.partStatMom1.y, 'y\'=', wfr.partBeam.partStatMom1.yp, 'E=',  wfr.partBeam.partStatMom1.gamma*0.51099890221e-03)
-            #wfr.partBeam.partStatMom1.x = -3.662765020071964e-05 #OC: these initial conditions lead to wfr propagation off the final mesh in Example20 - to check the propagation issues(!)
-            #wfr.partBeam.partStatMom1.xp = 4.2604539754324834e-05
-            #wfr.partBeam.partStatMom1.y = -5.014957889048704e-06
-            #wfr.partBeam.partStatMom1.yp = 2.4359620246785347e-06
-            #wfr.partBeam.partStatMom1.gamma = 3.004478203792218/0.51099890221e-03
-            #print('DEBUG: re-defining macro-electron initial conditions: NEW values:')
-            #print('i=', i, 'Electron Coord.: x=', wfr.partBeam.partStatMom1.x, 'x\'=', wfr.partBeam.partStatMom1.xp, 'y=', wfr.partBeam.partStatMom1.y, 'y\'=', wfr.partBeam.partStatMom1.yp, 'E=',  wfr.partBeam.partStatMom1.gamma*0.51099890221e-03)
-            #sys.stdout.flush()
-            #END DEBUG
-
-            if(calcSpecFluxSrc): #consider taking into account _rand_meth != 1 here
-                xObs = random.uniform(_mesh.xStart, _mesh.xFin)
-                wfr.mesh.xStart = xObs
-                wfr.mesh.xFin = xObs
-                yObs = random.uniform(_mesh.yStart, _mesh.yFin)
-                wfr.mesh.yStart = yObs
-                wfr.mesh.yFin = yObs
-                #DEBUG
-                #print('xObs=', xObs, 'yObs=', yObs)
+                #DEBUG OC16102021
+                #print('Rank:', rank, 'i=', i, 'Electron Coord.: x=', wfr.partBeam.partStatMom1.x, 'x\'=', wfr.partBeam.partStatMom1.xp, 'y=', wfr.partBeam.partStatMom1.y, 'y\'=', wfr.partBeam.partStatMom1.yp, 'E=',  wfr.partBeam.partStatMom1.gamma*0.51099890221e-03)
+                #print('DEBUG: re-defining macro-electron initial conditions: OLD values:')
+                #print('i=', i, 'Electron Coord.: x=', wfr.partBeam.partStatMom1.x, 'x\'=', wfr.partBeam.partStatMom1.xp, 'y=', wfr.partBeam.partStatMom1.y, 'y\'=', wfr.partBeam.partStatMom1.yp, 'E=',  wfr.partBeam.partStatMom1.gamma*0.51099890221e-03)
+                #wfr.partBeam.partStatMom1.x = -3.662765020071964e-05 #OC: these initial conditions lead to wfr propagation off the final mesh in Example20 - to check the propagation issues(!)
+                #wfr.partBeam.partStatMom1.xp = 4.2604539754324834e-05
+                #wfr.partBeam.partStatMom1.y = -5.014957889048704e-06
+                #wfr.partBeam.partStatMom1.yp = 2.4359620246785347e-06
+                #wfr.partBeam.partStatMom1.gamma = 3.004478203792218/0.51099890221e-03
+                #print('DEBUG: re-defining macro-electron initial conditions: NEW values:')
+                #print('i=', i, 'Electron Coord.: x=', wfr.partBeam.partStatMom1.x, 'x\'=', wfr.partBeam.partStatMom1.xp, 'y=', wfr.partBeam.partStatMom1.y, 'y\'=', wfr.partBeam.partStatMom1.yp, 'E=',  wfr.partBeam.partStatMom1.gamma*0.51099890221e-03)
+                #sys.stdout.flush()
                 #END DEBUG
 
-            iMode = i + iModeStart #OC23112022
-            #iMode = i #OC19112020
-            try:
-                if(useGsnBmSrc):
-                    _mag.x = wfr.partBeam.partStatMom1.x
-                    _mag.xp = wfr.partBeam.partStatMom1.xp
-                    _mag.y = wfr.partBeam.partStatMom1.y
-                    _mag.yp = wfr.partBeam.partStatMom1.yp
-                    srwl.CalcElecFieldGaussian(wfr, _mag, arPrecParSR)
-                    if(wfr2 is not None): srwl.CalcElecFieldGaussian(wfr2, _mag, arPrecParSR) #OC30052017
-                    #print('DEBUG: Commented-out: CalcElecFieldGaussian')
-                    #print('Gaussian wavefront calc. done')
-                elif(usePtSrc):
-                    _mag.x = wfr.partBeam.partStatMom1.x
-                    _mag.xp = 0
-                    _mag.y = wfr.partBeam.partStatMom1.y
-                    _mag.yp = 0
-                    srwl.CalcElecFieldPointSrc(wfr, _mag, arPrecParSR)
-                    if(wfr2 is not None): srwl.CalcElecFieldPointSrc(wfr2, _mag, arPrecParSR) #OC30052017
-
-                elif(doPropCM): #OC04112020
-
-                    #wfr = _mag[i]
-
-                    if(nProc > 1): iMode = arModesToCalcByThisWorker[i] #OC26042022
-                    #iMode = arModesToCalcByThisWorker[i] #OC30102021
-                    #if(nProc > 1): iMode = (nProc - 1)*(_n_mpi*i + int(float(rankMaster)/float(nProc) + 1.e-10)) + rank - rankMaster - 1 #OC27102021
-                    #if(nProc > 1): iMode = (nProc - 1)*i + rank - 1 #OC19112020
-                    #if(nProc > 1): iMode = (rank - 1)*nPartPerProc + i #OC19112020
-
+                if(calcSpecFluxSrc): #consider taking into account _rand_meth != 1 here
+                    xObs = random.uniform(_mesh.xStart, _mesh.xFin)
+                    wfr.mesh.xStart = xObs
+                    wfr.mesh.xFin = xObs
+                    yObs = random.uniform(_mesh.yStart, _mesh.yFin)
+                    wfr.mesh.yStart = yObs
+                    wfr.mesh.yFin = yObs
                     #DEBUG
-                    #print('rank:', rank, ' iMode=', iMode, 'assigned')
-                    #sys.stdout.flush()
-                    #END DEBUG
-                    
-                    wfr = _mag[iMode] #OC19112020
-
-                    #OC10092022
-                    if(_e_beam is not None):
-                        m1 = _e_beam.partStatMom1; m1w = wfr.partBeam.partStatMom1
-                        dx = m1.x - m1w.x; dxp = m1.xp - m1w.xp; dy = m1.y - m1w.y; dyp = m1.yp - m1w.yp
-                        if((dx != 0.) or (dxp != 0.) or (dy != 0.) or (dyp != 0.)): 
-                            wfr.sim_src_offset(_dx = dx, _dxp = dxp, _dy = dy, _dyp = dyp, _move_mesh=False, _copy=False)
-                    #OC01082022
-                    #if((wfr.partBeam.partStatMom1.x != _e_beam.partStatMom1.x) or (wfr.partBeam.partStatMom1.xp != _e_beam.partStatMom1.xp) or 
-                    #   (wfr.partBeam.partStatMom1.y != _e_beam.partStatMom1.y) or (wfr.partBeam.partStatMom1.yp != _e_beam.partStatMom1.yp)):
-                    #    wfr.sim_src_offset(_dx = (_e_beam.partStatMom1.x - wfr.partBeam.partStatMom1.x), _dxp = (_e_beam.partStatMom1.xp - wfr.partBeam.partStatMom1.xp), 
-                    #                       _dy = (_e_beam.partStatMom1.y - wfr.partBeam.partStatMom1.y), _dyp = (_e_beam.partStatMom1.yp - wfr.partBeam.partStatMom1.yp), _move_mesh=False, _copy=False)
-                        #wfr = wfr.sim_src_offset(_dx = (_e_beam.partStatMom1.x - wfr.partBeam.partStatMom1.x), _dxp = (_e_beam.partStatMom1.xp - wfr.partBeam.partStatMom1.xp), 
-                        #                         _dy = (_e_beam.partStatMom1.y - wfr.partBeam.partStatMom1.y), _dyp = (_e_beam.partStatMom1.yp - wfr.partBeam.partStatMom1.yp), _move_mesh=False, _copy=True)
-                    #DEBUG
-                    #print('Rank #', rank, ': Mode #', iMode, 'assigned')
-                    #sys.stdout.flush()
-                    #END DEBUG
-                    
-                else:
-
-                    #print('Single-electron SR calculation ... ', end='') #DEBUG
-                    #t0 = time.time(); #DEBUG
-                    #print('arPrecParSR[6]=', arPrecParSR[6])
-
-                    #DEBUG
-                    #print('Numbers of points (after re-setting):') #DEBUG
-                    #print('ne=', wfr.mesh.ne, 'eStart=', wfr.mesh.eStart, 'eFin=', wfr.mesh.eFin)
-                    #print('nx=', wfr.mesh.nx, 'xStart=', wfr.mesh.xStart, 'xFin=', wfr.mesh.xFin)
-                    #print('ny=', wfr.mesh.ny, 'yStart=', wfr.mesh.yStart, 'yFin=', wfr.mesh.yFin)
-                    #print('zStart=', wfr.mesh.zStart)
-                    #END DEBUG
-                    
-                    srwl.CalcElecFieldSR(wfr, 0, _mag, arPrecParSR) #calculate Electric Field emitted by current electron
-                    if(wfr2 is not None): srwl.CalcElecFieldSR(wfr2, 0, _mag, arPrecParSR) #OC30052017
-
-                    #DEBUG OC10102021
-                    #if(rank == 203): 
-                    #    print('    rank=', rank, 'iMode=', iMode, ': E-field calculated')
-                    #    sys.stdout.flush()
+                    #print('xObs=', xObs, 'yObs=', yObs)
                     #END DEBUG
 
-                    #print('completed (lasted', round(time.time() - t0, 6), 's)') #DEBUG
-                    #print('DEBUG: Commented-out: CalcElecFieldSR')
-                    #print('DEBUG MESSAGE: CalcElecFieldSR called (rank:', rank,')')
+                iMode = i + iModeStart #OC23112022
+                #iMode = i #OC19112020
+                try:
+                    if(useGsnBmSrc):
+                        _mag.x = wfr.partBeam.partStatMom1.x
+                        _mag.xp = wfr.partBeam.partStatMom1.xp
+                        _mag.y = wfr.partBeam.partStatMom1.y
+                        _mag.yp = wfr.partBeam.partStatMom1.yp
+                        srwl.CalcElecFieldGaussian(wfr, _mag, arPrecParSR)
+                        if(wfr2 is not None): srwl.CalcElecFieldGaussian(wfr2, _mag, arPrecParSR) #OC30052017
+                        #print('DEBUG: Commented-out: CalcElecFieldGaussian')
+                        #print('Gaussian wavefront calc. done')
+                    elif(usePtSrc):
+                        _mag.x = wfr.partBeam.partStatMom1.x
+                        _mag.xp = 0
+                        _mag.y = wfr.partBeam.partStatMom1.y
+                        _mag.yp = 0
+                        srwl.CalcElecFieldPointSrc(wfr, _mag, arPrecParSR)
+                        if(wfr2 is not None): srwl.CalcElecFieldPointSrc(wfr2, _mag, arPrecParSR) #OC30052017
 
-                if(_opt_bl is not None):
+                    elif(doPropCM): #OC04112020
 
-                    #print('Wavefront propagation calculation ... ', end='') #DEBUG
-                    #t0 = time.time(); #DEBUG
+                        #wfr = _mag[i]
 
-                    #if(_w_wr != 0.): #OC26032016
-                    if(_wr != 0.): #OC07092016
-                        wfr.Rx = _wr
-                        wfr.Ry = _wr
-
-                    if(_wre > 0.): #OC05012017
-                        wfr.dRx = _wre
-                        wfr.dRy = _wre
-
-                    if(_rand_opt): _opt_bl.randomize() #OC24042020
-                    #DEBUG OC24042020
-                    #print('TEST: Coordinates of optical element center:', _opt_bl.arOpt[13].x, _opt_bl.arOpt[13].y)
-                    #print('TEST: Coordinates of optical element center:', 0.5*(_opt_bl.arOpt[15].mesh.yStart + _opt_bl.arOpt[15].mesh.yFin))
-                    #print('TEST: Coordinates of optical element center:', 0.5*(_opt_bl.arOpt[2].mesh.yStart + _opt_bl.arOpt[2].mesh.yFin))
-                    #END DEBUG
-                    #print('Before srwl.PropagElecField(wfr, _opt_bl)') #DEBUG
-
-                    #DEBUG
-                    #print('wfr.mesh.xStart=', wfr.mesh.xStart, 'wfr.mesh.xFin=', wfr.mesh.xFin, 'wfr.mesh.yStart=', wfr.mesh.yStart, 'wfr.mesh.yFin=', wfr.mesh.yFin)
-                    #END DEBUG
-
-                    if(not (doPropCM and (iMode == iModeStart) and (_det is None))): #OC23112022
-                    #if(not (doPropCM and (iMode == 0) and (_det is None))): #OC17022021
-                    #if(not (doPropCM and (iMode == 0) and (_det == 0))): #OC03022021
-                    #if(not (doPropCM and (iMode == 0))): #OC19112020
-                    #if(not (doPropCM and (i == 0))): #OC13112020
-
-                        #DEBUG OC10102021
-                        #if(rank == 203): 
-                        #    print('    rank=', rank, 'iMode=', iMode, ': starting propag. E-field')
-                        #    sys.stdout.flush()
-                        #END DEBUG
-
-                        #OC07042026
-                        tryUsingGPUforWfr = 0
-                        if(_gpu_f > 0 and _gpu_f < 1): 
-                            
-                            if(nProc > 1):
-                                stdRandNum = random.uniform(0, 1)
-                            
-                                #DEBUG
-                                #print('DEBUG MESSAGE: Random Number for CPU/GPU choice: ', stdRandNum)
-                                #sys.stdout.flush()
-                                #END DEBUG
-                            
-                                if(stdRandNum <= _gpu_f): 
-                                    tryUsingGPUforWfr = indGPU
-                                    indGPU += 1
-                                    #if(indGPU > nGPU): indGPU = 1 #OC08042026 (commented-out in several places)
-                            else:
-                                nCalcCPUandGPU = nCalcCPU + nCalcGPU
-                                if(nCalcCPUandGPU == 0):
-                                    if(_gpu_f >= 0.5): 
-                                        tryUsingGPUforWfr = indGPU
-                                        nCalcGPU += 1
-                                        indGPU += 1
-                                        #if(indGPU > nGPU): indGPU = 1
-                                else:
-                                    ratGPUtoTot = float(nCalcGPU)/nCalcCPUandGPU
-                                    if(_gpu_f < ratGPUtoTot):
-                                        tryUsingGPUforWfr = 0
-                                        nCalcCPU += 1
-                                    else:
-                                        tryUsingGPUforWfr = indGPU
-                                        nCalcGPU += 1
-                                        indGPU += 1
-                                        #if(indGPU > nGPU): indGPU = 1
-                                        
-                        elif(_gpu_f == 1):
-                            tryUsingGPUforWfr = indGPU
-                            nCalcGPU += 1
-                            indGPU += 1
-                            #if(indGPU > nGPU): indGPU = 1
-
-                        if(indGPU > nGPU): indGPU = 1 #OC08042026 (moved here from commented-out places)
+                        if(nProc > 1): iMode = arModesToCalcByThisWorker[i] #OC26042022
+                        #iMode = arModesToCalcByThisWorker[i] #OC30102021
+                        #if(nProc > 1): iMode = (nProc - 1)*(_n_mpi*i + int(float(rankMaster)/float(nProc) + 1.e-10)) + rank - rankMaster - 1 #OC27102021
+                        #if(nProc > 1): iMode = (nProc - 1)*i + rank - 1 #OC19112020
+                        #if(nProc > 1): iMode = (rank - 1)*nPartPerProc + i #OC19112020
 
                         #DEBUG
-                        #print('DEBUG MESSAGE: Propagating wavefront with tryUsingGPUforWfr=', tryUsingGPUforWfr)
+                        #print('rank:', rank, ' iMode=', iMode, 'assigned')
                         #sys.stdout.flush()
-                        
-                        #if subcomm != MPI.COMM_NULL:
-                        #    print(f"Rank {rank} entering barrier")
-                        #    subcomm.Barrier()
-                        #    print(f"Rank {rank} passed barrier")
                         #END DEBUG
-                        
-                        #if(rank > 1): #OC22042026 (introducing radom sleep time to test / bypass CUDA memory access issue on Windows) - this did not help, so commenting-out for now
-                        #    if(i == 0):
-                        #        if(tryUsingGPUforWfr > 0):
-                        #            maxWaitTimeS = 5. #to tune(?)
-                        #            
-                        #            #rndWaitTimeS = random.uniform(0, maxWaitTimeS)
-                        #            rndWaitTimeS = (maxWaitTimeS/(nProc - 2))*(rank - 1) #to have a more deterministic behavior
-                        #            time.sleep(rndWaitTimeS) #Trying to mitigate a potential issue at simultaneous access to GPU by different processes
-                        #            
-                        #            #DEBUG
-                        #            print('Rank #', rank, 'waking up after', rndWaitTimeS, 's')
-                        #            sys.stdout.flush()
-                        #            #END DEBUG
-                        
-                        srwl.PropagElecField(wfr, _opt_bl, None, tryUsingGPUforWfr) #propagate Electric Field emitted by the electron #OC05042026
-                        #srwl.PropagElecField(wfr, _opt_bl) #propagate Electric Field emitted by the electron
+                    
+                        wfr = _mag[iMode] #OC19112020
 
-                        if(_det is not None): srwl.ResizeElecFieldMesh(wfr, meshRes, [0, 1]) #OC01082022
+                        #OC10092022
+                        if(_e_beam is not None):
+                            m1 = _e_beam.partStatMom1; m1w = wfr.partBeam.partStatMom1
+                            dx = m1.x - m1w.x; dxp = m1.xp - m1w.xp; dy = m1.y - m1w.y; dyp = m1.yp - m1w.yp
+                            if((dx != 0.) or (dxp != 0.) or (dy != 0.) or (dyp != 0.)): 
+                                wfr.sim_src_offset(_dx = dx, _dxp = dxp, _dy = dy, _dyp = dyp, _move_mesh=False, _copy=False)
+                        #OC01082022
+                        #if((wfr.partBeam.partStatMom1.x != _e_beam.partStatMom1.x) or (wfr.partBeam.partStatMom1.xp != _e_beam.partStatMom1.xp) or 
+                        #   (wfr.partBeam.partStatMom1.y != _e_beam.partStatMom1.y) or (wfr.partBeam.partStatMom1.yp != _e_beam.partStatMom1.yp)):
+                        #    wfr.sim_src_offset(_dx = (_e_beam.partStatMom1.x - wfr.partBeam.partStatMom1.x), _dxp = (_e_beam.partStatMom1.xp - wfr.partBeam.partStatMom1.xp), 
+                        #                       _dy = (_e_beam.partStatMom1.y - wfr.partBeam.partStatMom1.y), _dyp = (_e_beam.partStatMom1.yp - wfr.partBeam.partStatMom1.yp), _move_mesh=False, _copy=False)
+                            #wfr = wfr.sim_src_offset(_dx = (_e_beam.partStatMom1.x - wfr.partBeam.partStatMom1.x), _dxp = (_e_beam.partStatMom1.xp - wfr.partBeam.partStatMom1.xp), 
+                            #                         _dy = (_e_beam.partStatMom1.y - wfr.partBeam.partStatMom1.y), _dyp = (_e_beam.partStatMom1.yp - wfr.partBeam.partStatMom1.yp), _move_mesh=False, _copy=True)
+                        #DEBUG
+                        #print('Rank #', rank, ': Mode #', iMode, 'assigned')
+                        #sys.stdout.flush()
+                        #END DEBUG
+                    
+                    else:
+
+                        #print('Single-electron SR calculation ... ', end='') #DEBUG
+                        #t0 = time.time(); #DEBUG
+                        #print('arPrecParSR[6]=', arPrecParSR[6])
+
+                        #DEBUG
+                        #print('Numbers of points (after re-setting):') #DEBUG
+                        #print('ne=', wfr.mesh.ne, 'eStart=', wfr.mesh.eStart, 'eFin=', wfr.mesh.eFin)
+                        #print('nx=', wfr.mesh.nx, 'xStart=', wfr.mesh.xStart, 'xFin=', wfr.mesh.xFin)
+                        #print('ny=', wfr.mesh.ny, 'yStart=', wfr.mesh.yStart, 'yFin=', wfr.mesh.yFin)
+                        #print('zStart=', wfr.mesh.zStart)
+                        #END DEBUG
+                    
+                        srwl.CalcElecFieldSR(wfr, 0, _mag, arPrecParSR) #calculate Electric Field emitted by current electron
+                        if(wfr2 is not None): srwl.CalcElecFieldSR(wfr2, 0, _mag, arPrecParSR) #OC30052017
 
                         #DEBUG OC10102021
                         #if(rank == 203): 
@@ -10487,800 +10395,943 @@ def srwl_wfr_emit_prop_multi_e(_e_beam, _mag, _mesh, _sr_meth, _sr_rel_prec, _n_
                         #    sys.stdout.flush()
                         #END DEBUG
 
+                        #print('completed (lasted', round(time.time() - t0, 6), 's)') #DEBUG
+                        #print('DEBUG: Commented-out: CalcElecFieldSR')
+                        #print('DEBUG MESSAGE: CalcElecFieldSR called (rank:', rank,')')
+
+                    if(_opt_bl is not None):
+
+                        #print('Wavefront propagation calculation ... ', end='') #DEBUG
+                        #t0 = time.time(); #DEBUG
+
+                        #if(_w_wr != 0.): #OC26032016
+                        if(_wr != 0.): #OC07092016
+                            wfr.Rx = _wr
+                            wfr.Ry = _wr
+
+                        if(_wre > 0.): #OC05012017
+                            wfr.dRx = _wre
+                            wfr.dRy = _wre
+
+                        if(_rand_opt): _opt_bl.randomize() #OC24042020
+                        #DEBUG OC24042020
+                        #print('TEST: Coordinates of optical element center:', _opt_bl.arOpt[13].x, _opt_bl.arOpt[13].y)
+                        #print('TEST: Coordinates of optical element center:', 0.5*(_opt_bl.arOpt[15].mesh.yStart + _opt_bl.arOpt[15].mesh.yFin))
+                        #print('TEST: Coordinates of optical element center:', 0.5*(_opt_bl.arOpt[2].mesh.yStart + _opt_bl.arOpt[2].mesh.yFin))
+                        #END DEBUG
+                        #print('Before srwl.PropagElecField(wfr, _opt_bl)') #DEBUG
+
                         #DEBUG
-                        #print('Rank #', rank, ': mode #', iMode, 'propagated')
-                        #sys.stdout.flush()
+                        #print('wfr.mesh.xStart=', wfr.mesh.xStart, 'wfr.mesh.xFin=', wfr.mesh.xFin, 'wfr.mesh.yStart=', wfr.mesh.yStart, 'wfr.mesh.yFin=', wfr.mesh.yFin)
                         #END DEBUG
 
-                    #DEBUG
-                    #print('wfr.mesh.xStart=', wfr.mesh.xStart, 'wfr.mesh.xFin=', wfr.mesh.xFin, 'wfr.mesh.yStart=', wfr.mesh.yStart, 'wfr.mesh.yFin=', wfr.mesh.yFin)
-                    #END DEBUG
+                        if(not (doPropCM and (iMode == iModeStart) and (_det is None))): #OC23112022
+                        #if(not (doPropCM and (iMode == 0) and (_det is None))): #OC17022021
+                        #if(not (doPropCM and (iMode == 0) and (_det == 0))): #OC03022021
+                        #if(not (doPropCM and (iMode == 0))): #OC19112020
+                        #if(not (doPropCM and (i == 0))): #OC13112020
 
-                    #print('srwl.PropagElecField(wfr, _opt_bl) OK') #DEBUG
-                    #print('completed (lasted', round(time.time() - t0, 6), 's)') #DEBUG
-                    #print('DEBUG: Commented-out: PropagElecField')
+                            #DEBUG OC10102021
+                            #if(rank == 203): 
+                            #    print('    rank=', rank, 'iMode=', iMode, ': starting propag. E-field')
+                            #    sys.stdout.flush()
+                            #END DEBUG
 
-                    #DEBUG
-                    #if(i == 48):
-                    #    arI1 = array('f', [0]*wfr.mesh.nx*wfr.mesh.ny) #"flat" 2D array to take intensity data
-                    #    srwl.CalcIntFromElecField(arI1, wfr, 6, 0, 3, wfr.mesh.eStart, 0, 0)
-                    #    srwl_uti_save_intens_ascii(arI1, wfr.mesh, os.path.join(os.getcwd(), 'data_CDI', 'debug_int_pr_se.dat'))
-                    #    sys.exit()
-                    #END DEBUG
+                            #OC07042026
+                            tryUsingGPUforWfr = 0
+                            if(_gpu_f > 0 and _gpu_f < 1): 
+                            
+                                if(nProc > 1):
+                                    stdRandNum = random.uniform(0, 1)
+                            
+                                    #DEBUG
+                                    #print('DEBUG MESSAGE: Random Number for CPU/GPU choice: ', stdRandNum)
+                                    #sys.stdout.flush()
+                                    #END DEBUG
+                            
+                                    if(stdRandNum <= _gpu_f): 
+                                        tryUsingGPUforWfr = indGPU
+                                        indGPU += 1
+                                        #if(indGPU > nGPU): indGPU = 1 #OC08042026 (commented-out in several places)
+                                else:
+                                    nCalcCPUandGPU = nCalcCPU + nCalcGPU
+                                    if(nCalcCPUandGPU == 0):
+                                        if(_gpu_f >= 0.5): 
+                                            tryUsingGPUforWfr = indGPU
+                                            nCalcGPU += 1
+                                            indGPU += 1
+                                            #if(indGPU > nGPU): indGPU = 1
+                                    else:
+                                        ratGPUtoTot = float(nCalcGPU)/nCalcCPUandGPU
+                                        if(_gpu_f < ratGPUtoTot):
+                                            tryUsingGPUforWfr = 0
+                                            nCalcCPU += 1
+                                        else:
+                                            tryUsingGPUforWfr = indGPU
+                                            nCalcGPU += 1
+                                            indGPU += 1
+                                            #if(indGPU > nGPU): indGPU = 1
+                                        
+                            elif(_gpu_f == 1):
+                                tryUsingGPUforWfr = indGPU
+                                nCalcGPU += 1
+                                indGPU += 1
+                                #if(indGPU > nGPU): indGPU = 1
 
-                #if(_pres_ang > 0):
-                if(_pres_ang == 1): #OC23122018
+                            if(indGPU > nGPU): indGPU = 1 #OC08042026 (moved here from commented-out places)
+
+                            #DEBUG
+                            #print('DEBUG MESSAGE: Propagating wavefront with tryUsingGPUforWfr=', tryUsingGPUforWfr)
+                            #sys.stdout.flush()
+                        
+                            #if subcomm != MPI.COMM_NULL:
+                            #    print(f"Rank {rank} entering barrier")
+                            #    subcomm.Barrier()
+                            #    print(f"Rank {rank} passed barrier")
+                            #END DEBUG
+                        
+                            #if(rank > 1): #OC22042026 (introducing radom sleep time to test / bypass CUDA memory access issue on Windows) - this did not help, so commenting-out for now
+                            #    if(i == 0):
+                            #        if(tryUsingGPUforWfr > 0):
+                            #            maxWaitTimeS = 5. #to tune(?)
+                            #            
+                            #            #rndWaitTimeS = random.uniform(0, maxWaitTimeS)
+                            #            rndWaitTimeS = (maxWaitTimeS/(nProc - 2))*(rank - 1) #to have a more deterministic behavior
+                            #            time.sleep(rndWaitTimeS) #Trying to mitigate a potential issue at simultaneous access to GPU by different processes
+                            #            
+                            #            #DEBUG
+                            #            print('Rank #', rank, 'waking up after', rndWaitTimeS, 's')
+                            #            sys.stdout.flush()
+                            #            #END DEBUG
+                        
+                            srwl.PropagElecField(wfr, _opt_bl, None, tryUsingGPUforWfr) #propagate Electric Field emitted by the electron #OC05042026
+                            #srwl.PropagElecField(wfr, _opt_bl) #propagate Electric Field emitted by the electron
+
+                            if(_det is not None): srwl.ResizeElecFieldMesh(wfr, meshRes, [0, 1]) #OC01082022
+
+                            #DEBUG OC10102021
+                            #if(rank == 203): 
+                            #    print('    rank=', rank, 'iMode=', iMode, ': E-field calculated')
+                            #    sys.stdout.flush()
+                            #END DEBUG
+
+                            #DEBUG
+                            #print('Rank #', rank, ': mode #', iMode, 'propagated')
+                            #sys.stdout.flush()
+                            #END DEBUG
+
+                        #DEBUG
+                        #print('wfr.mesh.xStart=', wfr.mesh.xStart, 'wfr.mesh.xFin=', wfr.mesh.xFin, 'wfr.mesh.yStart=', wfr.mesh.yStart, 'wfr.mesh.yFin=', wfr.mesh.yFin)
+                        #END DEBUG
+
+                        #print('srwl.PropagElecField(wfr, _opt_bl) OK') #DEBUG
+                        #print('completed (lasted', round(time.time() - t0, 6), 's)') #DEBUG
+                        #print('DEBUG: Commented-out: PropagElecField')
+
+                        #DEBUG
+                        #if(i == 48):
+                        #    arI1 = array('f', [0]*wfr.mesh.nx*wfr.mesh.ny) #"flat" 2D array to take intensity data
+                        #    srwl.CalcIntFromElecField(arI1, wfr, 6, 0, 3, wfr.mesh.eStart, 0, 0)
+                        #    srwl_uti_save_intens_ascii(arI1, wfr.mesh, os.path.join(os.getcwd(), 'data_CDI', 'debug_int_pr_se.dat'))
+                        #    sys.exit()
+                        #END DEBUG
+
+                    #if(_pres_ang > 0):
+                    if(_pres_ang == 1): #OC23122018
                     
-                    wfr.unitElFldAng = 1 #OC20112017 (to have result in [ph/s/.1%bw/mrad^2] vs [rad])
-                    srwl.SetRepresElecField(wfr, 'a')
-                    if(wfr2 is not None):
-                        wfr2.unitElFldAng = 1 #OC20112017
-                        srwl.SetRepresElecField(wfr2, 'a')
+                        wfr.unitElFldAng = 1 #OC20112017 (to have result in [ph/s/.1%bw/mrad^2] vs [rad])
+                        srwl.SetRepresElecField(wfr, 'a')
+                        if(wfr2 is not None):
+                            wfr2.unitElFldAng = 1 #OC20112017
+                            srwl.SetRepresElecField(wfr2, 'a')
 
-                    #print('DEBUG: Commented-out: SetRepresElecField')
+                        #print('DEBUG: Commented-out: SetRepresElecField')
 
-            except:
+                except:
+
+                    #DEBUG
+                    #if doPropCM:
+                    #    print('Rank=', rank, ' Mode=', iMode, ' i=', i, ' nPartPerProc=', nPartPerProc)
+                    #    sys.stdout.flush()
+                    #END DEBUG
+
+                    traceback.print_exc()
+
+                #if((_char == 6) or (_char == 61) or (_char == 7)): #OC20062021 (moved down)
+                ##if(_char == 6): #OC18062021
+                #    if(i == 0): #OC26102021
+                #        if(wfrA is None): wfrA = SRWLWfr()
+
+                #        wfrA.numTypeElFld = wfr.numTypeElFld
+                #        wfrA.Rx = wfr.Rx
+                #        wfrA.Ry = wfr.Ry
+                #        wfrA.dRx = wfr.dRx
+                #        wfrA.dRy = wfr.dRy
+
+                #        if doPropCM: #OC25102021
+                #            wfrA.xc = wfr.xc
+                #            wfrA.yc = wfr.yc
+                #        else: #OC25102021: make sure if this is correct (probably the "if doPropCM" treatment should be done for all cases?)
+                #            wfrA.xc = elecX0
+                #            wfrA.yc = elecY0
+
+                #        wfrA.avgPhotEn = wfr.avgPhotEn
+                #        wfrA.presCA = wfr.presCA
+                #        wfrA.presFT = wfr.presFT
+                #        wfrA.unitElFld = wfr.unitElFld
+                #        wfrA.unitElFldAng = wfr.unitElFldAng
+                #        wfrA.mesh = wfr.mesh #OC28062021
+
+                meshWork = deepcopy(wfr.mesh)
+                meshWork2 = None #OC30052017
+                meshWorkA = None #OC24122018
+                if(doMutual > 0):
+                    if(_char == 2):
+                        meshWork.ny = 1
+                        meshWork.yStart = _y0
+                        meshWork.yFin = _y0
+                    elif(_char == 3):
+                        meshWork.nx = 1
+                        meshWork.xStart = _x0
+                        meshWork.xFin = _x0
+                    #elif(_char == 4): #OC30052017 #Cuts of Mutual Intensity vs X & Y
+                    elif((_char == 4) or (_char == 5)): #OC15072019 #Cuts of Mutual Intensity and/or Degree of Coherence vs X & Y
+                        meshWork.ny = 1
+                        meshWork.yStart = _y0
+                        meshWork.yFin = _y0
+                        meshWork2 = deepcopy(wfr.mesh)
+                        meshWork2.nx = 1
+                        meshWork2.xStart = _x0
+                        meshWork2.xFin = _x0
 
                 #DEBUG
-                #if doPropCM:
-                #    print('Rank=', rank, ' Mode=', iMode, ' i=', i, ' nPartPerProc=', nPartPerProc)
-                #    sys.stdout.flush()
+                #print('meshWork.xStart=', meshWork.xStart, 'meshWork.xFin=', meshWork.xFin, 'meshWork.nx=', meshWork.nx, 'meshWork.yStart=', meshWork.yStart, 'meshWork.yFin=', meshWork.yFin, 'meshWork.ny=', meshWork.ny)
+                #print('meshRes.xStart=', meshRes.xStart, 'meshRes.xFin=', meshRes.xFin, 'meshRes.nx=', meshRes.nx, 'meshRes.yStart=', meshRes.yStart, 'meshRes.yFin=', meshRes.yFin, 'meshRes.ny=', meshRes.ny)
                 #END DEBUG
-
-                traceback.print_exc()
-
-            #if((_char == 6) or (_char == 61) or (_char == 7)): #OC20062021 (moved down)
-            ##if(_char == 6): #OC18062021
-            #    if(i == 0): #OC26102021
-            #        if(wfrA is None): wfrA = SRWLWfr()
-
-            #        wfrA.numTypeElFld = wfr.numTypeElFld
-            #        wfrA.Rx = wfr.Rx
-            #        wfrA.Ry = wfr.Ry
-            #        wfrA.dRx = wfr.dRx
-            #        wfrA.dRy = wfr.dRy
-
-            #        if doPropCM: #OC25102021
-            #            wfrA.xc = wfr.xc
-            #            wfrA.yc = wfr.yc
-            #        else: #OC25102021: make sure if this is correct (probably the "if doPropCM" treatment should be done for all cases?)
-            #            wfrA.xc = elecX0
-            #            wfrA.yc = elecY0
-
-            #        wfrA.avgPhotEn = wfr.avgPhotEn
-            #        wfrA.presCA = wfr.presCA
-            #        wfrA.presFT = wfr.presFT
-            #        wfrA.unitElFld = wfr.unitElFld
-            #        wfrA.unitElFldAng = wfr.unitElFldAng
-            #        wfrA.mesh = wfr.mesh #OC28062021
-
-            meshWork = deepcopy(wfr.mesh)
-            meshWork2 = None #OC30052017
-            meshWorkA = None #OC24122018
-            if(doMutual > 0):
-                if(_char == 2):
-                    meshWork.ny = 1
-                    meshWork.yStart = _y0
-                    meshWork.yFin = _y0
-                elif(_char == 3):
-                    meshWork.nx = 1
-                    meshWork.xStart = _x0
-                    meshWork.xFin = _x0
-                #elif(_char == 4): #OC30052017 #Cuts of Mutual Intensity vs X & Y
-                elif((_char == 4) or (_char == 5)): #OC15072019 #Cuts of Mutual Intensity and/or Degree of Coherence vs X & Y
-                    meshWork.ny = 1
-                    meshWork.yStart = _y0
-                    meshWork.yFin = _y0
-                    meshWork2 = deepcopy(wfr.mesh)
-                    meshWork2.nx = 1
-                    meshWork2.xStart = _x0
-                    meshWork2.xFin = _x0
-
-            #DEBUG
-            #print('meshWork.xStart=', meshWork.xStart, 'meshWork.xFin=', meshWork.xFin, 'meshWork.nx=', meshWork.nx, 'meshWork.yStart=', meshWork.yStart, 'meshWork.yFin=', meshWork.yFin, 'meshWork.ny=', meshWork.ny)
-            #print('meshRes.xStart=', meshRes.xStart, 'meshRes.xFin=', meshRes.xFin, 'meshRes.nx=', meshRes.nx, 'meshRes.yStart=', meshRes.yStart, 'meshRes.yFin=', meshRes.yFin, 'meshRes.ny=', meshRes.ny)
-            #END DEBUG
             
-            #OC06042017 (commented-out the above, entered workStokes = ... below)
-            if((_char != 6) and (_char != 61) and (_char != 7)): #OC20062021
-            #if(_char != 6): #OC03022021
-                workStokes = SRWLStokes(1, 'f', meshWork.eStart, meshWork.eFin, meshWork.ne, meshWork.xStart, meshWork.xFin, meshWork.nx, meshWork.yStart, meshWork.yFin, meshWork.ny, doMutual, _n_comp = numComp) #OC18072021
-                #workStokes = SRWLStokes(1, 'f', meshWork.eStart, meshWork.eFin, meshWork.ne, meshWork.xStart, meshWork.xFin, meshWork.nx, meshWork.yStart, meshWork.yFin, meshWork.ny, doMutual)
-
-            #if(_char == 4): #Cuts of Mutual Intensity vs X & Y
-            if((_char == 4) or (_char == 5)): #OC15072019 #Cuts of Mutual Intensity and/or Degree of Coherence vs X & Y
-                workStokes2 = SRWLStokes(1, 'f', meshWork2.eStart, meshWork2.eFin, meshWork2.ne, meshWork2.xStart, meshWork2.xFin, meshWork2.nx, meshWork2.yStart, meshWork2.yFin, meshWork2.ny, doMutual, _n_comp = numComp) #OC18072021
-                #workStokes2 = SRWLStokes(1, 'f', meshWork2.eStart, meshWork2.eFin, meshWork2.ne, meshWork2.xStart, meshWork2.xFin, meshWork2.nx, meshWork2.yStart, meshWork2.yFin, meshWork2.ny, doMutual)
-                     
-            #if(_char == 40): #OC03052018 #Intensity and Cuts of Mutual Intensity vs X & Y
-            if((_char == 40) or (_char == 41)): #OC15072019 #Intensity and Cuts of Mutual Intensity and/or Degree of Coherence vs X & Y
-                workStokes2 = SRWLStokes(1, 'f', meshWork.eStart, meshWork.eFin, meshWork.ne, meshWork.xStart, meshWork.xFin, meshWork.nx, _y0, _y0, 1, _mutual=1, _n_comp = numComp) #OC18072021
-                #workStokes2 = SRWLStokes(1, 'f', meshWork.eStart, meshWork.eFin, meshWork.ne, meshWork.xStart, meshWork.xFin, meshWork.nx, _y0, _y0, 1, _mutual=1)
-                workStokes3 = SRWLStokes(1, 'f', meshWork.eStart, meshWork.eFin, meshWork.ne, _x0, _x0, 1, meshWork.yStart, meshWork.yFin, meshWork.ny, _mutual=1, _n_comp = numComp) #OC18072021
-                #workStokes3 = SRWLStokes(1, 'f', meshWork.eStart, meshWork.eFin, meshWork.ne, _x0, _x0, 1, meshWork.yStart, meshWork.yFin, meshWork.ny, _mutual=1)
-
-            if((_char == 6) or (_char == 61) or (_char == 7)): #OC03102021
-            #if((_det is not None) and ((_char == 6) or (_char == 61) or (_char == 7))): #OC20062021 (consider doing this for other cases!)
-            #if((_det is not None) and (_char == 6)): #OC03022021 (consider doing this for other cases!)
-
-                #DEBUG OC10102021
-                #if(rank == 203): 
-                #    print('    rank=', rank, 'iMode=', iMode, ': staring resizing E-field to required final mesh')
-                #    sys.stdout.flush()
-                #END DEBUG
-
-                #OC: if wfr.mesh and meshRes have the same basic params, perhaps calling the following function is not required(?)
-                srwl.ResizeElecFieldMesh(wfr, meshRes, [0, 1])
-
-                #if(i == 0): #OC26102021 (moved from top)
-                if(wfrA is None): wfrA = SRWLWfr()
-
-                if(wfrA.avgPhotEn <= 0): #I.e. if Average Wavefront was not filled-out
-
-                    wfrA.numTypeElFld = wfr.numTypeElFld
-                    wfrA.Rx = wfr.Rx
-                    wfrA.Ry = wfr.Ry
-                    wfrA.dRx = wfr.dRx
-                    wfrA.dRy = wfr.dRy
-
-                    if doPropCM: #OC25102021
-                        wfrA.xc = wfr.xc
-                        wfrA.yc = wfr.yc
-                    else: #OC25102021: make sure if this is correct (probably the "if doPropCM" treatment should be done for all cases?)
-                        wfrA.xc = elecX0
-                        wfrA.yc = elecY0
-
-                    wfrA.avgPhotEn = wfr.avgPhotEn
-                    wfrA.presCA = wfr.presCA
-                    wfrA.presFT = wfr.presFT
-                    wfrA.unitElFld = wfr.unitElFld
-                    wfrA.unitElFldAng = wfr.unitElFldAng
-                    wfrA.mesh = copy(wfr.mesh) #OC27102021
-                    #wfrA.mesh = wfr.mesh #OC28062021
-
-                #DEBUG OC17102021
-                #import numpy as np
-                #print('rank=', rank, ': Trying to test E-field after Resizing at iMode=', iMode)
-                #np.asarray_chkfinite(wfr.arEx, dtype=float)
-                #np.asarray_chkfinite(wfr.arEy, dtype=float)
-                #print('rank=', rank, 'iMode=', iMode, ': No NaN or Inf found in E-field')
-                #sys.stdout.flush()
-                #    print('    rank=', rank, 'iMode=', iMode, ': E-field resized to the final mesh')
-                #    sys.stdout.flush()
-                #END DEBUG
-
-                #DEBUG
-                #print('rank=', rank, 'iMode=', iMode, ': resizing to Detector Mesh done')
-                #print('wfr.mesh.xStart=', wfr.mesh.xStart, 'wfr.mesh.xFin=', wfr.mesh.xFin, 'wfr.mesh.nx=', wfr.mesh.nx)
-                #print('wfr.mesh.yStart=', wfr.mesh.yStart, 'wfr.mesh.yFin=', wfr.mesh.yFin, 'wfr.mesh.ny=', wfr.mesh.ny)
-                #sys.stdout.flush()
-                #END DEBUG
-
-            #OC04022021 (moved from below)
-            if(resStokes is None):
-                #nComp = 4
-                #if((_char == 6) or (_char == 61) or (_char == 7)): nComp = 1 #OC20062021
-                ##if(_char == 6): nComp = 1 #OC04022021 ??
-                #OC18072021 (commented-out the above, using numComp instead)
-
-                if(not (((_char == 6) or (_char == 61) or (_char == 7)) and (nProc > 1))): #OC20062021
-                #if(not ((_char == 6) and (nProc > 1))): #OC18022021
-                    resStokes = SRWLStokes(1, 'f', meshRes.eStart, meshRes.eFin, meshRes.ne, meshRes.xStart, meshRes.xFin, meshRes.nx, meshRes.yStart, meshRes.yFin, meshRes.ny, doMutual, numComp, itStartEnd) #OC18072021
-                    #resStokes = SRWLStokes(1, 'f', meshRes.eStart, meshRes.eFin, meshRes.ne, meshRes.xStart, meshRes.xFin, meshRes.nx, meshRes.yStart, meshRes.yFin, meshRes.ny, doMutual, nComp, itStartEnd) #OC03032021
-                    #resStokes = SRWLStokes(1, 'f', meshRes.eStart, meshRes.eFin, meshRes.ne, meshRes.xStart, meshRes.xFin, meshRes.nx, meshRes.yStart, meshRes.yFin, meshRes.ny, doMutual, nComp)
-
-            if(_me_approx == 0): #OC05042017 #General case of numerical integration over 5D phase space of electron beam
-                
-                if(_char == 20): 
-                    wfr.copy_comp(workStokes) #OC15012017: copy electric field components to Stokes structure
-                elif(_char == 0): #OC15092017
-
-                    #DEBUG
-                    #print('About to define workStokes')
-                    #END DEBUG
-                    if(not (doPropCM and (iMode == iModeStart) and (_det is None))): #OC23112022
-                    #if(not (doPropCM and (iMode == 0) and (_det is None))): #OC01082022
-                    #if(not (doPropCM and (iMode == 0))): #OC19112020
-                    #if(not (doPropCM and (i == 0))): #OC13112020
-                        srwl.CalcIntFromElecField(workStokes.arS, wfr, 6, 0, depTypeInt, phEnInt, 0., 0.)
-                    
-                elif((_char == 1) or (_char == 11)): #OC16042020
-                    #meshWorkStokes = workStokes.mesh #DEBUG
-                    #print('workStokes: ne=', meshWorkStokes.ne, 'nx=', meshWorkStokes.nx, 'ny=', meshWorkStokes.ny, 'len(arS)=', len(workStokes.arS))
-                    srwl.CalcIntFromElecField(workStokes.arS, wfr, -5, 0, depTypeInt, phEnInt, 0., 0.) #All Stokes
-
-                elif((_char == 6) or (_char == 61) or (_char == 7)): #OC20062021
-                #elif(_char == 6): #OC03022021
-
-                    #DEBUG
-                    #print('resStokes.mesh.xStart=', resStokes.mesh.xStart, ' resStokes.mesh.xFin=', resStokes.mesh.xFin, ' resStokes.mesh.nx=', resStokes.mesh.nx)
-                    #print('resStokes.mesh.yStart=', resStokes.mesh.yStart, ' resStokes.mesh.yFin=', resStokes.mesh.yFin, ' resStokes.mesh.ny=', resStokes.mesh.ny)
-                    #print('depTypeInt=', depTypeInt, ' phEnInt=', phEnInt)
-                    #END DEBUG
-
-                    if(nProc == 1): #OC18022021
-                        #Extract Intensity from Electric Field only at sequential execution (otherwise Electric Field should be sent directly to master)
-                        #Calculate single-e mutual intensity from electric fied and add it to resStokes.arS (s0)
-                        #NOTE: Common Quadratic Phase Terms can be subtracted before calculating the mutual intensity
-                        intSumType = 1 #calculation of Intensity with instant averaging
-                        if(doPropCM): intSumType = 2 #adding of new Intensity value to previous one
-
-                        #DEBUG
-                        #t0 = time.time()
-                        #END DEBUG
-
-                        arMethPar = [0]*20 #OC03032021 (in principle, this is not required if(nProc == 1) ?)
-                        arMethPar[0] = intSumType; arMethPar[1] = i
-                        if((_n_mpi > 1) and (itStartEnd is not None)):
-                            arMethPar[18] = itStartEnd[0]
-                            arMethPar[19] = itStartEnd[1]
-
-                        #if(_opt_bl is not None): srwl.ResizeElecFieldMesh(wfr, resStokes.mesh, [0, 1]) #OC03102021 (changed lines before) #OC01102021 (added)
-
-                        srwl.CalcIntFromElecField(resStokes.arS, wfr, -1, 8, depTypeInt, phEnInt, 0., 0., arMethPar) #OC03032021: this call is supposed to update / extract one main Stokes component
-                        #srwl.CalcIntFromElecField(resStokes.arS, wfr, -1, 8, depTypeInt, phEnInt, 0., 0., [intSumType, i]) #OC03032021: this call is supposed to update / extract one main Stokes component
-                        #srwl.CalcIntFromElecField(resStokes.arS, wfr, 6, 8, depTypeInt, phEnInt, 0., 0., [intSumType, i]) #One main Stokes component
-
-                        #DEBUG
-                        #print(resStokes.arS[0], resStokes.arS[resStokes.mesh.nx*resStokes.mesh.ny*2 + 2], resStokes.arS[(resStokes.mesh.nx*resStokes.mesh.ny*2)*2 + 2*2])
-                        #END DEBUG
-
-                        #DEBUG/TEST of a function:
-                        #srwl.UtiIntProc(resStokes.arS, resStokes.mesh, None, None, [5, -1, wfrA.Rx, wfrA.Ry, wfrA.xc, wfrA.yc]) #Subtract common quadratic phase terms from CSD
-                        #END DEBUG/TEST of a function
-
-                        #DEBUG
-                        #print('CSD Update lasted:', round(time.time() - t0, 6), 's')
-                        #sys.stdout.flush()
-                        #END DEBUG
-
-                    #DEBUG
-                    #print('MI updated')
-                    #END DEBUG
-                    
-                else:
-                    #DEBUG
-                    #print('About to define workStokes')
-                    #END DEBUG
-                    if(not (doPropCM and (iMode == iModeStart))): #OC23112022
-                    #if(not (doPropCM and (iMode == 0))): #OC19112020
-                    #if(not (doPropCM and (i == 0))): #OC13112020
-                    
-                        wfr.calc_stokes(workStokes, _n_stokes_comp=numComp) #calculate Stokes parameters from Electric Field
-
-                        if(workStokes2 is not None): #OC30052017
-                            #OC21052020
-                            if(wfr2 is None): wfr.calc_stokes(workStokes2, _n_stokes_comp=numComp, _rx_avg=RxAvg, _ry_avg=RyAvg, _xc_avg=xcAvg, _yc_avg=ycAvg)
-                            else: wfr2.calc_stokes(workStokes2, _n_stokes_comp=numComp, _rx_avg=RxAvg, _ry_avg=RyAvg, _xc_avg=xcAvg, _yc_avg=ycAvg)
-                            #if(wfr2 is None): wfr.calc_stokes(workStokes2, _n_stokes_comp=numComp)
-                            #else: wfr2.calc_stokes(workStokes2, _n_stokes_comp=numComp)
-
-                        if(workStokes3 is not None): #OC03052018
-                            wfr.calc_stokes(workStokes3, _n_stokes_comp=numComp, _rx_avg=RxAvg, _ry_avg=RyAvg, _xc_avg=xcAvg, _yc_avg=ycAvg) #OC21052020
-                            #wfr.calc_stokes(workStokes3, _n_stokes_comp=numComp)
-
-                if(_pres_ang == 2): #23122018
-                    wfr.unitElFldAng = 1 #?
-                    srwl.SetRepresElecField(wfr, 'a')
-                    meshWorkA = deepcopy(wfr.mesh)
-                    workStokesA = SRWLStokes(1, 'f', meshWorkA.eStart, meshWorkA.eFin, meshWorkA.ne, meshWorkA.xStart, meshWorkA.xFin, meshWorkA.nx, meshWorkA.yStart, meshWorkA.yFin, meshWorkA.ny, _n_comp = numComp) #OC18072021
-                    #workStokesA = SRWLStokes(1, 'f', meshWorkA.eStart, meshWorkA.eFin, meshWorkA.ne, meshWorkA.xStart, meshWorkA.xFin, meshWorkA.nx, meshWorkA.yStart, meshWorkA.yFin, meshWorkA.ny)
-                    srwl.CalcIntFromElecField(workStokesA.arS, wfr, 6, 0, depTypeInt, phEnInt, 0., 0.)
-
-                    #DEBUG
-                    #srwl_uti_save_intens_ascii(workStokesA.arS, workStokesA.mesh, copy(_file_path) + '.debug', 1)
-                    #END DEBUG
-
-            elif(_me_approx == 1): #OC05042017 #Numerical integration only over electron energy, convolution over transverse phase space
-
-                if(_char == 0): #Total intensity
-                    #DEBUG
-                    #print('DEBUG: 2nd order e-beam moments after eventual propagation:')
-                    #print('sigX=', sqrt(wfr.partBeam.arStatMom2[0]))
-                    #print('mXXp=', wfr.partBeam.arStatMom2[1])
-                    #print('sigXp=', sqrt(wfr.partBeam.arStatMom2[2]))
-                    #print('sigY=', sqrt(wfr.partBeam.arStatMom2[3]))
-                    #print('mYYp=', wfr.partBeam.arStatMom2[4])
-                    #print('sigYp=', sqrt(wfr.partBeam.arStatMom2[5]))
-                    #print('relEnSpr=', sqrt(wfr.partBeam.arStatMom2[10]))
-                    #print('wfr.Rx=', wfr.Rx, ' wfr.Ry=', wfr.Ry)
-                    #print('wfr.arElecPropMatr=', wfr.arElecPropMatr)
-                    #END DEBUG
-
-                    #srwl.CalcIntFromElecField(workStokes.arS, wfr, 6, 1, depTypeME_Approx, phEnME_Approx, _x0, _y0)
-                    srwl.CalcIntFromElecField(workStokes.arS, wfr, 6, 1, depTypeInt, phEnInt, _x0, _y0) #OC30052017
-
-                    #DEBUG
-                    #arTest = array('f', [0]*wfr.mesh.nx*wfr.mesh.ny)
-                    ##srwl.CalcIntFromElecField(arTest, wfr, 6, 1, depTypeME_Approx, phEnME_Approx, _x0, _y0)
-                    #srwl.CalcIntFromElecField(arTest, wfr, 6, 0, depTypeME_Approx, phEnME_Approx, _x0, _y0)
-
-                    #srwl_uti_save_intens_ascii(arTest, wfr.mesh, _file_path + '.debug', numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual)
-
-                    ##srwl_uti_save_intens_ascii(workStokes.arS, workStokes.mesh, _file_path + '.debug', numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual)
-                    #if(i == 0): raise Exception("DEBUG: STOP") #OC06042017
-                    ##srwl.CalcIntFromElecField(workStokes.arS, wfr, 6, 0, depTypeME_Approx, phEnME_Approx, _x0, _y0)
-                    #END DEBUG
-
-                elif(_char == 1): #Four Stokes components
-                    
-                    #OC29122023
-                    srwl.CalcIntFromElecField(workStokes.arS, wfr, -5, 1, depTypeInt, phEnInt, 0., 0.) #All Stokes (implement extraction of Stokes components, with convolution, in CalcIntFromElecField)
-
-                #if(_pres_ang == 2): #23122018
-                #    #To make convolution taking into account angular divergancies only!
-                #                
-                #    wfr.unitElFldAng = 1 #?
-                #    srwl.SetRepresElecField(wfr, 'a')
-                #    meshWorkA = deepcopy(wfr.mesh)
-                #    workStokesA = SRWLStokes(1, 'f', meshWorkA.eStart, meshWorkA.eFin, meshWorkA.ne, meshWorkA.xStart, meshWorkA.xFin, meshWorkA.nx, meshWorkA.yStart, meshWorkA.yFin, meshWorkA.ny)
-                #    #srwl.CalcIntFromElecField(workStokesA.arS, wfr, 6, 1, depTypeInt, phEnInt, 0, 0)
-
-            #DEBUG
-            #srwl_uti_save_intens_ascii(workStokes.arS, workStokes.mesh, _file_path, 1)
-            #END DEBUG
-
-            #OC04022021 (moved up)
-            #if(resStokes is None):
-            #    resStokes = SRWLStokes(1, 'f', meshRes.eStart, meshRes.eFin, meshRes.ne, meshRes.xStart, meshRes.xFin, meshRes.nx, meshRes.yStart, meshRes.yFin, meshRes.ny, doMutual)
-                #DEBUG
-                #print('resStokes #2: ne=', resStokes.mesh.ne, 'eStart=', resStokes.mesh.eStart, 'eFin=', resStokes.mesh.eFin)
-                #END DEBUG
-
-            lenArSt0 = 0
-            if(resStokes is not None): #OC18022021
-                lenArSt0 = len(resStokes.arS)
-            lenArSt = lenArSt0
-
-            #if(_char == 4): #OC31052017 #Cuts of Mutual Intensity vs X & Y
-            if((_char == 4) or (_char == 5)): #OC15072019 #Cuts of Mutual Intensity and/or Degree of Coherence vs X & Y
-                if(resStokes2 is None):
-                    resStokes2 = SRWLStokes(1, 'f', meshRes2.eStart, meshRes2.eFin, meshRes2.ne, meshRes2.xStart, meshRes2.xFin, meshRes2.nx, meshRes2.yStart, meshRes2.yFin, meshRes2.ny, doMutual, _n_comp = numComp) #OC18072021
-                    #resStokes2 = SRWLStokes(1, 'f', meshRes2.eStart, meshRes2.eFin, meshRes2.ne, meshRes2.xStart, meshRes2.xFin, meshRes2.nx, meshRes2.yStart, meshRes2.yFin, meshRes2.ny, doMutual)
-                #if(arAuxResSt12 is None):
-                #    lenArSt12 = len(resStokes.arS) + len(resStokes2.arS)
-                #    arAuxResSt12 = array('f', [0]*lenArSt12)
-                lenArSt += len(resStokes2.arS) #OC24122018
-
-            #if(_char == 40): #OC03052018 #Intensity and Cuts of Mutual Intensity vs X & Y
-            if((_char == 40) or (_char == 41)): #OC15072019 #Intensity and Cuts of Mutual Intensity and/or Degree of Coherence vs X & Y
-                if(resStokes2 is None):
-                    resStokes2 = SRWLStokes(1, 'f', meshRes.eStart, meshRes.eFin, meshRes.ne, meshRes.xStart, meshRes.xFin, meshRes.nx, _y0, _y0, 1, _mutual=1, _n_comp=numComp) #OC18072021
-                    #resStokes2 = SRWLStokes(1, 'f', meshRes.eStart, meshRes.eFin, meshRes.ne, meshRes.xStart, meshRes.xFin, meshRes.nx, _y0, _y0, 1, _mutual=1)
-                if(resStokes3 is None):
-                    resStokes3 = SRWLStokes(1, 'f', meshRes.eStart, meshRes.eFin, meshRes.ne, _x0, _x0, 1, meshRes.yStart, meshRes.yFin, meshRes.ny, _mutual=1, _n_comp=numComp) #OC18072021
-                    #resStokes3 = SRWLStokes(1, 'f', meshRes.eStart, meshRes.eFin, meshRes.ne, _x0, _x0, 1, meshRes.yStart, meshRes.yFin, meshRes.ny, _mutual=1)
-                #if(arAuxResSt123 is None):
-                #    lenArSt123 = len(resStokes.arS) + len(resStokes2.arS) + len(resStokes3.arS)
-                #    arAuxResSt123 = array('f', [0]*lenArSt123)
-                lenArSt += (len(resStokes2.arS) + len(resStokes3.arS)) #OC24122018
-
-            if(_pres_ang == 2): #24122018
-                if((resStokesA is None) and (meshResA is not None)):
-                    resStokesA = SRWLStokes(1, 'f', meshResA.eStart, meshResA.eFin, meshResA.ne, meshResA.xStart, meshResA.xFin, meshResA.nx, meshResA.yStart, meshResA.yFin, meshResA.ny, _n_comp = numComp) #OC18072021
-                    #resStokesA = SRWLStokes(1, 'f', meshResA.eStart, meshResA.eFin, meshResA.ne, meshResA.xStart, meshResA.xFin, meshResA.nx, meshResA.yStart, meshResA.yFin, meshResA.ny)
-                    lenArSt += len(resStokesA.arS) #OC26122018
-
-            if((lenArSt > lenArSt0) and ((arAuxResSt is None) or (len(arAuxResSt) < lenArSt))): arAuxResSt = array('f', [0]*lenArSt) #OC24122018
-
-            #DEBUG
-            #print('workStokes.mesh: nx=', workStokes.mesh.nx, 'xStart=', workStokes.mesh.xStart, 'xFin=', workStokes.mesh.xFin)
-            #print('workStokes.mesh: ny=', workStokes.mesh.ny, 'yStart=', workStokes.mesh.yStart, 'yFin=', workStokes.mesh.yFin)
-            #print('resStokes.mesh: nx=', resStokes.mesh.nx, 'xStart=', resStokes.mesh.xStart, 'xFin=', resStokes.mesh.xFin)
-            #print('resStokes.mesh: ny=', resStokes.mesh.ny, 'yStart=', resStokes.mesh.yStart, 'yFin=', resStokes.mesh.yFin)
-            #END DEBUG
- 
-            if(_opt_bl is None):
-                #resStokes.avg_update_same_mesh(workStokes, iAvgProc, 1)
-
-                #print('resStokes.avg_update_same_mesh ... ', end='') #DEBUG
-                #t0 = time.time(); #DEBUG
-                
+                #OC06042017 (commented-out the above, entered workStokes = ... below)
                 if((_char != 6) and (_char != 61) and (_char != 7)): #OC20062021
-                #if(_char != 6): #OC26022021
-                    #resStokes.avg_update_same_mesh(workStokes, iAvgProc, 1, ePhIntegMult) #to treat all Stokes components / Polarization in the future
-                    resStokes.avg_update_same_mesh(workStokes, iAvgProc, numComp, ePhIntegMult) #OC16012017 #to treat all Stokes components / Polarization in the future
+                #if(_char != 6): #OC03022021
+                    workStokes = SRWLStokes(1, 'f', meshWork.eStart, meshWork.eFin, meshWork.ne, meshWork.xStart, meshWork.xFin, meshWork.nx, meshWork.yStart, meshWork.yFin, meshWork.ny, doMutual, _n_comp = numComp) #OC18072021
+                    #workStokes = SRWLStokes(1, 'f', meshWork.eStart, meshWork.eFin, meshWork.ne, meshWork.xStart, meshWork.xFin, meshWork.nx, meshWork.yStart, meshWork.yFin, meshWork.ny, doMutual)
 
-                    if((resStokes2 is not None) and (workStokes2 is not None)): #OC30052017
-                        resStokes2.avg_update_same_mesh(workStokes2, iAvgProc, numComp, ePhIntegMult)
+                #if(_char == 4): #Cuts of Mutual Intensity vs X & Y
+                if((_char == 4) or (_char == 5)): #OC15072019 #Cuts of Mutual Intensity and/or Degree of Coherence vs X & Y
+                    workStokes2 = SRWLStokes(1, 'f', meshWork2.eStart, meshWork2.eFin, meshWork2.ne, meshWork2.xStart, meshWork2.xFin, meshWork2.nx, meshWork2.yStart, meshWork2.yFin, meshWork2.ny, doMutual, _n_comp = numComp) #OC18072021
+                    #workStokes2 = SRWLStokes(1, 'f', meshWork2.eStart, meshWork2.eFin, meshWork2.ne, meshWork2.xStart, meshWork2.xFin, meshWork2.nx, meshWork2.yStart, meshWork2.yFin, meshWork2.ny, doMutual)
+                     
+                #if(_char == 40): #OC03052018 #Intensity and Cuts of Mutual Intensity vs X & Y
+                if((_char == 40) or (_char == 41)): #OC15072019 #Intensity and Cuts of Mutual Intensity and/or Degree of Coherence vs X & Y
+                    workStokes2 = SRWLStokes(1, 'f', meshWork.eStart, meshWork.eFin, meshWork.ne, meshWork.xStart, meshWork.xFin, meshWork.nx, _y0, _y0, 1, _mutual=1, _n_comp = numComp) #OC18072021
+                    #workStokes2 = SRWLStokes(1, 'f', meshWork.eStart, meshWork.eFin, meshWork.ne, meshWork.xStart, meshWork.xFin, meshWork.nx, _y0, _y0, 1, _mutual=1)
+                    workStokes3 = SRWLStokes(1, 'f', meshWork.eStart, meshWork.eFin, meshWork.ne, _x0, _x0, 1, meshWork.yStart, meshWork.yFin, meshWork.ny, _mutual=1, _n_comp = numComp) #OC18072021
+                    #workStokes3 = SRWLStokes(1, 'f', meshWork.eStart, meshWork.eFin, meshWork.ne, _x0, _x0, 1, meshWork.yStart, meshWork.yFin, meshWork.ny, _mutual=1)
 
-                    if((resStokes3 is not None) and (workStokes3 is not None)): #OC03052018
-                        resStokes3.avg_update_same_mesh(workStokes3, iAvgProc, numComp, ePhIntegMult)
+                if((_char == 6) or (_char == 61) or (_char == 7)): #OC03102021
+                #if((_det is not None) and ((_char == 6) or (_char == 61) or (_char == 7))): #OC20062021 (consider doing this for other cases!)
+                #if((_det is not None) and (_char == 6)): #OC03022021 (consider doing this for other cases!)
 
-                    if((resStokesA is not None) and (workStokesA is not None)): #OC24122018
-                        resStokesA.avg_update_same_mesh(workStokesA, iAvgProc, numComp, ePhIntegMult)
+                    #DEBUG OC10102021
+                    #if(rank == 203): 
+                    #    print('    rank=', rank, 'iMode=', iMode, ': staring resizing E-field to required final mesh')
+                    #    sys.stdout.flush()
+                    #END DEBUG
 
-                #print('completed (lasted', round(time.time() - t0, 6), 's)') #DEBUG
+                    #OC: if wfr.mesh and meshRes have the same basic params, perhaps calling the following function is not required(?)
+                    srwl.ResizeElecFieldMesh(wfr, meshRes, [0, 1])
+
+                    #if(i == 0): #OC26102021 (moved from top)
+                    if(wfrA is None): wfrA = SRWLWfr()
+
+                    if(wfrA.avgPhotEn <= 0): #I.e. if Average Wavefront was not filled-out
+
+                        wfrA.numTypeElFld = wfr.numTypeElFld
+                        wfrA.Rx = wfr.Rx
+                        wfrA.Ry = wfr.Ry
+                        wfrA.dRx = wfr.dRx
+                        wfrA.dRy = wfr.dRy
+
+                        if doPropCM: #OC25102021
+                            wfrA.xc = wfr.xc
+                            wfrA.yc = wfr.yc
+                        else: #OC25102021: make sure if this is correct (probably the "if doPropCM" treatment should be done for all cases?)
+                            wfrA.xc = elecX0
+                            wfrA.yc = elecY0
+
+                        wfrA.avgPhotEn = wfr.avgPhotEn
+                        wfrA.presCA = wfr.presCA
+                        wfrA.presFT = wfr.presFT
+                        wfrA.unitElFld = wfr.unitElFld
+                        wfrA.unitElFldAng = wfr.unitElFldAng
+                        wfrA.mesh = copy(wfr.mesh) #OC27102021
+                        #wfrA.mesh = wfr.mesh #OC28062021
+
+                    #DEBUG OC17102021
+                    #import numpy as np
+                    #print('rank=', rank, ': Trying to test E-field after Resizing at iMode=', iMode)
+                    #np.asarray_chkfinite(wfr.arEx, dtype=float)
+                    #np.asarray_chkfinite(wfr.arEy, dtype=float)
+                    #print('rank=', rank, 'iMode=', iMode, ': No NaN or Inf found in E-field')
+                    #sys.stdout.flush()
+                    #    print('    rank=', rank, 'iMode=', iMode, ': E-field resized to the final mesh')
+                    #    sys.stdout.flush()
+                    #END DEBUG
+
+                    #DEBUG
+                    #print('rank=', rank, 'iMode=', iMode, ': resizing to Detector Mesh done')
+                    #print('wfr.mesh.xStart=', wfr.mesh.xStart, 'wfr.mesh.xFin=', wfr.mesh.xFin, 'wfr.mesh.nx=', wfr.mesh.nx)
+                    #print('wfr.mesh.yStart=', wfr.mesh.yStart, 'wfr.mesh.yFin=', wfr.mesh.yFin, 'wfr.mesh.ny=', wfr.mesh.ny)
+                    #sys.stdout.flush()
+                    #END DEBUG
+
+                #OC04022021 (moved from below)
+                if(resStokes is None):
+                    #nComp = 4
+                    #if((_char == 6) or (_char == 61) or (_char == 7)): nComp = 1 #OC20062021
+                    ##if(_char == 6): nComp = 1 #OC04022021 ??
+                    #OC18072021 (commented-out the above, using numComp instead)
+
+                    if(not (((_char == 6) or (_char == 61) or (_char == 7)) and (nProc > 1))): #OC20062021
+                    #if(not ((_char == 6) and (nProc > 1))): #OC18022021
+                        resStokes = SRWLStokes(1, 'f', meshRes.eStart, meshRes.eFin, meshRes.ne, meshRes.xStart, meshRes.xFin, meshRes.nx, meshRes.yStart, meshRes.yFin, meshRes.ny, doMutual, numComp, itStartEnd) #OC18072021
+                        #resStokes = SRWLStokes(1, 'f', meshRes.eStart, meshRes.eFin, meshRes.ne, meshRes.xStart, meshRes.xFin, meshRes.nx, meshRes.yStart, meshRes.yFin, meshRes.ny, doMutual, nComp, itStartEnd) #OC03032021
+                        #resStokes = SRWLStokes(1, 'f', meshRes.eStart, meshRes.eFin, meshRes.ne, meshRes.xStart, meshRes.xFin, meshRes.nx, meshRes.yStart, meshRes.yFin, meshRes.ny, doMutual, nComp)
+
+                if(_me_approx == 0): #OC05042017 #General case of numerical integration over 5D phase space of electron beam
+                
+                    if(_char == 20): 
+                        wfr.copy_comp(workStokes) #OC15012017: copy electric field components to Stokes structure
+                    elif(_char == 0): #OC15092017
+
+                        #DEBUG
+                        #print('About to define workStokes')
+                        #END DEBUG
+                        if(not (doPropCM and (iMode == iModeStart) and (_det is None))): #OC23112022
+                        #if(not (doPropCM and (iMode == 0) and (_det is None))): #OC01082022
+                        #if(not (doPropCM and (iMode == 0))): #OC19112020
+                        #if(not (doPropCM and (i == 0))): #OC13112020
+                            srwl.CalcIntFromElecField(workStokes.arS, wfr, 6, 0, depTypeInt, phEnInt, 0., 0.)
+                    
+                    elif((_char == 1) or (_char == 11)): #OC16042020
+                        #meshWorkStokes = workStokes.mesh #DEBUG
+                        #print('workStokes: ne=', meshWorkStokes.ne, 'nx=', meshWorkStokes.nx, 'ny=', meshWorkStokes.ny, 'len(arS)=', len(workStokes.arS))
+                        srwl.CalcIntFromElecField(workStokes.arS, wfr, -5, 0, depTypeInt, phEnInt, 0., 0.) #All Stokes
+
+                    elif((_char == 6) or (_char == 61) or (_char == 7)): #OC20062021
+                    #elif(_char == 6): #OC03022021
+
+                        #DEBUG
+                        #print('resStokes.mesh.xStart=', resStokes.mesh.xStart, ' resStokes.mesh.xFin=', resStokes.mesh.xFin, ' resStokes.mesh.nx=', resStokes.mesh.nx)
+                        #print('resStokes.mesh.yStart=', resStokes.mesh.yStart, ' resStokes.mesh.yFin=', resStokes.mesh.yFin, ' resStokes.mesh.ny=', resStokes.mesh.ny)
+                        #print('depTypeInt=', depTypeInt, ' phEnInt=', phEnInt)
+                        #END DEBUG
+
+                        if(nProc == 1): #OC18022021
+                            #Extract Intensity from Electric Field only at sequential execution (otherwise Electric Field should be sent directly to master)
+                            #Calculate single-e mutual intensity from electric fied and add it to resStokes.arS (s0)
+                            #NOTE: Common Quadratic Phase Terms can be subtracted before calculating the mutual intensity
+                            intSumType = 1 #calculation of Intensity with instant averaging
+                            if(doPropCM): intSumType = 2 #adding of new Intensity value to previous one
+
+                            #DEBUG
+                            #t0 = time.time()
+                            #END DEBUG
+
+                            arMethPar = [0]*20 #OC03032021 (in principle, this is not required if(nProc == 1) ?)
+                            arMethPar[0] = intSumType; arMethPar[1] = i
+                            if((_n_mpi > 1) and (itStartEnd is not None)):
+                                arMethPar[18] = itStartEnd[0]
+                                arMethPar[19] = itStartEnd[1]
+
+                            #if(_opt_bl is not None): srwl.ResizeElecFieldMesh(wfr, resStokes.mesh, [0, 1]) #OC03102021 (changed lines before) #OC01102021 (added)
+
+                            #HG20072026 added the trailing `None, sessDevCSD`. Until now this call
+                            #passed only 9 positional arguments, stopping at the _meth slot, so
+                            #_dev defaulted to absent and TGPUUsageArg::deviceIndex stayed -1 --
+                            #i.e. the 4D CSD accumulation ALWAYS ran on the CPU, however _gpu_f was
+                            #set. The GPU kernel in srradmnp_gpu.cu existed and was correct; it was
+                            #simply never reached from this, the production entry point.
+                            srwl.CalcIntFromElecField(resStokes.arS, wfr, -1, 8, depTypeInt, phEnInt, 0., 0., arMethPar, None, sessDevCSD) #OC03032021: this call is supposed to update / extract one main Stokes component
+                            #srwl.CalcIntFromElecField(resStokes.arS, wfr, -1, 8, depTypeInt, phEnInt, 0., 0., arMethPar) #OC03032021
+                            #srwl.CalcIntFromElecField(resStokes.arS, wfr, -1, 8, depTypeInt, phEnInt, 0., 0., [intSumType, i]) #OC03032021: this call is supposed to update / extract one main Stokes component
+                            #srwl.CalcIntFromElecField(resStokes.arS, wfr, 6, 8, depTypeInt, phEnInt, 0., 0., [intSumType, i]) #One main Stokes component
+
+                            #DEBUG
+                            #print(resStokes.arS[0], resStokes.arS[resStokes.mesh.nx*resStokes.mesh.ny*2 + 2], resStokes.arS[(resStokes.mesh.nx*resStokes.mesh.ny*2)*2 + 2*2])
+                            #END DEBUG
+
+                            #DEBUG/TEST of a function:
+                            #srwl.UtiIntProc(resStokes.arS, resStokes.mesh, None, None, [5, -1, wfrA.Rx, wfrA.Ry, wfrA.xc, wfrA.yc]) #Subtract common quadratic phase terms from CSD
+                            #END DEBUG/TEST of a function
+
+                            #DEBUG
+                            #print('CSD Update lasted:', round(time.time() - t0, 6), 's')
+                            #sys.stdout.flush()
+                            #END DEBUG
+
+                        #DEBUG
+                        #print('MI updated')
+                        #END DEBUG
+                    
+                    else:
+                        #DEBUG
+                        #print('About to define workStokes')
+                        #END DEBUG
+                        if(not (doPropCM and (iMode == iModeStart))): #OC23112022
+                        #if(not (doPropCM and (iMode == 0))): #OC19112020
+                        #if(not (doPropCM and (i == 0))): #OC13112020
+                    
+                            wfr.calc_stokes(workStokes, _n_stokes_comp=numComp) #calculate Stokes parameters from Electric Field
+
+                            if(workStokes2 is not None): #OC30052017
+                                #OC21052020
+                                if(wfr2 is None): wfr.calc_stokes(workStokes2, _n_stokes_comp=numComp, _rx_avg=RxAvg, _ry_avg=RyAvg, _xc_avg=xcAvg, _yc_avg=ycAvg)
+                                else: wfr2.calc_stokes(workStokes2, _n_stokes_comp=numComp, _rx_avg=RxAvg, _ry_avg=RyAvg, _xc_avg=xcAvg, _yc_avg=ycAvg)
+                                #if(wfr2 is None): wfr.calc_stokes(workStokes2, _n_stokes_comp=numComp)
+                                #else: wfr2.calc_stokes(workStokes2, _n_stokes_comp=numComp)
+
+                            if(workStokes3 is not None): #OC03052018
+                                wfr.calc_stokes(workStokes3, _n_stokes_comp=numComp, _rx_avg=RxAvg, _ry_avg=RyAvg, _xc_avg=xcAvg, _yc_avg=ycAvg) #OC21052020
+                                #wfr.calc_stokes(workStokes3, _n_stokes_comp=numComp)
+
+                    if(_pres_ang == 2): #23122018
+                        wfr.unitElFldAng = 1 #?
+                        srwl.SetRepresElecField(wfr, 'a')
+                        meshWorkA = deepcopy(wfr.mesh)
+                        workStokesA = SRWLStokes(1, 'f', meshWorkA.eStart, meshWorkA.eFin, meshWorkA.ne, meshWorkA.xStart, meshWorkA.xFin, meshWorkA.nx, meshWorkA.yStart, meshWorkA.yFin, meshWorkA.ny, _n_comp = numComp) #OC18072021
+                        #workStokesA = SRWLStokes(1, 'f', meshWorkA.eStart, meshWorkA.eFin, meshWorkA.ne, meshWorkA.xStart, meshWorkA.xFin, meshWorkA.nx, meshWorkA.yStart, meshWorkA.yFin, meshWorkA.ny)
+                        srwl.CalcIntFromElecField(workStokesA.arS, wfr, 6, 0, depTypeInt, phEnInt, 0., 0.)
+
+                        #DEBUG
+                        #srwl_uti_save_intens_ascii(workStokesA.arS, workStokesA.mesh, copy(_file_path) + '.debug', 1)
+                        #END DEBUG
+
+                elif(_me_approx == 1): #OC05042017 #Numerical integration only over electron energy, convolution over transverse phase space
+
+                    if(_char == 0): #Total intensity
+                        #DEBUG
+                        #print('DEBUG: 2nd order e-beam moments after eventual propagation:')
+                        #print('sigX=', sqrt(wfr.partBeam.arStatMom2[0]))
+                        #print('mXXp=', wfr.partBeam.arStatMom2[1])
+                        #print('sigXp=', sqrt(wfr.partBeam.arStatMom2[2]))
+                        #print('sigY=', sqrt(wfr.partBeam.arStatMom2[3]))
+                        #print('mYYp=', wfr.partBeam.arStatMom2[4])
+                        #print('sigYp=', sqrt(wfr.partBeam.arStatMom2[5]))
+                        #print('relEnSpr=', sqrt(wfr.partBeam.arStatMom2[10]))
+                        #print('wfr.Rx=', wfr.Rx, ' wfr.Ry=', wfr.Ry)
+                        #print('wfr.arElecPropMatr=', wfr.arElecPropMatr)
+                        #END DEBUG
+
+                        #srwl.CalcIntFromElecField(workStokes.arS, wfr, 6, 1, depTypeME_Approx, phEnME_Approx, _x0, _y0)
+                        srwl.CalcIntFromElecField(workStokes.arS, wfr, 6, 1, depTypeInt, phEnInt, _x0, _y0) #OC30052017
+
+                        #DEBUG
+                        #arTest = array('f', [0]*wfr.mesh.nx*wfr.mesh.ny)
+                        ##srwl.CalcIntFromElecField(arTest, wfr, 6, 1, depTypeME_Approx, phEnME_Approx, _x0, _y0)
+                        #srwl.CalcIntFromElecField(arTest, wfr, 6, 0, depTypeME_Approx, phEnME_Approx, _x0, _y0)
+
+                        #srwl_uti_save_intens_ascii(arTest, wfr.mesh, _file_path + '.debug', numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual)
+
+                        ##srwl_uti_save_intens_ascii(workStokes.arS, workStokes.mesh, _file_path + '.debug', numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual)
+                        #if(i == 0): raise Exception("DEBUG: STOP") #OC06042017
+                        ##srwl.CalcIntFromElecField(workStokes.arS, wfr, 6, 0, depTypeME_Approx, phEnME_Approx, _x0, _y0)
+                        #END DEBUG
+
+                    elif(_char == 1): #Four Stokes components
+                    
+                        #OC29122023
+                        srwl.CalcIntFromElecField(workStokes.arS, wfr, -5, 1, depTypeInt, phEnInt, 0., 0.) #All Stokes (implement extraction of Stokes components, with convolution, in CalcIntFromElecField)
+
+                    #if(_pres_ang == 2): #23122018
+                    #    #To make convolution taking into account angular divergancies only!
+                    #                
+                    #    wfr.unitElFldAng = 1 #?
+                    #    srwl.SetRepresElecField(wfr, 'a')
+                    #    meshWorkA = deepcopy(wfr.mesh)
+                    #    workStokesA = SRWLStokes(1, 'f', meshWorkA.eStart, meshWorkA.eFin, meshWorkA.ne, meshWorkA.xStart, meshWorkA.xFin, meshWorkA.nx, meshWorkA.yStart, meshWorkA.yFin, meshWorkA.ny)
+                    #    #srwl.CalcIntFromElecField(workStokesA.arS, wfr, 6, 1, depTypeInt, phEnInt, 0, 0)
+
                 #DEBUG
                 #srwl_uti_save_intens_ascii(workStokes.arS, workStokes.mesh, _file_path, 1)
                 #END DEBUG
-                
-            else:
-                #print('DEBUG MESSAGE: Started interpolation of current wavefront on resulting mesh')
-                #if(doMutual <= 0): resStokes.avg_update_interp(workStokes, iAvgProc, 1, 1)
-                #else: resStokes.avg_update_interp_mutual(workStokes, iAvgProc, 1)
 
-                #print('resStokes.avg_update_interp ... ', end='') #DEBUG
-                #t0 = time.time(); #DEBUG
-
-                #DEBUG (test save at iAvgProc = 0)
-                #if(iAvgProc == 0):
-                #    srwl_uti_save_intens_ascii(resStokes.arS, meshRes, _file_path, 1, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual)
-                #END DEBUG
-
-                #if(doMutual <= 0): resStokes.avg_update_interp(workStokes, iAvgProc, 1, 1, ePhIntegMult) #to treat all Stokes components / Polarization in the future
-
-                #if(_char == 40): #OC03052018
-                if((_char == 40) or (_char == 41)): #OC15072019
-
+                #OC04022021 (moved up)
+                #if(resStokes is None):
+                #    resStokes = SRWLStokes(1, 'f', meshRes.eStart, meshRes.eFin, meshRes.ne, meshRes.xStart, meshRes.xFin, meshRes.nx, meshRes.yStart, meshRes.yFin, meshRes.ny, doMutual)
                     #DEBUG
-                    #if(i == 0):
-                    #    print('Before first Stokes Averaging')
-                    #    for ii in range(0, len(resStokes.arS), 10): print(ii, resStokes.arS[ii])
+                    #print('resStokes #2: ne=', resStokes.mesh.ne, 'eStart=', resStokes.mesh.eStart, 'eFin=', resStokes.mesh.eFin)
+                    #END DEBUG
 
-                    if(not (doPropCM and (iMode == iModeStart))): #OC23112022
-                    #if(not (doPropCM and (iMode == 0))): #OC19112020
-                    #if(not (doPropCM and (i == 0))): #OC13112020
-                        
-                        resStokes.avg_update_interp(workStokes, iAvgProc, 1, numComp, ePhIntegMult, _sum=doPropCM) #OC04112020
-                        #resStokes.avg_update_interp(workStokes, iAvgProc, 1, numComp, ePhIntegMult)
+                lenArSt0 = 0
+                if(resStokes is not None): #OC18022021
+                    lenArSt0 = len(resStokes.arS)
+                lenArSt = lenArSt0
 
-                        if((resStokes2 is not None) and (workStokes2 is not None)):
-                            #DEBUG
-                            #print('Apdating from resStokes2')
-                            resStokes2.avg_update_interp_mutual(workStokes2, iAvgProc, 1, ePhIntegMult, _sum=doPropCM) #OC13112020
-                            #resStokes2.avg_update_interp_mutual(workStokes2, iAvgProc, 1, ePhIntegMult)
+                #if(_char == 4): #OC31052017 #Cuts of Mutual Intensity vs X & Y
+                if((_char == 4) or (_char == 5)): #OC15072019 #Cuts of Mutual Intensity and/or Degree of Coherence vs X & Y
+                    if(resStokes2 is None):
+                        resStokes2 = SRWLStokes(1, 'f', meshRes2.eStart, meshRes2.eFin, meshRes2.ne, meshRes2.xStart, meshRes2.xFin, meshRes2.nx, meshRes2.yStart, meshRes2.yFin, meshRes2.ny, doMutual, _n_comp = numComp) #OC18072021
+                        #resStokes2 = SRWLStokes(1, 'f', meshRes2.eStart, meshRes2.eFin, meshRes2.ne, meshRes2.xStart, meshRes2.xFin, meshRes2.nx, meshRes2.yStart, meshRes2.yFin, meshRes2.ny, doMutual)
+                    #if(arAuxResSt12 is None):
+                    #    lenArSt12 = len(resStokes.arS) + len(resStokes2.arS)
+                    #    arAuxResSt12 = array('f', [0]*lenArSt12)
+                    lenArSt += len(resStokes2.arS) #OC24122018
 
-                        if((resStokes3 is not None) and (workStokes3 is not None)):
-                            #DEBUG
-                            #print('Apdating from resStokes3')
-                            resStokes3.avg_update_interp_mutual(workStokes3, iAvgProc, 1, ePhIntegMult, _sum=doPropCM) #OC13112020
-                            #resStokes3.avg_update_interp_mutual(workStokes3, iAvgProc, 1, ePhIntegMult)
+                #if(_char == 40): #OC03052018 #Intensity and Cuts of Mutual Intensity vs X & Y
+                if((_char == 40) or (_char == 41)): #OC15072019 #Intensity and Cuts of Mutual Intensity and/or Degree of Coherence vs X & Y
+                    if(resStokes2 is None):
+                        resStokes2 = SRWLStokes(1, 'f', meshRes.eStart, meshRes.eFin, meshRes.ne, meshRes.xStart, meshRes.xFin, meshRes.nx, _y0, _y0, 1, _mutual=1, _n_comp=numComp) #OC18072021
+                        #resStokes2 = SRWLStokes(1, 'f', meshRes.eStart, meshRes.eFin, meshRes.ne, meshRes.xStart, meshRes.xFin, meshRes.nx, _y0, _y0, 1, _mutual=1)
+                    if(resStokes3 is None):
+                        resStokes3 = SRWLStokes(1, 'f', meshRes.eStart, meshRes.eFin, meshRes.ne, _x0, _x0, 1, meshRes.yStart, meshRes.yFin, meshRes.ny, _mutual=1, _n_comp=numComp) #OC18072021
+                        #resStokes3 = SRWLStokes(1, 'f', meshRes.eStart, meshRes.eFin, meshRes.ne, _x0, _x0, 1, meshRes.yStart, meshRes.yFin, meshRes.ny, _mutual=1)
+                    #if(arAuxResSt123 is None):
+                    #    lenArSt123 = len(resStokes.arS) + len(resStokes2.arS) + len(resStokes3.arS)
+                    #    arAuxResSt123 = array('f', [0]*lenArSt123)
+                    lenArSt += (len(resStokes2.arS) + len(resStokes3.arS)) #OC24122018
 
+                if(_pres_ang == 2): #24122018
+                    if((resStokesA is None) and (meshResA is not None)):
+                        resStokesA = SRWLStokes(1, 'f', meshResA.eStart, meshResA.eFin, meshResA.ne, meshResA.xStart, meshResA.xFin, meshResA.nx, meshResA.yStart, meshResA.yFin, meshResA.ny, _n_comp = numComp) #OC18072021
+                        #resStokesA = SRWLStokes(1, 'f', meshResA.eStart, meshResA.eFin, meshResA.ne, meshResA.xStart, meshResA.xFin, meshResA.nx, meshResA.yStart, meshResA.yFin, meshResA.ny)
+                        lenArSt += len(resStokesA.arS) #OC26122018
+
+                if((lenArSt > lenArSt0) and ((arAuxResSt is None) or (len(arAuxResSt) < lenArSt))): arAuxResSt = array('f', [0]*lenArSt) #OC24122018
+
+                #DEBUG
+                #print('workStokes.mesh: nx=', workStokes.mesh.nx, 'xStart=', workStokes.mesh.xStart, 'xFin=', workStokes.mesh.xFin)
+                #print('workStokes.mesh: ny=', workStokes.mesh.ny, 'yStart=', workStokes.mesh.yStart, 'yFin=', workStokes.mesh.yFin)
+                #print('resStokes.mesh: nx=', resStokes.mesh.nx, 'xStart=', resStokes.mesh.xStart, 'xFin=', resStokes.mesh.xFin)
+                #print('resStokes.mesh: ny=', resStokes.mesh.ny, 'yStart=', resStokes.mesh.yStart, 'yFin=', resStokes.mesh.yFin)
+                #END DEBUG
+ 
+                if(_opt_bl is None):
+                    #resStokes.avg_update_same_mesh(workStokes, iAvgProc, 1)
+
+                    #print('resStokes.avg_update_same_mesh ... ', end='') #DEBUG
+                    #t0 = time.time(); #DEBUG
+                
+                    if((_char != 6) and (_char != 61) and (_char != 7)): #OC20062021
+                    #if(_char != 6): #OC26022021
+                        #resStokes.avg_update_same_mesh(workStokes, iAvgProc, 1, ePhIntegMult) #to treat all Stokes components / Polarization in the future
+                        resStokes.avg_update_same_mesh(workStokes, iAvgProc, numComp, ePhIntegMult) #OC16012017 #to treat all Stokes components / Polarization in the future
+
+                        if((resStokes2 is not None) and (workStokes2 is not None)): #OC30052017
+                            resStokes2.avg_update_same_mesh(workStokes2, iAvgProc, numComp, ePhIntegMult)
+
+                        if((resStokes3 is not None) and (workStokes3 is not None)): #OC03052018
+                            resStokes3.avg_update_same_mesh(workStokes3, iAvgProc, numComp, ePhIntegMult)
+
+                        if((resStokesA is not None) and (workStokesA is not None)): #OC24122018
+                            resStokesA.avg_update_same_mesh(workStokesA, iAvgProc, numComp, ePhIntegMult)
+
+                    #print('completed (lasted', round(time.time() - t0, 6), 's)') #DEBUG
+                    #DEBUG
+                    #srwl_uti_save_intens_ascii(workStokes.arS, workStokes.mesh, _file_path, 1)
+                    #END DEBUG
+                
                 else:
-                    if(doMutual == 0):
+                    #print('DEBUG MESSAGE: Started interpolation of current wavefront on resulting mesh')
+                    #if(doMutual <= 0): resStokes.avg_update_interp(workStokes, iAvgProc, 1, 1)
+                    #else: resStokes.avg_update_interp_mutual(workStokes, iAvgProc, 1)
+
+                    #print('resStokes.avg_update_interp ... ', end='') #DEBUG
+                    #t0 = time.time(); #DEBUG
+
+                    #DEBUG (test save at iAvgProc = 0)
+                    #if(iAvgProc == 0):
+                    #    srwl_uti_save_intens_ascii(resStokes.arS, meshRes, _file_path, 1, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual)
+                    #END DEBUG
+
+                    #if(doMutual <= 0): resStokes.avg_update_interp(workStokes, iAvgProc, 1, 1, ePhIntegMult) #to treat all Stokes components / Polarization in the future
+
+                    #if(_char == 40): #OC03052018
+                    if((_char == 40) or (_char == 41)): #OC15072019
+
                         #DEBUG
-                        #print('Before the update of Stokes')
-                        #END DEBUG
-                        #DEBUG
-                        #print('Saving intensity of propagated wavefront #', i)
-                        #srwl_uti_save_intens_ascii(workStokes.arS, workStokes.mesh, _file_path + '_' + repr(i) + '.dat', 1, _mutual = doMutual)
-                        #sys.exit()
-                        #END DEBUG
+                        #if(i == 0):
+                        #    print('Before first Stokes Averaging')
+                        #    for ii in range(0, len(resStokes.arS), 10): print(ii, resStokes.arS[ii])
 
                         if(not (doPropCM and (iMode == iModeStart))): #OC23112022
                         #if(not (doPropCM and (iMode == 0))): #OC19112020
                         #if(not (doPropCM and (i == 0))): #OC13112020
-
-                            if resStokes.mesh.is_equal(workStokes.mesh): #OC01082022
-                                resStokes.avg_update_same_mesh(workStokes, iAvgProc, numComp, ePhIntegMult, _sum=doPropCM)
-                            else:
-                                
-                                try: #OC14012024 (added "try-except")
-                                    resStokes.avg_update_interp(workStokes, iAvgProc, 1, numComp, ePhIntegMult, _sum=doPropCM)
-                                except:
-                                    print('Failed to add intensity of single-electron / fully coherent radiation')
-
-                            #resStokes.avg_update_interp(workStokes, iAvgProc, 1, numComp, ePhIntegMult, _sum=doPropCM) #OC04112020
                         
-                        elif resStokes.mesh.is_equal(workStokes.mesh): #OC01082022
-                            resStokes.avg_update_same_mesh(workStokes, iAvgProc, numComp, ePhIntegMult, _sum=doPropCM)
+                            resStokes.avg_update_interp(workStokes, iAvgProc, 1, numComp, ePhIntegMult, _sum=doPropCM) #OC04112020
+                            #resStokes.avg_update_interp(workStokes, iAvgProc, 1, numComp, ePhIntegMult)
 
-                        #resStokes.avg_update_interp(workStokes, iAvgProc, 1, numComp, ePhIntegMult) #OC16012017 #to treat all Stokes components / Polarization in the future
-                        
+                            if((resStokes2 is not None) and (workStokes2 is not None)):
+                                #DEBUG
+                                #print('Apdating from resStokes2')
+                                resStokes2.avg_update_interp_mutual(workStokes2, iAvgProc, 1, ePhIntegMult, _sum=doPropCM) #OC13112020
+                                #resStokes2.avg_update_interp_mutual(workStokes2, iAvgProc, 1, ePhIntegMult)
+
+                            if((resStokes3 is not None) and (workStokes3 is not None)):
+                                #DEBUG
+                                #print('Apdating from resStokes3')
+                                resStokes3.avg_update_interp_mutual(workStokes3, iAvgProc, 1, ePhIntegMult, _sum=doPropCM) #OC13112020
+                                #resStokes3.avg_update_interp_mutual(workStokes3, iAvgProc, 1, ePhIntegMult)
+
                     else:
-                        if((_char != 6) and (_char != 61) and (_char != 7)): #OC20062021 (added condition; MI was already updated in case of _char == 6)
-                        #if(_char != 6): #OC04022021 (added condition; MI was already updated in case of _char == 6)
-                            resStokes.avg_update_interp_mutual(workStokes, iAvgProc, 1, ePhIntegMult)
+                        if(doMutual == 0):
+                            #DEBUG
+                            #print('Before the update of Stokes')
+                            #END DEBUG
+                            #DEBUG
+                            #print('Saving intensity of propagated wavefront #', i)
+                            #srwl_uti_save_intens_ascii(workStokes.arS, workStokes.mesh, _file_path + '_' + repr(i) + '.dat', 1, _mutual = doMutual)
+                            #sys.exit()
+                            #END DEBUG
 
-                        if((resStokes2 is not None) and (workStokes2 is not None)): #OC30052017
-                            resStokes2.avg_update_interp_mutual(workStokes2, iAvgProc, 1, ePhIntegMult)
+                            if(not (doPropCM and (iMode == iModeStart))): #OC23112022
+                            #if(not (doPropCM and (iMode == 0))): #OC19112020
+                            #if(not (doPropCM and (i == 0))): #OC13112020
 
-                if((resStokesA is not None) and (workStokesA is not None)): #OC24122018
-                    resStokesA.avg_update_interp(workStokesA, iAvgProc, 1, numComp, ePhIntegMult)
+                                if resStokes.mesh.is_equal(workStokes.mesh): #OC01082022
+                                    resStokes.avg_update_same_mesh(workStokes, iAvgProc, numComp, ePhIntegMult, _sum=doPropCM)
+                                else:
+                                
+                                    try: #OC14012024 (added "try-except")
+                                        resStokes.avg_update_interp(workStokes, iAvgProc, 1, numComp, ePhIntegMult, _sum=doPropCM)
+                                    except:
+                                        print('Failed to add intensity of single-electron / fully coherent radiation')
 
-                #DEBUG
-                #srwl_uti_save_intens_ascii(resStokesA.arS, resStokesA.mesh, copy(_file_path) + '.ang_res.debug', 1)
-                #END DEBUG
-                
-                #print('completed (lasted', round(time.time() - t0, 6), 's)') #DEBUG
-                #print('DEBUG MESSAGE: Finished interpolation of current wavefront on resulting mesh')
-
-            iAvgProc += 1
-            #if(iAvgProc >= _n_part_avg_proc):
-
-            doAllowSending = (nProc > 1) and (iAvgProc >= _n_part_avg_proc) #OC26022021
-            #doAllowSending = (iAvgProc >= _n_part_avg_proc) #OC20112020
-            if(doAllowSending and ((_char != 6) and (_char != 61) and (_char != 7))): #OC20062021 (consider removing the second part)
-            #if(doAllowSending and (_char != 6)): #OC18022021 (consider removing the second part)
-            #if(doAllowSending):
-                if(doPropCM and ((nPartPerProc - i) <= _n_part_avg_proc) and ((nPartPerProc - i) > 1)): doAllowSending = False #OC20012021
-                #if(doPropCM and ((nPartPerProc - i) < _n_part_avg_proc) and ((nPartPerProc - i) > 1)): doAllowSending = False #OC20112020
-
-            #DEBUG
-            #if(rank == 1): print('Rank #1: i=', i, 'iAvgProc=', iAvgProc, 'nPartPerProc=', nPartPerProc, '_n_part_avg_proc=', _n_part_avg_proc, 'doAllowSending=', doAllowSending)
-            #sys.stdout.flush()
-            #END DEBUG
-            
-            if(doAllowSending): #OC20112020
-            #if(iAvgProc >= _n_part_avg_proc):
-
-                #if(nProc > 1): #OC26022021: commented this out, since sending can be required only if nProc > 1
-
-                #if(doPropCM and ((nPartPerProc - iMode) < _n_part_avg_proc) and ((nPartPerProc - iMode) > 1)): continue #OC20112020
-
-                #sys.exit(0)
-                #print("sending data from %d to 0" % rank) #an he
-                #DEBUG
-                #srwl_uti_save_intens_ascii(resStokes.arS, resStokes.mesh, _file_path, 1)
-                #END DEBUG
-
-                #DEBUG
-                #srwl_uti_save_text("Preparing to sending # " + str(iAuxSendCount + 1), _file_path + "." + str(rank) + "bs.dbg")
-                #END DEBUG
-
-                ##comMPI.Send([resStokes.arS, MPI.FLOAT], dest=0)
-                #if(resStokes2 is None):
-                #    comMPI.Send([resStokes.arS, MPI.FLOAT], dest=0)
-                ##else: #OC31052017
-                #elif(resStokes3 is None): #OC03052018
-                #    lenArSt1 = len(resStokes.arS)
-                #    lenArSt2 = len(resStokes2.arS)
-                #    for i1 in range(lenArSt1): arAuxResSt12[i1] = resStokes.arS[i1]
-                #    for i2 in range(lenArSt2): arAuxResSt12[i2 + lenArSt1] = resStokes2.arS[i2]
-                #    comMPI.Send([arAuxResSt12, MPI.FLOAT], dest=0)
-                #else: #OC03052018
-                #    lenArSt1 = len(resStokes.arS)
-                #    lenArSt2 = len(resStokes2.arS)
-                #    lenArSt3 = len(resStokes3.arS)
-                #    for i1 in range(lenArSt1): arAuxResSt123[i1] = resStokes.arS[i1]
-                #    for i2 in range(lenArSt2): arAuxResSt123[i2 + lenArSt1] = resStokes2.arS[i2]
-                #    lenArSt12 = lenArSt1 + lenArSt2
-                #    for i3 in range(lenArSt3): arAuxResSt123[i3 + lenArSt12] = resStokes3.arS[i3]
-                #    comMPI.Send([arAuxResSt123, MPI.FLOAT], dest=0)
-
-                if((_char != 6) and (_char != 61) and (_char != 7)): #OC20062021
-                #if(_char != 6): #OC18022021 (in case _char == 6 Electric Field should be sent)
-                    #OC24122018
-                    resStkToSend = resStokes.arS
-                    lenArSt1 = len(resStokes.arS)
-                    lenArSt = lenArSt1
-                    if((resStokes2 is not None) and (resStokes3 is None)):
-                        lenArSt2 = len(resStokes2.arS)
-                        #for i1 in range(lenArSt): arAuxResSt[i1] = resStokes.arS[i1]
-                        arAuxResSt[0:lenArSt] = resStokes.arS #??
-                        #for i2 in range(lenArSt2): arAuxResSt[i2 + lenArSt] = resStokes2.arS[i2]
-                        lenArStTot = lenArSt + lenArSt2
-                        arAuxResSt[lenArSt:lenArStTot] = resStokes2.arS #??
-                        lenArSt = lenArStTot
-                        resStkToSend = arAuxResSt
-                    elif((resStokes2 is not None) and (resStokes3 is not None)):
-                        lenArSt2 = len(resStokes2.arS)
-                        lenArSt3 = len(resStokes3.arS)
-                        #for i1 in range(lenArSt): arAuxResSt[i1] = resStokes.arS[i1]
-                        arAuxResSt[0:lenArSt] = resStokes.arS #??
-                        #for i2 in range(lenArSt2): arAuxResSt[i2 + lenArSt] = resStokes2.arS[i2]
-                        lenArStTot = lenArSt + lenArSt2
-                        arAuxResSt[lenArSt:lenArStTot] = resStokes2.arS #??
-                        lenArSt = lenArStTot
-                        #for i3 in range(lenArSt3): arAuxResSt[i3 + lenArSt] = resStokes3.arS[i3]
-                        lenArStTot = lenArSt + lenArSt3
-                        arAuxResSt[lenArSt:lenArStTot] = resStokes3.arS #??
-                        lenArSt = lenArStTot
-                        resStkToSend = arAuxResSt
-
-                    if(resStokesA is not None):
-                        if(resStokes2 is None):
-                            #for i1 in range(lenArSt): arAuxResSt[i1] = resStokes.arS[i1]
-                            arAuxResSt[0:lenArSt] = resStokes.arS
-                        lenArStA = len(resStokesA.arS)
-                        #for ia in range(lenArStA): arAuxResSt[ia + lenArSt] = resStokesA.arS[ia]
-                        lenArStTot = lenArSt + lenArStA
-                        arAuxResSt[lenArSt:lenArStTot] = resStokesA.arS
-                        lenArSt = lenArStTot
-                        resStkToSend = arAuxResSt
+                                #resStokes.avg_update_interp(workStokes, iAvgProc, 1, numComp, ePhIntegMult, _sum=doPropCM) #OC04112020
                         
-                    #comMPI.Send([arAuxResSt, MPI.FLOAT], dest=0)
-                    #comMPI.Send([resStkToSend, MPI.FLOAT], dest=0) #OC26122018
-                    comMPI.Send([resStkToSend, MPI.FLOAT], dest=rankMaster) #OC03032021
+                            elif resStokes.mesh.is_equal(workStokes.mesh): #OC01082022
+                                resStokes.avg_update_same_mesh(workStokes, iAvgProc, numComp, ePhIntegMult, _sum=doPropCM)
 
-                    #if(resStokes2 is not None): comMPI.Send([resStokes2.arS, MPI.FLOAT], dest=0) #OC30052017
+                            #resStokes.avg_update_interp(workStokes, iAvgProc, 1, numComp, ePhIntegMult) #OC16012017 #to treat all Stokes components / Polarization in the future
+                        
+                        else:
+                            if((_char != 6) and (_char != 61) and (_char != 7)): #OC20062021 (added condition; MI was already updated in case of _char == 6)
+                            #if(_char != 6): #OC04022021 (added condition; MI was already updated in case of _char == 6)
+                                resStokes.avg_update_interp_mutual(workStokes, iAvgProc, 1, ePhIntegMult)
 
-                    for ir in range(len(resStokes.arS)): #OC17022021
-                    #for ir in range(nStPt):
-                        resStokes.arS[ir] = 0
+                            if((resStokes2 is not None) and (workStokes2 is not None)): #OC30052017
+                                resStokes2.avg_update_interp_mutual(workStokes2, iAvgProc, 1, ePhIntegMult)
 
-                    if(resStokes2 is not None): #OC30052017
-                        for ir in range(len(resStokes2.arS)): #OC17022021
-                        #for ir in range(nStPt2):
-                            resStokes2.arS[ir] = 0
-
-                    if(resStokes3 is not None): #OC03052018
-                        for ir in range(len(resStokes3.arS)): #OC17022021
-                        #for ir in range(nStPt3):
-                            resStokes3.arS[ir] = 0
-
-                    if(resStokesA is not None): #OC27122018
-                        for ir in range(len(resStokesA.arS)): resStokesA.arS[ir] = 0
-
-                else: #if((_char == 6) or (_char == 61) or (_char == 7)): #OC20062021 (in case _char == 6 Electric Field should be sent)
-                #else: #if(_char == 6): #OC18022021 (in case _char == 6 Electric Field should be sent)
-
-                    #Resize the Electric Field according to the required meshRes (commented-out, since this was done before)
-                    #srwl.ResizeElecFieldMesh(wfr, meshRes, [0,1]) #[0,1] means do the resizing without FFT and allow treatment of quad. phase terms
+                    if((resStokesA is not None) and (workStokesA is not None)): #OC24122018
+                        resStokesA.avg_update_interp(workStokesA, iAvgProc, 1, numComp, ePhIntegMult)
 
                     #DEBUG
-                    #print('Rank #', rank, ': mode #', iMode, 'about to send electric field calculated on the mesh:')
-                    #print('wfr.mesh.eStart=', wfr.mesh.eStart, 'wfr.mesh.eFin=', wfr.mesh.eFin, 'wfr.mesh.ne=', wfr.mesh.ne)
-                    #print('wfr.mesh.xStart=', wfr.mesh.xStart, 'wfr.mesh.xFin=', wfr.mesh.xFin, 'wfr.mesh.nx=', wfr.mesh.nx)
-                    #print('wfr.mesh.yStart=', wfr.mesh.yStart, 'wfr.mesh.yFin=', wfr.mesh.yFin, 'wfr.mesh.ny=', wfr.mesh.ny)
-                    #sys.stdout.flush()
-                    #t0 = time.time()
+                    #srwl_uti_save_intens_ascii(resStokesA.arS, resStokesA.mesh, copy(_file_path) + '.ang_res.debug', 1)
                     #END DEBUG
+                
+                    #print('completed (lasted', round(time.time() - t0, 6), 's)') #DEBUG
+                    #print('DEBUG MESSAGE: Finished interpolation of current wavefront on resulting mesh')
 
-                    #Consider adding logic if wfr.arEx or wfr.arEy is not defined
-                    arElFldToSend[0:lenHalfArToSend] = wfr.arEx
-                    arElFldToSend[lenHalfArToSend:lenArToSend] = wfr.arEy
+                iAvgProc += 1
+                #if(iAvgProc >= _n_part_avg_proc):
 
-                    #DEBUG_OC16042021 (commented-out comMPI.Send([arElFldToSend, MPI.FLOAT], dest=rankMaster) line for test)
-                    comMPI.Send([arElFldToSend, MPI.FLOAT], dest=rankMaster) #OC03032021 (sending electric field to master)
-                    #comMPI.Send([arElFldToSend, MPI.FLOAT], dest=0) #OC18022021 (sending electric field to master)
-
-                    #DEBUG
-                    #print('Rank #', rank, ': mode #', iMode, 'sent to Master; sending lasted:', round(time.time() - t0, 6), 's')
-                    #sys.stdout.flush()
-                    #END DEBUG
-
-                #OC18022021 (moved here from upper location)
-                iAuxSendCount += 1 #for debug
+                doAllowSending = (nProc > 1) and (iAvgProc >= _n_part_avg_proc) #OC26022021
+                #doAllowSending = (iAvgProc >= _n_part_avg_proc) #OC20112020
+                if(doAllowSending and ((_char != 6) and (_char != 61) and (_char != 7))): #OC20062021 (consider removing the second part)
+                #if(doAllowSending and (_char != 6)): #OC18022021 (consider removing the second part)
+                #if(doAllowSending):
+                    if(doPropCM and ((nPartPerProc - i) <= _n_part_avg_proc) and ((nPartPerProc - i) > 1)): doAllowSending = False #OC20012021
+                    #if(doPropCM and ((nPartPerProc - i) < _n_part_avg_proc) and ((nPartPerProc - i) > 1)): doAllowSending = False #OC20112020
 
                 #DEBUG
-                #srwl_uti_save_text("Sent # " + str(iAuxSendCount), _file_path + "." + str(rank) + "es.dbg")
-                #END DEBUG
-
-                #DEBUG
-                #srwl_uti_save_intens_ascii(resStokes.arS, resStokes.mesh, _file_path, 1)
-                #print('Rank #', rank, ': summed-up propagated mode data sent to Master; i=', i, ' iAvgProc=', iAvgProc)
+                #if(rank == 1): print('Rank #1: i=', i, 'iAvgProc=', iAvgProc, 'nPartPerProc=', nPartPerProc, '_n_part_avg_proc=', _n_part_avg_proc, 'doAllowSending=', doAllowSending)
                 #sys.stdout.flush()
                 #END DEBUG
+            
+                if(doAllowSending): #OC20112020
+                #if(iAvgProc >= _n_part_avg_proc):
 
-                iAvgProc = 0
+                    #if(nProc > 1): #OC26022021: commented this out, since sending can be required only if nProc > 1
 
-            if(nProc == 1):
-                #DEBUG
-                #if(i == 1):
-                #    srwl_uti_save_intens_ascii(resStokes.arS, meshRes, _file_path, 1)
-                #    sys.exit(0)
-                #END DEBUG
-                iSave += 1
-                if((_file_path is not None) and (iSave == _n_save_per)):
-                    #Saving results from time to time in the process of calculation:
+                    #if(doPropCM and ((nPartPerProc - iMode) < _n_part_avg_proc) and ((nPartPerProc - iMode) > 1)): continue #OC20112020
 
-                    #print('srwl_uti_save_intens_ascii ... ', end='') #DEBUG
-                    #t0 = time.time(); #DEBUG
-                    
-                    #srwl_uti_save_intens_ascii(resStokes.arS, meshRes, _file_path, 1, _mutual = doMutual)
-                    #srwl_uti_save_intens_ascii(resStokes.arS, meshRes, _file_path, 1, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual) #OC26042016
-                    #srwl_uti_save_intens_ascii(resStokes.arS, meshRes, _file_path, numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual) #OC16012017
-                        
-                    fp = _file_path; fp1 = file_path1; fp2 = file_path2; fpdc1 = file_path_deg_coh1; fpdc2 = file_path_deg_coh2 #OC14082018
-                    fpA = file_pathA #OC24122018
-                    if(_file_bkp): 
-                        if(bkpFileToBeSaved):
-                            if(fp is not None): fp = copy(fp) + '.bkp'
-                            if(fp1 is not None): fp1 = copy(fp1) + '.bkp'
-                            if(fp2 is not None): fp2 = copy(fp2) + '.bkp'
-                            if(fpdc1 is not None): fpdc1 = copy(fpdc1) + '.bkp'
-                            if(fpdc2 is not None): fpdc2 = copy(fpdc2) + '.bkp'
-                            if(fpA is not None): fpA = copy(fpA) + '.bkp' #OC24122018
-                            
-                            bkpFileToBeSaved = False
-                        else: bkpFileToBeSaved = True
-
-                    if(((_char == 6) or (_char == 61) or (_char == 7)) and (_n_mpi <= 1)): #OC20062021 (copy / update CSD only if total distribution is required)
-                    #if((_char == 6) and (_n_mpi <= 1)): #OC03032021 (copy / update CSD only if total distribution is required)
-                    #if(_char == 6):
-                        #DEBUG
-                        #print('About to fill symmetrical part of Hermitian Mutual Intensity distribution')
-                        #END DEBUG
-
-                        srwl.UtiIntProc(resStokes.arS, resStokes.mesh, None, None, [4]) #Filling-in "symmetrical" part of the Hermitian Mutual Intensity distribution
-
-                    #if(_char == 40): #OC03052018
-                    if((_char == 40) or (_char == 41)): #OC13072019
-                        #srwl_uti_save_intens_ascii(resStokes.arS, meshRes, _file_path, numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = 0)
-                        #srwl_uti_save_intens_ascii(resStokes.arS, meshRes, fp, numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = 0) #OC14082018 #Intensity
-                        srwl_uti_save_intens(resStokes.arS, meshRes, fp, numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = 0, _form = _file_form) #OC17072021 #Intensity
-
-                        if(resStokes2 is not None):
-                            #srwl_uti_save_intens_ascii(resStokes2.arS, resStokes2.mesh, file_path1, numComp, _arLabels = resLabelsToSaveMutualHorCut, _arUnits = resUnitsToSave, _mutual = 1, _cmplx = 1)
-                            #srwl_uti_save_intens_ascii(resStokes2.arS, resStokes2.mesh, file_path1, _n_stokes = 1, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = 1, _cmplx = 1) #OC06052018
-                            if(_char == 40): #OC13072019
-                                srwl_uti_save_intens(resStokes2.arS, resStokes2.mesh, fp1, _n_stokes = 1, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = 1, _cmplx = 1, _form = _file_form) #OC17072021 #Mutual Intensity, Hor. Cut
-                                #srwl_uti_save_intens_ascii(resStokes2.arS, resStokes2.mesh, fp1, _n_stokes = 1, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = 1, _cmplx = 1) #OC14082018 #Mutual Intensity, Hor. Cut
-                            #srwl_uti_save_intens_ascii(resStokes2.to_deg_coh(), resStokes2.mesh, file_path_deg_coh1, _n_stokes = 1, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = 1, _cmplx = 0) #OC06052018
-                            #srwl_uti_save_intens_ascii(resStokes2.to_deg_coh(), resStokes2.mesh, fpdc1, _n_stokes = 1, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = 1, _cmplx = 0) #OC14082018 #Degree of Coherence, Hor. Cut
-                            #srwl_uti_save_intens_ascii(resStokes2.to_deg_coh(), resStokes2.mesh, fpdc1, _n_stokes = 1, _arLabels = resLabelsToSaveDC, _arUnits = resUnitsToSaveDC, _mutual = 1, _cmplx = 0) #OC12072019 #Degree of Coherence, Hor. Cut
-
-                            #srwl_uti_save_intens_ascii(resStokes2.to_deg_coh(), resStokes2.mesh, fpdc1, _n_stokes = 1, _arLabels = resLabelsToSaveDC, _arUnits = resUnitsToSaveDC, _mutual = 2, _cmplx = 0) #OC16072019 #Degree of Coherence, Hor. Cut
-                            #OCTEST14112020
-                            #srwl_uti_save_intens_ascii(resStokes2.to_deg_coh(_rel_zer_tol=0), resStokes2.mesh, fpdc1, _n_stokes = 1, _arLabels = resLabelsToSaveDC, _arUnits = resUnitsToSaveDC, _mutual = 2, _cmplx = 0) #OC16072019 #Degree of Coherence, Hor. Cut
-                            srwl_uti_save_intens(resStokes2.to_deg_coh(_rel_zer_tol=0), resStokes2.mesh, fpdc1, _n_stokes = 1, _arLabels = resLabelsToSaveDC, _arUnits = resUnitsToSaveDC, _mutual = 2, _cmplx = 0, _form = _file_form) #OC17072021 #Degree of Coherence, Hor. Cut
-
-                        if(resStokes3 is not None):
-                            #srwl_uti_save_intens_ascii(resStokes3.arS, resStokes3.mesh, file_path2, numComp, _arLabels = resLabelsToSaveMutualVerCut, _arUnits = resUnitsToSave, _mutual = 1, _cmplx = 1)
-                            #srwl_uti_save_intens_ascii(resStokes3.arS, resStokes3.mesh, file_path2, _n_stokes = 1, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = 1, _cmplx = 1) #OC06052018
-                            if(_char == 40): #OC13072019
-                                srwl_uti_save_intens(resStokes3.arS, resStokes3.mesh, fp2, _n_stokes = 1, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = 1, _cmplx = 1, _form = _file_form) #OC17072021 #Mutual Intensity, Vert. Cut
-                                #srwl_uti_save_intens_ascii(resStokes3.arS, resStokes3.mesh, fp2, _n_stokes = 1, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = 1, _cmplx = 1) #OC14082018 #Mutual Intensity, Vert. Cut
- 
-                            #srwl_uti_save_intens_ascii(resStokes3.to_deg_coh(), resStokes3.mesh, file_path_deg_coh2, _n_stokes = 1, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = 1, _cmplx = 0) #OC06052018
-                            #srwl_uti_save_intens_ascii(resStokes3.to_deg_coh(), resStokes3.mesh, fpdc2, _n_stokes = 1, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = 1, _cmplx = 0) #OC14082018 #Degree of Coherence, Vert. Cut
-                            #srwl_uti_save_intens_ascii(resStokes3.to_deg_coh(), resStokes3.mesh, fpdc2, _n_stokes = 1, _arLabels = resLabelsToSaveDC, _arUnits = resUnitsToSaveDC, _mutual = 1, _cmplx = 0) #OC12072019 #Degree of Coherence, Vert. Cut
-
-                            #srwl_uti_save_intens_ascii(resStokes3.to_deg_coh(), resStokes3.mesh, fpdc2, _n_stokes = 1, _arLabels = resLabelsToSaveDC, _arUnits = resUnitsToSaveDC, _mutual = 2, _cmplx = 0) #OC16072019 #Degree of Coherence, Vert. Cut
-                            #OCTEST14112020
-                            #srwl_uti_save_intens_ascii(resStokes3.to_deg_coh(_rel_zer_tol=0), resStokes3.mesh, fpdc2, _n_stokes = 1, _arLabels = resLabelsToSaveDC, _arUnits = resUnitsToSaveDC, _mutual = 2, _cmplx = 0) #OC16072019 #Degree of Coherence, Vert. Cut
-                            srwl_uti_save_intens(resStokes3.to_deg_coh(_rel_zer_tol=0), resStokes3.mesh, fpdc2, _n_stokes = 1, _arLabels = resLabelsToSaveDC, _arUnits = resUnitsToSaveDC, _mutual = 2, _cmplx = 0, _form = _file_form) #OC17072021 #Degree of Coherence, Vert. Cut
-
-                    #elif(_char == 4): #OC03052018
-                    elif((_char == 4) or (_char == 5)): #OC13072019
-                        #srwl_uti_save_intens_ascii(resStokes.arS, meshRes, file_path1, numComp, _arLabels = resLabelsToSaveMutualHorCut, _arUnits = resUnitsToSave, _mutual = doMutual, _cmplx = (1 if doMutual else 0))
-                        #srwl_uti_save_intens_ascii(resStokes.arS, meshRes, file_path1, numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual, _cmplx = (1 if doMutual else 0)) #OC06052018
-                        if(_char == 4):
-                            srwl_uti_save_intens(resStokes.arS, meshRes, fp1, numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual, _cmplx = (1 if doMutual else 0), _form = _file_form) #OC17072021 #Mutual Intensity, Hor. Cut
-                            #srwl_uti_save_intens_ascii(resStokes.arS, meshRes, fp1, numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual, _cmplx = (1 if doMutual else 0)) #OC14082018 #Mutual Intensity, Hor. Cut
-                        #srwl_uti_save_intens_ascii(resStokes.to_deg_coh(), meshRes, file_path_deg_coh1, _n_stokes = 1, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = 1, _cmplx = 0) #OC06052018
-                        #srwl_uti_save_intens_ascii(resStokes.to_deg_coh(), meshRes, fpdc1, _n_stokes = 1, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = 1, _cmplx = 0) #OC14082018 #Degree of Coherence, Hor. Cut
-                        #srwl_uti_save_intens_ascii(resStokes.to_deg_coh(), meshRes, fpdc1, _n_stokes = 1, _arLabels = resLabelsToSaveDC, _arUnits = resUnitsToSaveDC, _mutual = 1, _cmplx = 0) #OC12072019 #Degree of Coherence, Hor. Cut
-                        #srwl_uti_save_intens_ascii(resStokes.to_deg_coh(), meshRes, fpdc1, _n_stokes = 1, _arLabels = resLabelsToSaveDC, _arUnits = resUnitsToSaveDC, _mutual = 2, _cmplx = 0) #OC16072019 #Degree of Coherence, Hor. Cut
-                        srwl_uti_save_intens(resStokes.to_deg_coh(), meshRes, fpdc1, _n_stokes = 1, _arLabels = resLabelsToSaveDC, _arUnits = resUnitsToSaveDC, _mutual = 2, _cmplx = 0, _form = _file_form) #OC17072021 #Degree of Coherence, Hor. Cut
-                        if((resStokes2 is not None) and (meshRes2 is not None)): #OC30052017
-                            #srwl_uti_save_intens_ascii(resStokes2.arS, meshRes2, file_path2, numComp, _arLabels = resLabelsToSaveMutualVerCut, _arUnits = resUnitsToSave, _mutual = doMutual, _cmplx = (1 if doMutual else 0))
-                            #srwl_uti_save_intens_ascii(resStokes2.arS, meshRes2, file_path2, numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual, _cmplx = (1 if doMutual else 0)) #OC06052018
-                            if(_char == 4):
-                                srwl_uti_save_intens(resStokes2.arS, meshRes2, fp2, numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual, _cmplx = (1 if doMutual else 0), _form = _file_form) #OC17072021  #Mutual Intensity, Vert. Cut
-                                #srwl_uti_save_intens_ascii(resStokes2.arS, meshRes2, fp2, numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual, _cmplx = (1 if doMutual else 0)) #OC14082018  #Mutual Intensity, Vert. Cut
-                            #srwl_uti_save_intens_ascii(resStokes2.to_deg_coh(), meshRes2, file_path_deg_coh2, _n_stokes = 1, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual, _cmplx = 0) #OC06052018
-                            #srwl_uti_save_intens_ascii(resStokes2.to_deg_coh(), meshRes2, fpdc2, _n_stokes = 1, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual, _cmplx = 0) #OC14082018 #Degree of Coherence, Vert. Cut
-                            #srwl_uti_save_intens_ascii(resStokes2.to_deg_coh(), meshRes2, fpdc2, _n_stokes = 1, _arLabels = resLabelsToSaveDC, _arUnits = resUnitsToSaveDC, _mutual = doMutual, _cmplx = 0) #OC12072019 #Degree of Coherence, Vert. Cut
-                            #srwl_uti_save_intens_ascii(resStokes2.to_deg_coh(), meshRes2, fpdc2, _n_stokes = 1, _arLabels = resLabelsToSaveDC, _arUnits = resUnitsToSaveDC, _mutual = 2, _cmplx = 0) #OC16072019 #Degree of Coherence, Vert. Cut
-                            srwl_uti_save_intens(resStokes2.to_deg_coh(), meshRes2, fpdc2, _n_stokes = 1, _arLabels = resLabelsToSaveDC, _arUnits = resUnitsToSaveDC, _mutual = 2, _cmplx = 0, _form = _file_form) #OC17072021 #Degree of Coherence, Vert. Cut
-
-                    else:
-                        #srwl_uti_save_intens_ascii(resStokes.arS, meshRes, file_path1, numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual, _cmplx = (1 if doMutual else 0))
-                        #DEBUG
-                        #print('meshRes.eStart=', meshRes.eStart, ' meshRes.eFin=', meshRes.eFin)
-                        #END DEBUG
-
-                        srwl_uti_save_intens(resStokes.arS, meshRes, fp1, numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual, _cmplx = (1 if doMutual else 0), _form = _file_form, _wfr = wfrA) #OC18062021
-                        #srwl_uti_save_intens(resStokes.arS, meshRes, fp1, numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual, _cmplx = (1 if doMutual else 0), _form = _file_form) #OC18022021
-                        #if(_file_form == 'ascii'): #OC05022021
-                        #    srwl_uti_save_intens_ascii(resStokes.arS, meshRes, fp1, numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual, _cmplx = (1 if doMutual else 0)) #OC14082018
-                        #elif(_file_form == 'hdf5'): #OC05022021
-                        #    srwl_uti_save_intens_hdf5(resStokes.arS, meshRes, fp1, numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual, _cmplx = (1 if doMutual else 0))
-                        
-                        if((resStokes2 is not None) and (meshRes2 is not None)): #OC30052017
-                            #srwl_uti_save_intens_ascii(resStokes2.arS, meshRes2, file_path2, numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual, _cmplx = (1 if doMutual else 0))
-                            #srwl_uti_save_intens_ascii(resStokes2.arS, meshRes2, fp2, numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual, _cmplx = (1 if doMutual else 0)) #OC14082018
-                            srwl_uti_save_intens(resStokes2.arS, meshRes2, fp2, numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual, _cmplx = (1 if doMutual else 0), _form = _file_form) #OC17072021
-
-                    if(_pres_ang == 2): #OC24122018
-                        srwl_uti_save_intens(resStokesA.arS, meshResA, fpA, numComp, _arLabels = resLabelsToSaveA, _arUnits = resUnitsToSaveA, _mutual = 0, _cmplx = 0, _form = _file_form) #OC17072021
-                        #srwl_uti_save_intens_ascii(resStokesA.arS, meshResA, fpA, numComp, _arLabels = resLabelsToSaveA, _arUnits = resUnitsToSaveA, _mutual = 0, _cmplx = 0)
-                        
+                    #sys.exit(0)
+                    #print("sending data from %d to 0" % rank) #an he
                     #DEBUG
-                    #srwl_uti_save_intens_ascii(workStokes.arS, workStokes.mesh, _file_path, numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual)
+                    #srwl_uti_save_intens_ascii(resStokes.arS, resStokes.mesh, _file_path, 1)
                     #END DEBUG
 
-                    #MR01112016: write the status of the simulation:  
-                    #srwl_uti_save_stat_wfr_emit_prop_multi_e(i + 1, total_num_of_particles, filename=log_path)
-                    srwl_uti_save_stat_wfr_emit_prop_multi_e(i + 1, actNumPartTot, filename=log_path) #OC31102021
+                    #DEBUG
+                    #srwl_uti_save_text("Preparing to sending # " + str(iAuxSendCount + 1), _file_path + "." + str(rank) + "bs.dbg")
+                    #END DEBUG
+
+                    ##comMPI.Send([resStokes.arS, MPI.FLOAT], dest=0)
+                    #if(resStokes2 is None):
+                    #    comMPI.Send([resStokes.arS, MPI.FLOAT], dest=0)
+                    ##else: #OC31052017
+                    #elif(resStokes3 is None): #OC03052018
+                    #    lenArSt1 = len(resStokes.arS)
+                    #    lenArSt2 = len(resStokes2.arS)
+                    #    for i1 in range(lenArSt1): arAuxResSt12[i1] = resStokes.arS[i1]
+                    #    for i2 in range(lenArSt2): arAuxResSt12[i2 + lenArSt1] = resStokes2.arS[i2]
+                    #    comMPI.Send([arAuxResSt12, MPI.FLOAT], dest=0)
+                    #else: #OC03052018
+                    #    lenArSt1 = len(resStokes.arS)
+                    #    lenArSt2 = len(resStokes2.arS)
+                    #    lenArSt3 = len(resStokes3.arS)
+                    #    for i1 in range(lenArSt1): arAuxResSt123[i1] = resStokes.arS[i1]
+                    #    for i2 in range(lenArSt2): arAuxResSt123[i2 + lenArSt1] = resStokes2.arS[i2]
+                    #    lenArSt12 = lenArSt1 + lenArSt2
+                    #    for i3 in range(lenArSt3): arAuxResSt123[i3 + lenArSt12] = resStokes3.arS[i3]
+                    #    comMPI.Send([arAuxResSt123, MPI.FLOAT], dest=0)
+
+                    if((_char != 6) and (_char != 61) and (_char != 7)): #OC20062021
+                    #if(_char != 6): #OC18022021 (in case _char == 6 Electric Field should be sent)
+                        #OC24122018
+                        resStkToSend = resStokes.arS
+                        lenArSt1 = len(resStokes.arS)
+                        lenArSt = lenArSt1
+                        if((resStokes2 is not None) and (resStokes3 is None)):
+                            lenArSt2 = len(resStokes2.arS)
+                            #for i1 in range(lenArSt): arAuxResSt[i1] = resStokes.arS[i1]
+                            arAuxResSt[0:lenArSt] = resStokes.arS #??
+                            #for i2 in range(lenArSt2): arAuxResSt[i2 + lenArSt] = resStokes2.arS[i2]
+                            lenArStTot = lenArSt + lenArSt2
+                            arAuxResSt[lenArSt:lenArStTot] = resStokes2.arS #??
+                            lenArSt = lenArStTot
+                            resStkToSend = arAuxResSt
+                        elif((resStokes2 is not None) and (resStokes3 is not None)):
+                            lenArSt2 = len(resStokes2.arS)
+                            lenArSt3 = len(resStokes3.arS)
+                            #for i1 in range(lenArSt): arAuxResSt[i1] = resStokes.arS[i1]
+                            arAuxResSt[0:lenArSt] = resStokes.arS #??
+                            #for i2 in range(lenArSt2): arAuxResSt[i2 + lenArSt] = resStokes2.arS[i2]
+                            lenArStTot = lenArSt + lenArSt2
+                            arAuxResSt[lenArSt:lenArStTot] = resStokes2.arS #??
+                            lenArSt = lenArStTot
+                            #for i3 in range(lenArSt3): arAuxResSt[i3 + lenArSt] = resStokes3.arS[i3]
+                            lenArStTot = lenArSt + lenArSt3
+                            arAuxResSt[lenArSt:lenArStTot] = resStokes3.arS #??
+                            lenArSt = lenArStTot
+                            resStkToSend = arAuxResSt
+
+                        if(resStokesA is not None):
+                            if(resStokes2 is None):
+                                #for i1 in range(lenArSt): arAuxResSt[i1] = resStokes.arS[i1]
+                                arAuxResSt[0:lenArSt] = resStokes.arS
+                            lenArStA = len(resStokesA.arS)
+                            #for ia in range(lenArStA): arAuxResSt[ia + lenArSt] = resStokesA.arS[ia]
+                            lenArStTot = lenArSt + lenArStA
+                            arAuxResSt[lenArSt:lenArStTot] = resStokesA.arS
+                            lenArSt = lenArStTot
+                            resStkToSend = arAuxResSt
+                        
+                        #comMPI.Send([arAuxResSt, MPI.FLOAT], dest=0)
+                        #comMPI.Send([resStkToSend, MPI.FLOAT], dest=0) #OC26122018
+                        comMPI.Send([resStkToSend, MPI.FLOAT], dest=rankMaster) #OC03032021
+
+                        #if(resStokes2 is not None): comMPI.Send([resStokes2.arS, MPI.FLOAT], dest=0) #OC30052017
+
+                        for ir in range(len(resStokes.arS)): #OC17022021
+                        #for ir in range(nStPt):
+                            resStokes.arS[ir] = 0
+
+                        if(resStokes2 is not None): #OC30052017
+                            for ir in range(len(resStokes2.arS)): #OC17022021
+                            #for ir in range(nStPt2):
+                                resStokes2.arS[ir] = 0
+
+                        if(resStokes3 is not None): #OC03052018
+                            for ir in range(len(resStokes3.arS)): #OC17022021
+                            #for ir in range(nStPt3):
+                                resStokes3.arS[ir] = 0
+
+                        if(resStokesA is not None): #OC27122018
+                            for ir in range(len(resStokesA.arS)): resStokesA.arS[ir] = 0
+
+                    else: #if((_char == 6) or (_char == 61) or (_char == 7)): #OC20062021 (in case _char == 6 Electric Field should be sent)
+                    #else: #if(_char == 6): #OC18022021 (in case _char == 6 Electric Field should be sent)
+
+                        #Resize the Electric Field according to the required meshRes (commented-out, since this was done before)
+                        #srwl.ResizeElecFieldMesh(wfr, meshRes, [0,1]) #[0,1] means do the resizing without FFT and allow treatment of quad. phase terms
+
+                        #DEBUG
+                        #print('Rank #', rank, ': mode #', iMode, 'about to send electric field calculated on the mesh:')
+                        #print('wfr.mesh.eStart=', wfr.mesh.eStart, 'wfr.mesh.eFin=', wfr.mesh.eFin, 'wfr.mesh.ne=', wfr.mesh.ne)
+                        #print('wfr.mesh.xStart=', wfr.mesh.xStart, 'wfr.mesh.xFin=', wfr.mesh.xFin, 'wfr.mesh.nx=', wfr.mesh.nx)
+                        #print('wfr.mesh.yStart=', wfr.mesh.yStart, 'wfr.mesh.yFin=', wfr.mesh.yFin, 'wfr.mesh.ny=', wfr.mesh.ny)
+                        #sys.stdout.flush()
+                        #t0 = time.time()
+                        #END DEBUG
+
+                        #Consider adding logic if wfr.arEx or wfr.arEy is not defined
+                        arElFldToSend[0:lenHalfArToSend] = wfr.arEx
+                        arElFldToSend[lenHalfArToSend:lenArToSend] = wfr.arEy
+
+                        #DEBUG_OC16042021 (commented-out comMPI.Send([arElFldToSend, MPI.FLOAT], dest=rankMaster) line for test)
+                        comMPI.Send([arElFldToSend, MPI.FLOAT], dest=rankMaster) #OC03032021 (sending electric field to master)
+                        #comMPI.Send([arElFldToSend, MPI.FLOAT], dest=0) #OC18022021 (sending electric field to master)
+
+                        #DEBUG
+                        #print('Rank #', rank, ': mode #', iMode, 'sent to Master; sending lasted:', round(time.time() - t0, 6), 's')
+                        #sys.stdout.flush()
+                        #END DEBUG
+
+                    #OC18022021 (moved here from upper location)
+                    iAuxSendCount += 1 #for debug
+
+                    #DEBUG
+                    #srwl_uti_save_text("Sent # " + str(iAuxSendCount), _file_path + "." + str(rank) + "es.dbg")
+                    #END DEBUG
+
+                    #DEBUG
+                    #srwl_uti_save_intens_ascii(resStokes.arS, resStokes.mesh, _file_path, 1)
+                    #print('Rank #', rank, ': summed-up propagated mode data sent to Master; i=', i, ' iAvgProc=', iAvgProc)
+                    #sys.stdout.flush()
+                    #END DEBUG
+
+                    iAvgProc = 0
+
+                if(nProc == 1):
+                    #DEBUG
+                    #if(i == 1):
+                    #    srwl_uti_save_intens_ascii(resStokes.arS, meshRes, _file_path, 1)
+                    #    sys.exit(0)
+                    #END DEBUG
+                    iSave += 1
+                    if((_file_path is not None) and (iSave == _n_save_per)):
+                        #Saving results from time to time in the process of calculation:
+
+                        #HG20072026 The periodic save reads resStokes.arS ON THE HOST (via
+                        #srwl.UtiIntProc, which has no GPU parameter, and srwl_uti_save_intens).
+                        #While the session above is open that buffer lives on the device and the
+                        #host copy is stale, so the save must be bracketed by a real close/reopen:
+                        #the close drops the depth to 0 and triggers the copy-back. Worse than
+                        #stale reads, UtiIntProc WRITES the host buffer (it fills in the
+                        #symmetric half of the Hermitian CSD), and a host write to a buffer that
+                        #is still mapped would never reach the device -- it would be silently
+                        #discarded at session close. Reopening afterwards re-uploads it.
+                        if(useCSDSession): srwl.UtiGPUProc(3, sessDevCSD) #HG20072026 flush device -> host
+                        try: #HG20072026
+
+                            #print('srwl_uti_save_intens_ascii ... ', end='') #DEBUG
+                            #t0 = time.time(); #DEBUG
                     
-                    #print('completed (lasted', round(time.time() - t0, 6), 's)') #DEBUG
+                            #srwl_uti_save_intens_ascii(resStokes.arS, meshRes, _file_path, 1, _mutual = doMutual)
+                            #srwl_uti_save_intens_ascii(resStokes.arS, meshRes, _file_path, 1, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual) #OC26042016
+                            #srwl_uti_save_intens_ascii(resStokes.arS, meshRes, _file_path, numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual) #OC16012017
+                        
+                            fp = _file_path; fp1 = file_path1; fp2 = file_path2; fpdc1 = file_path_deg_coh1; fpdc2 = file_path_deg_coh2 #OC14082018
+                            fpA = file_pathA #OC24122018
+                            if(_file_bkp): 
+                                if(bkpFileToBeSaved):
+                                    if(fp is not None): fp = copy(fp) + '.bkp'
+                                    if(fp1 is not None): fp1 = copy(fp1) + '.bkp'
+                                    if(fp2 is not None): fp2 = copy(fp2) + '.bkp'
+                                    if(fpdc1 is not None): fpdc1 = copy(fpdc1) + '.bkp'
+                                    if(fpdc2 is not None): fpdc2 = copy(fpdc2) + '.bkp'
+                                    if(fpA is not None): fpA = copy(fpA) + '.bkp' #OC24122018
+                            
+                                    bkpFileToBeSaved = False
+                                else: bkpFileToBeSaved = True
+
+                            if(((_char == 6) or (_char == 61) or (_char == 7)) and (_n_mpi <= 1)): #OC20062021 (copy / update CSD only if total distribution is required)
+                            #if((_char == 6) and (_n_mpi <= 1)): #OC03032021 (copy / update CSD only if total distribution is required)
+                            #if(_char == 6):
+                                #DEBUG
+                                #print('About to fill symmetrical part of Hermitian Mutual Intensity distribution')
+                                #END DEBUG
+
+                                srwl.UtiIntProc(resStokes.arS, resStokes.mesh, None, None, [4]) #Filling-in "symmetrical" part of the Hermitian Mutual Intensity distribution
+
+                            #if(_char == 40): #OC03052018
+                            if((_char == 40) or (_char == 41)): #OC13072019
+                                #srwl_uti_save_intens_ascii(resStokes.arS, meshRes, _file_path, numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = 0)
+                                #srwl_uti_save_intens_ascii(resStokes.arS, meshRes, fp, numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = 0) #OC14082018 #Intensity
+                                srwl_uti_save_intens(resStokes.arS, meshRes, fp, numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = 0, _form = _file_form) #OC17072021 #Intensity
+
+                                if(resStokes2 is not None):
+                                    #srwl_uti_save_intens_ascii(resStokes2.arS, resStokes2.mesh, file_path1, numComp, _arLabels = resLabelsToSaveMutualHorCut, _arUnits = resUnitsToSave, _mutual = 1, _cmplx = 1)
+                                    #srwl_uti_save_intens_ascii(resStokes2.arS, resStokes2.mesh, file_path1, _n_stokes = 1, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = 1, _cmplx = 1) #OC06052018
+                                    if(_char == 40): #OC13072019
+                                        srwl_uti_save_intens(resStokes2.arS, resStokes2.mesh, fp1, _n_stokes = 1, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = 1, _cmplx = 1, _form = _file_form) #OC17072021 #Mutual Intensity, Hor. Cut
+                                        #srwl_uti_save_intens_ascii(resStokes2.arS, resStokes2.mesh, fp1, _n_stokes = 1, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = 1, _cmplx = 1) #OC14082018 #Mutual Intensity, Hor. Cut
+                                    #srwl_uti_save_intens_ascii(resStokes2.to_deg_coh(), resStokes2.mesh, file_path_deg_coh1, _n_stokes = 1, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = 1, _cmplx = 0) #OC06052018
+                                    #srwl_uti_save_intens_ascii(resStokes2.to_deg_coh(), resStokes2.mesh, fpdc1, _n_stokes = 1, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = 1, _cmplx = 0) #OC14082018 #Degree of Coherence, Hor. Cut
+                                    #srwl_uti_save_intens_ascii(resStokes2.to_deg_coh(), resStokes2.mesh, fpdc1, _n_stokes = 1, _arLabels = resLabelsToSaveDC, _arUnits = resUnitsToSaveDC, _mutual = 1, _cmplx = 0) #OC12072019 #Degree of Coherence, Hor. Cut
+
+                                    #srwl_uti_save_intens_ascii(resStokes2.to_deg_coh(), resStokes2.mesh, fpdc1, _n_stokes = 1, _arLabels = resLabelsToSaveDC, _arUnits = resUnitsToSaveDC, _mutual = 2, _cmplx = 0) #OC16072019 #Degree of Coherence, Hor. Cut
+                                    #OCTEST14112020
+                                    #srwl_uti_save_intens_ascii(resStokes2.to_deg_coh(_rel_zer_tol=0), resStokes2.mesh, fpdc1, _n_stokes = 1, _arLabels = resLabelsToSaveDC, _arUnits = resUnitsToSaveDC, _mutual = 2, _cmplx = 0) #OC16072019 #Degree of Coherence, Hor. Cut
+                                    srwl_uti_save_intens(resStokes2.to_deg_coh(_rel_zer_tol=0), resStokes2.mesh, fpdc1, _n_stokes = 1, _arLabels = resLabelsToSaveDC, _arUnits = resUnitsToSaveDC, _mutual = 2, _cmplx = 0, _form = _file_form) #OC17072021 #Degree of Coherence, Hor. Cut
+
+                                if(resStokes3 is not None):
+                                    #srwl_uti_save_intens_ascii(resStokes3.arS, resStokes3.mesh, file_path2, numComp, _arLabels = resLabelsToSaveMutualVerCut, _arUnits = resUnitsToSave, _mutual = 1, _cmplx = 1)
+                                    #srwl_uti_save_intens_ascii(resStokes3.arS, resStokes3.mesh, file_path2, _n_stokes = 1, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = 1, _cmplx = 1) #OC06052018
+                                    if(_char == 40): #OC13072019
+                                        srwl_uti_save_intens(resStokes3.arS, resStokes3.mesh, fp2, _n_stokes = 1, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = 1, _cmplx = 1, _form = _file_form) #OC17072021 #Mutual Intensity, Vert. Cut
+                                        #srwl_uti_save_intens_ascii(resStokes3.arS, resStokes3.mesh, fp2, _n_stokes = 1, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = 1, _cmplx = 1) #OC14082018 #Mutual Intensity, Vert. Cut
+ 
+                                    #srwl_uti_save_intens_ascii(resStokes3.to_deg_coh(), resStokes3.mesh, file_path_deg_coh2, _n_stokes = 1, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = 1, _cmplx = 0) #OC06052018
+                                    #srwl_uti_save_intens_ascii(resStokes3.to_deg_coh(), resStokes3.mesh, fpdc2, _n_stokes = 1, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = 1, _cmplx = 0) #OC14082018 #Degree of Coherence, Vert. Cut
+                                    #srwl_uti_save_intens_ascii(resStokes3.to_deg_coh(), resStokes3.mesh, fpdc2, _n_stokes = 1, _arLabels = resLabelsToSaveDC, _arUnits = resUnitsToSaveDC, _mutual = 1, _cmplx = 0) #OC12072019 #Degree of Coherence, Vert. Cut
+
+                                    #srwl_uti_save_intens_ascii(resStokes3.to_deg_coh(), resStokes3.mesh, fpdc2, _n_stokes = 1, _arLabels = resLabelsToSaveDC, _arUnits = resUnitsToSaveDC, _mutual = 2, _cmplx = 0) #OC16072019 #Degree of Coherence, Vert. Cut
+                                    #OCTEST14112020
+                                    #srwl_uti_save_intens_ascii(resStokes3.to_deg_coh(_rel_zer_tol=0), resStokes3.mesh, fpdc2, _n_stokes = 1, _arLabels = resLabelsToSaveDC, _arUnits = resUnitsToSaveDC, _mutual = 2, _cmplx = 0) #OC16072019 #Degree of Coherence, Vert. Cut
+                                    srwl_uti_save_intens(resStokes3.to_deg_coh(_rel_zer_tol=0), resStokes3.mesh, fpdc2, _n_stokes = 1, _arLabels = resLabelsToSaveDC, _arUnits = resUnitsToSaveDC, _mutual = 2, _cmplx = 0, _form = _file_form) #OC17072021 #Degree of Coherence, Vert. Cut
+
+                            #elif(_char == 4): #OC03052018
+                            elif((_char == 4) or (_char == 5)): #OC13072019
+                                #srwl_uti_save_intens_ascii(resStokes.arS, meshRes, file_path1, numComp, _arLabels = resLabelsToSaveMutualHorCut, _arUnits = resUnitsToSave, _mutual = doMutual, _cmplx = (1 if doMutual else 0))
+                                #srwl_uti_save_intens_ascii(resStokes.arS, meshRes, file_path1, numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual, _cmplx = (1 if doMutual else 0)) #OC06052018
+                                if(_char == 4):
+                                    srwl_uti_save_intens(resStokes.arS, meshRes, fp1, numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual, _cmplx = (1 if doMutual else 0), _form = _file_form) #OC17072021 #Mutual Intensity, Hor. Cut
+                                    #srwl_uti_save_intens_ascii(resStokes.arS, meshRes, fp1, numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual, _cmplx = (1 if doMutual else 0)) #OC14082018 #Mutual Intensity, Hor. Cut
+                                #srwl_uti_save_intens_ascii(resStokes.to_deg_coh(), meshRes, file_path_deg_coh1, _n_stokes = 1, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = 1, _cmplx = 0) #OC06052018
+                                #srwl_uti_save_intens_ascii(resStokes.to_deg_coh(), meshRes, fpdc1, _n_stokes = 1, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = 1, _cmplx = 0) #OC14082018 #Degree of Coherence, Hor. Cut
+                                #srwl_uti_save_intens_ascii(resStokes.to_deg_coh(), meshRes, fpdc1, _n_stokes = 1, _arLabels = resLabelsToSaveDC, _arUnits = resUnitsToSaveDC, _mutual = 1, _cmplx = 0) #OC12072019 #Degree of Coherence, Hor. Cut
+                                #srwl_uti_save_intens_ascii(resStokes.to_deg_coh(), meshRes, fpdc1, _n_stokes = 1, _arLabels = resLabelsToSaveDC, _arUnits = resUnitsToSaveDC, _mutual = 2, _cmplx = 0) #OC16072019 #Degree of Coherence, Hor. Cut
+                                srwl_uti_save_intens(resStokes.to_deg_coh(), meshRes, fpdc1, _n_stokes = 1, _arLabels = resLabelsToSaveDC, _arUnits = resUnitsToSaveDC, _mutual = 2, _cmplx = 0, _form = _file_form) #OC17072021 #Degree of Coherence, Hor. Cut
+                                if((resStokes2 is not None) and (meshRes2 is not None)): #OC30052017
+                                    #srwl_uti_save_intens_ascii(resStokes2.arS, meshRes2, file_path2, numComp, _arLabels = resLabelsToSaveMutualVerCut, _arUnits = resUnitsToSave, _mutual = doMutual, _cmplx = (1 if doMutual else 0))
+                                    #srwl_uti_save_intens_ascii(resStokes2.arS, meshRes2, file_path2, numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual, _cmplx = (1 if doMutual else 0)) #OC06052018
+                                    if(_char == 4):
+                                        srwl_uti_save_intens(resStokes2.arS, meshRes2, fp2, numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual, _cmplx = (1 if doMutual else 0), _form = _file_form) #OC17072021  #Mutual Intensity, Vert. Cut
+                                        #srwl_uti_save_intens_ascii(resStokes2.arS, meshRes2, fp2, numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual, _cmplx = (1 if doMutual else 0)) #OC14082018  #Mutual Intensity, Vert. Cut
+                                    #srwl_uti_save_intens_ascii(resStokes2.to_deg_coh(), meshRes2, file_path_deg_coh2, _n_stokes = 1, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual, _cmplx = 0) #OC06052018
+                                    #srwl_uti_save_intens_ascii(resStokes2.to_deg_coh(), meshRes2, fpdc2, _n_stokes = 1, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual, _cmplx = 0) #OC14082018 #Degree of Coherence, Vert. Cut
+                                    #srwl_uti_save_intens_ascii(resStokes2.to_deg_coh(), meshRes2, fpdc2, _n_stokes = 1, _arLabels = resLabelsToSaveDC, _arUnits = resUnitsToSaveDC, _mutual = doMutual, _cmplx = 0) #OC12072019 #Degree of Coherence, Vert. Cut
+                                    #srwl_uti_save_intens_ascii(resStokes2.to_deg_coh(), meshRes2, fpdc2, _n_stokes = 1, _arLabels = resLabelsToSaveDC, _arUnits = resUnitsToSaveDC, _mutual = 2, _cmplx = 0) #OC16072019 #Degree of Coherence, Vert. Cut
+                                    srwl_uti_save_intens(resStokes2.to_deg_coh(), meshRes2, fpdc2, _n_stokes = 1, _arLabels = resLabelsToSaveDC, _arUnits = resUnitsToSaveDC, _mutual = 2, _cmplx = 0, _form = _file_form) #OC17072021 #Degree of Coherence, Vert. Cut
+
+                            else:
+                                #srwl_uti_save_intens_ascii(resStokes.arS, meshRes, file_path1, numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual, _cmplx = (1 if doMutual else 0))
+                                #DEBUG
+                                #print('meshRes.eStart=', meshRes.eStart, ' meshRes.eFin=', meshRes.eFin)
+                                #END DEBUG
+
+                                srwl_uti_save_intens(resStokes.arS, meshRes, fp1, numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual, _cmplx = (1 if doMutual else 0), _form = _file_form, _wfr = wfrA) #OC18062021
+                                #srwl_uti_save_intens(resStokes.arS, meshRes, fp1, numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual, _cmplx = (1 if doMutual else 0), _form = _file_form) #OC18022021
+                                #if(_file_form == 'ascii'): #OC05022021
+                                #    srwl_uti_save_intens_ascii(resStokes.arS, meshRes, fp1, numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual, _cmplx = (1 if doMutual else 0)) #OC14082018
+                                #elif(_file_form == 'hdf5'): #OC05022021
+                                #    srwl_uti_save_intens_hdf5(resStokes.arS, meshRes, fp1, numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual, _cmplx = (1 if doMutual else 0))
+                        
+                                if((resStokes2 is not None) and (meshRes2 is not None)): #OC30052017
+                                    #srwl_uti_save_intens_ascii(resStokes2.arS, meshRes2, file_path2, numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual, _cmplx = (1 if doMutual else 0))
+                                    #srwl_uti_save_intens_ascii(resStokes2.arS, meshRes2, fp2, numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual, _cmplx = (1 if doMutual else 0)) #OC14082018
+                                    srwl_uti_save_intens(resStokes2.arS, meshRes2, fp2, numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual, _cmplx = (1 if doMutual else 0), _form = _file_form) #OC17072021
+
+                            if(_pres_ang == 2): #OC24122018
+                                srwl_uti_save_intens(resStokesA.arS, meshResA, fpA, numComp, _arLabels = resLabelsToSaveA, _arUnits = resUnitsToSaveA, _mutual = 0, _cmplx = 0, _form = _file_form) #OC17072021
+                                #srwl_uti_save_intens_ascii(resStokesA.arS, meshResA, fpA, numComp, _arLabels = resLabelsToSaveA, _arUnits = resUnitsToSaveA, _mutual = 0, _cmplx = 0)
+                        
+                            #DEBUG
+                            #srwl_uti_save_intens_ascii(workStokes.arS, workStokes.mesh, _file_path, numComp, _arLabels = resLabelsToSave, _arUnits = resUnitsToSave, _mutual = doMutual)
+                            #END DEBUG
+
+                            #MR01112016: write the status of the simulation:  
+                            #srwl_uti_save_stat_wfr_emit_prop_multi_e(i + 1, total_num_of_particles, filename=log_path)
+                            srwl_uti_save_stat_wfr_emit_prop_multi_e(i + 1, actNumPartTot, filename=log_path) #OC31102021
                     
-                    #sys.exit(0)
-                    iSave = 0
+                            #print('completed (lasted', round(time.time() - t0, 6), 's)') #DEBUG
+                    
+                            #sys.exit(0)
+                            iSave = 0
+                        finally: #HG20072026
+                            if(useCSDSession): srwl.UtiGPUProc(2, sessDevCSD) #HG20072026 reopen
+        finally: #HG20072026
+            if(useCSDSession): srwl.UtiGPUProc(3, sessDevCSD) #HG20072026 close: this is what copies the CSD back to the host
 
     elif((rank == rankMaster) and (nProc > 1)): #OC02032021
     #elif((rank == 0) and (nProc > 1)):
