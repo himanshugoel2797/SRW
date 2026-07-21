@@ -1826,6 +1826,31 @@ int srTGenOptElem::SetRadRepres1D(srTRadSect1D* pRadSect1D, char CoordOrAng)
 
 //*************************************************************************
 
+//HG20072026 ///////////////////// KNOWN OPEN BUG - READ BEFORE EDITING /////////////////////
+//The SECOND-ORDER moments this produces differ between the CPU and GPU paths by ~1.3% for
+//some wavefronts, and srTDriftSpace amplifies that into a ~12% field error. Net effect:
+//a GPU beamline with an aperture followed by a drift can be several percent wrong, silently.
+//
+//Proven causally: grafting the CPU moments into a GPU-propagated wavefront immediately
+//before the drift takes the discrepancy from 1.199e-01 to 6.214e-07, matching the
+//CPU-propagated control (5.880e-07). Replacing ONLY the moments removes all of it.
+//
+//First-order moments agree exactly; only the second-order ones diverge. They are
+//<x^2> - <x>^2, so a reduction whose terms agree to float precision can still lose three
+//digits to cancellation - which is also why it is wavefront-dependent: it bites when the
+//centroid is near zero and not otherwise.
+//
+//Likely fix: accumulate the moment reduction in double, and/or compute the central
+//moments in a shifted (compensated) form instead of subtracting two large nearly-equal
+//float quantities. Dump the raw sums CPU vs GPU BEFORE the subtraction first.
+//
+//NOT the cause - ruled out by experiment, do not re-chase: the float32 prefix sum in
+//PrefixSum_GPU (srmatsta_gpu.cu). It was a genuine CPU/GPU divergence and is fixed, but
+//this discrepancy is bit-for-bit unmoved by it.
+//
+//Reproducers: tools/repro_moments_gap.py (diagnosis), tools/repro_multi_e_gpu_cpu_gap.py
+//(symptom). Full write-up: KNOWN_ISSUES.md at the repo root.
+///////////////////////////////////////////////////////////////////////////////////////////
 int srTGenOptElem::ComputeRadMoments(srTSRWRadStructAccessData* pSRWRadStructAccessData, void* pvGPU) //HG26072024
 //int srTGenOptElem::ComputeRadMoments(srTSRWRadStructAccessData* pSRWRadStructAccessData)
 {// Here Lengths are in m and Phot energy in eV!
