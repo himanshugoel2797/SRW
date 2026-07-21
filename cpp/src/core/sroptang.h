@@ -30,12 +30,19 @@ public:
 		AngY = InAngY;
 	}
 
+	int GPUImplFeatures() override { return 1; } //HG20072026 Mark propagator as GPU supporting
+
+#ifdef _OFFLOAD_GPU //HG20072026
+	int TraverseRadZXEParallel(srTSRWRadStructAccessData* pRadAccessData, void* pBufVars = 0, long pBufVarsSz = 0, TGPUUsageArg* pGPU = 0) override;
+#endif
+
 	//int PropagateRadiation(srTSRWRadStructAccessData* pRadAccessData, srTParPrecWfrPropag& ParPrecWfrPropag, srTRadResizeVect& ResBeforeAndAfterVect) //virtual
 	int PropagateRadiation(srTSRWRadStructAccessData* pRadAccessData, srTParPrecWfrPropag& ParPrecWfrPropag, srTRadResizeVect& ResBeforeAndAfterVect, void* pvGPU=0) //virtual //HG30112023
 	{
 		//return PropagateRadiationMeth_0(pRadAccessData);
 		int res = 0;
-		if(res = PropagateRadiationMeth_0(pRadAccessData)) return res;
+		//if(res = PropagateRadiationMeth_0(pRadAccessData)) return res;
+		if(res = PropagateRadiationMeth_0(pRadAccessData, pvGPU)) return res; //HG20072026 pvGPU was dropped here, so even with the kernel in place the element would have run on CPU
 
 		if(res = PropagateWaveFrontRadius(pRadAccessData)) return res; //because this is the same for all E slices!
 		if(res = PropagateRadMoments(pRadAccessData, 0)) return res;
@@ -60,8 +67,12 @@ public:
 		return 0;
 	}
 
+#ifdef __CUDA_ARCH__ //HG20072026
+	GPU_PORTABLE void RadPointModifierPortable(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBuf = 0)
+#else
 	void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs, void* pBufVars=0) //OC29082019
 	//void RadPointModifier(srTEXZ& EXZ, srTEFieldPtrs& EPtrs)
+#endif
 	{// e in eV; Length in m !!!
 	 // Operates on Coordinates side !!!
 		double twoPi_d_Lambda = (5.06773065e+06)*EXZ.e;

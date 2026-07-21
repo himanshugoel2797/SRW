@@ -202,6 +202,7 @@ if(USE_CUDA) #HG01082025
         ${core_source_files}
         ../src/core/srradstr_gpu.cu
         ../src/core/sroptelm_gpu.cu
+        ../src/core/sroptang_gpu.cu
         ../src/core/sroptapt_gpu.cu
         ../src/core/sroptdrf_gpu.cu
         ../src/core/sroptfoc_gpu.cu
