@@ -398,7 +398,13 @@ __global__ void ExtractSingleElecMutualIntensityVsXZ_Kernel(const float* __restr
 	long iter = iter0;
 
 	if (i0 > nxnz) return;
-	if (it0_0 > nxnz / 2) return;
+	//HG20072026 was `it0_0 > nxnz / 2`, which for even nxnz admits it0 == nxnz/2 -- one
+	//value too many. The fold below maps rows [nxnz/2, nxnz-1] onto [0, nxnz/2-1], so
+	//it0 == nxnz/2 re-covers rows nxnz/2-1 and nxnz/2 that it0 == nxnz/2-1 already
+	//covered. Because the update is a read-modify-write running average, those two rows
+	//had the electron applied TWICE and came out wrong -- not merely duplicated writes of
+	//the same value. Correct bound is (nxnz-1)/2, which also handles odd nxnz.
+	if (it0_0 > (nxnz - 1) / 2) return;
 
 	for (int it0 = it0_0 * itPerBlk; it0 < it0_0 * itPerBlk + itPerBlk; it0++)
 	{
@@ -408,9 +414,19 @@ __global__ void ExtractSingleElecMutualIntensityVsXZ_Kernel(const float* __restr
 		{
 			it = nxnz - it0 - 1;
 			i = i0 - (it0 + 1);
+			//HG20072026 For ODD nxnz the middle row is its own mirror, so the folded branch
+			//would re-cover the row the unfolded branch of this same it0 already did.
+			if (it <= it0) return;
 		}
 
-		if (it >= itEnd) {
+		//HG20072026 was `it >= itEnd`, i.e. EXCLUSIVE, while the CPU loop this mirrors is
+		//INCLUSIVE: `for(long long it=itStart; it<=itEnd; it++)` (srradmnp.cpp:2161) with
+		//itEnd defaulting to nxnz-1 (srradmnp.cpp:1643). The GPU therefore never computed
+		//it == nxnz-1 and silently dropped the last row (and, via the Hermitian mirror, the
+		//last column) of the CSD -- 2*nxnz-1 elements left at whatever the host buffer held.
+		//Invisible on a centred Gaussian test beam, where the field at the mesh edge is ~0;
+		//on a real undulator source at 16x16 it was 86% of peak.
+		if (it > itEnd) {
 			return;
 		}
 
@@ -603,7 +619,11 @@ int srTRadGenManip::ExtractSingleElecMutualIntensityVsXZ_GPU(float* pEx, float* 
 
 	pEx = CAuxGPU::ToDevice(pGPU, pEx, nxnz*2, CAuxGPU::DISCARD_HOST);
 	pEz = CAuxGPU::ToDevice(pGPU, pEz, nxnz*2, CAuxGPU::DISCARD_HOST);
-	pMI0 = CAuxGPU::ToDevice(pGPU, pMI0, (itEnd - itStart)*nxnz*2);
+	//HG20072026 (itEnd - itStart + 1), not (itEnd - itStart): itEnd is an INCLUSIVE bound
+	//(srradmnp.cpp:1643 sets it to nxnz-1 and the CPU loop runs it<=itEnd), so the region
+	//spans itEnd-itStart+1 rows. Under-mapping by one row meant the last row of the host
+	//CSD was never registered and so never received results on copy-back.
+	pMI0 = CAuxGPU::ToDevice(pGPU, pMI0, (itEnd - itStart + 1)*nxnz*2);
 	CAuxGPU::EnsureDeviceMemoryReady(pGPU, pEx, pEz, pMI0); //HG31072024 Bug-fix
 
 	int idx = ((PolCom + 5) << 4) | ((EhOK & 1) << 3) | ((EvOK & 1) << 2);
