@@ -34,6 +34,13 @@
 #endif
 //#include <time.h> //Added by S.Yakubov (for profiling?) at parallelizing SRW via OpenMP
 
+#include <chrono> //HG20072026 host-side phase profiling (SRW_HOST_PROF=1)
+namespace { //HG20072026
+	inline bool srLibProfOn() { static const bool on = (getenv("SRW_HOST_PROF") != 0); return on; }
+	inline double srLibProfNow() { return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
+	inline void srLibProfRep(const char* tag, double t0, double t1) { if(srLibProfOn()) { fprintf(stderr, "SRW_HOST_PROF %-34s %9.3f ms\n", tag, (t1-t0)*1e3); fflush(stderr); } }
+}
+
 //-------------------------------------------------------------------------
 // Global Variables (used in SRW/SRWLIB, some may be obsolete)
 //-------------------------------------------------------------------------
@@ -470,6 +477,7 @@ EXP int CALL srwlCalcElecFieldSR(SRWLWfr* pWfr, SRWLPrtTrj* pTrj, SRWLMagFldC* p
 
 	try
 	{
+		double tl0 = srLibProfNow(); //HG20072026
 		if(!trjIsDefined) pTrj = SetupTrjFromMagFld(&(pWfr->partBeam.partStatMom1), pMagFld, precPar); //OC23022020
 		//{
 		//	pTrj = new SRWLPrtTrj();
@@ -505,12 +513,18 @@ EXP int CALL srwlCalcElecFieldSR(SRWLWfr* pWfr, SRWLPrtTrj* pTrj, SRWLMagFldC* p
 		//srwlCalcPartTraj's internal UtiWarnCheck() would otherwise throw that warning mid-setup and abort
 		//the whole computation (and, before the null guard below, crash on cleanup).
 		if(getenv("SRW_RADINT_GPU_VERBOSE") != 0) { fprintf(stderr, "srwlCalcElecFieldSR: arParGPU=%p nPrecPar=%d\n", (void*)arParGPU, nPrecPar); fflush(stderr); }
+		double tlg = srLibProfNow(); srLibProfRep("SetupTrjFromMagFld", tl0, tlg); //HG20072026
 		srwlUtiGPUProc(1, arParGPU);
+		double tlh = srLibProfNow(); srLibProfRep("srwlUtiGPUProc(1) init", tlg, tlh); //HG20072026
+
+		double tl1 = srLibProfNow(); srLibProfRep("SetupTrjFromMagFld+GPUProc", tl0, tl1); //HG20072026
 
 		srTTrjDat trjData(pTrj); //this calculates interpolating structure required for SR calculation
 		trjData.EbmDat.SetCurrentAndMom2(pWfr->partBeam.Iavg, pWfr->partBeam.arStatMom2, 21);
+		double tl2 = srLibProfNow(); srLibProfRep("srTTrjDat ctor", tl1, tl2); //HG20072026
 
 		srTSRWRadStructAccessData wfr(pWfr, &trjData, precPar); //ATTENTION: this may request for changing numbers of points in the wavefront mesh
+		double tl3 = srLibProfNow(); srLibProfRep("srTSRWRadStructAccessData ctor", tl2, tl3); //HG20072026
 
 		srTWfrSmp auxSmp;
 		wfr.SetObsParamFromWfr(auxSmp);
@@ -524,8 +538,11 @@ EXP int CALL srwlCalcElecFieldSR(SRWLWfr* pWfr, SRWLPrtTrj* pTrj, SRWLMagFldC* p
 		srTParPrecElecFld precElecFld((int)precPar[0], precPar[1], precPar[2], precPar[3], precPar[6], false, calcTerminTerms);
 
         srTRadInt RadInt;
+		double tl4 = srLibProfNow(); //HG20072026
 		RadInt.ComputeElectricFieldFreqDomain(&trjData, &auxSmp, &precElecFld, &wfr, 0, (void*)arParGPU); //HG20072026 added arParGPU (enables the GPU Auto1 path; 0 = CPU as before)
+		double tl5 = srLibProfNow(); srLibProfRep("ComputeElectricFieldFreqDomain", tl4, tl5); //HG20072026
 		wfr.OutSRWRadPtrs(*pWfr);
+		double tl6 = srLibProfNow(); srLibProfRep("OutSRWRadPtrs", tl5, tl6); //HG20072026
 		UtiWarnCheck();
 	}
 	catch(int erNo)

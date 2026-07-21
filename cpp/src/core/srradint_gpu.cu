@@ -49,6 +49,13 @@
 #include "srtrjdat.h"
 #include "auxgpu.h"
 
+#include <chrono> //HG20072026 host-side phase profiling (SRW_HOST_PROF=1)
+namespace { //HG20072026
+	inline bool srGpuProfOn() { static const bool on = (getenv("SRW_HOST_PROF") != 0); return on; }
+	inline double srGpuProfNow() { return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
+	inline void srGpuProfRep(const char* tag, double t0, double t1) { if(srGpuProfOn()) { fprintf(stderr, "SRW_HOST_PROF   %-32s %9.3f ms\n", tag, (t1-t0)*1e3); fflush(stderr); } }
+}
+
 //*************************************************************************
 // Status codes per observation point
 #define SRRADINT_GPU_ST_CONVERGED   0
@@ -443,11 +450,14 @@ int srTRadInt::ComputeTotalRadDistrDirectOutGPU(srTSRWRadStructAccessData& SRWRa
 #undef SRRADINT_GPU_REFUSE
 
 	// ---- host trajectory grid (pointwise from the interpolating structure) ----
+	double tg0 = srGpuProfNow(); //HG20072026
 	double *hTraj = new double[nGrid*8];
 	if(hTraj == 0) return MEMORY_ALLOCATION_FAILURE;
 	double *hBtx = hTraj, *hBtz = hTraj + nGrid, *hX = hTraj + 2*nGrid, *hZ = hTraj + 3*nGrid;
 	double *hIntBtxE2 = hTraj + 4*nGrid, *hIntBtzE2 = hTraj + 5*nGrid, *hBx = hTraj + 6*nGrid, *hBz = hTraj + 7*nGrid;
 	TrjDatPtr->CompTotalTrjData(sIntegStart, sIntegFin, nGrid, hBtx, hBtz, hX, hZ, hIntBtxE2, hIntBtzE2, hBx, hBz);
+	double tg1 = srGpuProfNow(); //HG20072026
+	srGpuProfRep("gpu: CompTotalTrjData prefill", tg0, tg1); //HG20072026
 
 	// ---- kernel arguments ----
 	SRadIntAuto1GPUArgs p;
@@ -486,6 +496,7 @@ int srTRadInt::ComputeTotalRadDistrDirectOutGPU(srTSRWRadStructAccessData& SRWRa
 	int result = 0;
 	float *hEx = 0, *hEz = 0; double *hSqNorm = 0; unsigned char *hStatus = 0;
 
+	double tgA = srGpuProfNow(); //HG20072026
 	do {
 		if((cuErr = cudaMalloc(&dTraj, sizeof(double)*nGrid*6)) != cudaSuccess) break;
 		if((cuErr = cudaMalloc(&dEx, sizeof(float)*2*nPts)) != cudaSuccess) break;
@@ -507,11 +518,13 @@ int srTRadInt::ComputeTotalRadDistrDirectOutGPU(srTSRWRadStructAccessData& SRWRa
 
 		int threads = 128;
 		long long blocks = (nPts + threads - 1)/threads;
+		double tgB = srGpuProfNow(); srGpuProfRep("gpu: malloc+upload traj", tgA, tgB); //HG20072026
 
 		// ---- pass A: per-point relative convergence ----
 		RadIntAuto1Kernel<<<(unsigned int)blocks, threads>>>(p);
 		if((cuErr = cudaGetLastError()) != cudaSuccess) break;
 		if((cuErr = cudaDeviceSynchronize()) != cudaSuccess) break;
+		double tgC = srGpuProfNow(); srGpuProfRep("gpu: passA kernel+sync", tgB, tgC); //HG20072026
 
 		hSqNorm = new double[nPts];
 		hStatus = new unsigned char[nPts];
@@ -545,10 +558,12 @@ int srTRadInt::ComputeTotalRadDistrDirectOutGPU(srTSRWRadStructAccessData& SRWRa
 				if(hStatus[i] == SRRADINT_GPU_ST_NEED_PASS_B) hStatus[i] = SRRADINT_GPU_ST_CPU;
 		}
 
+		double tgD = srGpuProfNow(); srGpuProfRep("gpu: passA dl+reduce+passB", tgC, tgD); //HG20072026
 		hEx = new float[2*nPts];
 		hEz = new float[2*nPts];
 		if((cuErr = cudaMemcpy(hEx, dEx, sizeof(float)*2*nPts, cudaMemcpyDeviceToHost)) != cudaSuccess) break;
 		if((cuErr = cudaMemcpy(hEz, dEz, sizeof(float)*2*nPts, cudaMemcpyDeviceToHost)) != cudaSuccess) break;
+		double tgE = srGpuProfNow(); srGpuProfRep("gpu: download field", tgD, tgE); //HG20072026
 
 		// ---- scatter into the wavefront and CPU-recompute flagged points ----
 		long long PerX = DistrInfoDat.nLamb << 1;
@@ -601,8 +616,12 @@ int srTRadInt::ComputeTotalRadDistrDirectOutGPU(srTSRWRadStructAccessData& SRWRa
 			if(result) break;
 		}
 
+		double tgF = srGpuProfNow(); srGpuProfRep("gpu: scatter+cpu fallback", tgE, tgF); //HG20072026
+		if(srGpuProfOn()) { fprintf(stderr, "SRW_HOST_PROF   nPts=%lld nCPUFallback=%lld\n", nPts, nCPUFallback); fflush(stderr); } //HG20072026
+
 		if((result == 0) && (FinalResAreSymOverZ || FinalResAreSymOverX))
 			FillInSymPartsOfResults(FinalResAreSymOverX, FinalResAreSymOverZ, SRWRadStructAccessData);
+		double tgG = srGpuProfNow(); srGpuProfRep("gpu: FillInSymPartsOfResults", tgF, tgG); //HG20072026
 
 		if(getenv("SRW_RADINT_GPU_VERBOSE") != 0)
 		{

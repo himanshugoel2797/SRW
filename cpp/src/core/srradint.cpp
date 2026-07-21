@@ -21,6 +21,14 @@
 #include "srmlttsk.h"
 #include "sroptelm.h"
 #include "srerror.h"
+#include <chrono> //HG20072026 host-side phase profiling (SRW_HOST_PROF=1)
+
+//HG20072026 env-gated host-side phase timer. Zero cost when SRW_HOST_PROF is unset.
+namespace { //HG20072026
+	inline bool srHostProfOn() { static const bool on = (getenv("SRW_HOST_PROF") != 0); return on; }
+	inline double srHostProfNow() { return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
+	inline void srHostProfRep(const char* tag, double t0, double t1) { if(srHostProfOn()) { fprintf(stderr, "SRW_HOST_PROF %-34s %9.3f ms\n", tag, (t1-t0)*1e3); fflush(stderr); } }
+}
 
 //*************************************************************************
 
@@ -290,16 +298,19 @@ int srTRadInt::ComputeTotalRadDistrLoops()
 int srTRadInt::ComputeTotalRadDistrDirectOut(srTSRWRadStructAccessData& SRWRadStructAccessData, char showProgressInd)
 {
 	int result = 0;
+	double tq0 = srHostProfNow(); //HG20072026
 	EstimateAbsoluteTolerance();
 	ProbablyTheSameLoop = 1;
 
 	SRWRadStructAccessData.UnderSamplingX = SRWRadStructAccessData.UnderSamplingZ = 1; //OC290805
 	DeallocateMemForRadDistr(); // Do not remove this
+	double tq1 = srHostProfNow(); srHostProfRep("  radint: dealloc prologue", tq0, tq1); //HG20072026
 
 	//if(result = pSend->InitRadDistrOutFormat3(SRWRadStructAccessData, DistrInfoDat)) return result;
 	//?????
 
 	if(result = SetupRadCompStructures()) return result;
+	double tq2 = srHostProfNow(); srHostProfRep("  radint: SetupRadCompStructures", tq1, tq2); //HG20072026
 	if(DistrInfoDat.ShowPhaseOnly) return ScanPhase();
 
 	double StepLambda = (DistrInfoDat.nLamb > 1)? (DistrInfoDat.LambEnd - DistrInfoDat.LambStart)/(DistrInfoDat.nLamb - 1) : 0.;
@@ -3577,13 +3588,28 @@ void srTRadInt::ComputeElectricFieldFreqDomain(srTTrjDat* pTrjDat, srTWfrSmp* pW
 	SetPrecParams(pPrecElecFld);
 
 	if(res = CheckInputConsistency()) throw res;
+	double tp0 = srHostProfNow(); //HG20072026
 	if(res = ComputeTotalRadDistrDirectOut(*pWfr, showProgressInd)) throw res;
+	double tp1 = srHostProfNow(); //HG20072026
 
 	srTGenOptElem GenOptElem;
-	if(res = GenOptElem.ComputeRadMoments(pWfr)) throw res;
+	//HG20072026 Hand the GPU usage params to ComputeRadMoments. This post-integral moment
+	//computation is ~80% of the host residual of a GPU source-field call at 1024^2 (47.6 of
+	//59.5 ms measured): TreatStronglyOscillatingTerm ('r' and 'a'), FindIntensityLimitsInds
+	//and the moment sum loop each walk the whole mesh on the CPU. All four already have GPU
+	//implementations, gated on this argument -- the propagation path passes it, this path
+	//never did, so the field was being pulled back to the host and re-walked scalar.
+	//On a build without CUDA (or with the GPU disabled) CAuxGPU::GPUEnabled() is false and
+	//every one of them falls back to the unchanged CPU code, so the CPU path is unaffected.
+	if(res = GenOptElem.ComputeRadMoments(pWfr, m_pvGPUUsageParams)) throw res;
+	double tp2 = srHostProfNow(); //HG20072026
 
 	//setting the average photon energy:
 	pWfr->SetAvgPhotEnergyFromLimits();
+	double tp3 = srHostProfNow(); //HG20072026
+	srHostProfRep("ComputeTotalRadDistrDirectOut", tp0, tp1); //HG20072026
+	srHostProfRep("ComputeRadMoments", tp1, tp2); //HG20072026
+	srHostProfRep("SetAvgPhotEnergyFromLimits", tp2, tp3); //HG20072026
 }
 
 //*************************************************************************
