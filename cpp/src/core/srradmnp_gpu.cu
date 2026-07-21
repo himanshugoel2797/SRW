@@ -18,6 +18,7 @@
 #include <string>
 #include <assert.h>
 #include <math.h>
+#include <cublas_v2.h> //HG20072026 for the rank-K CSD update (cublasCherk)
 #include "srradmnp.h"
 #include "gmmeth.h"
 
@@ -564,6 +565,286 @@ __global__ void ExtractSingleElecMutualIntensityVsXZ_Kernel(const float* __restr
 	}
 }
 
+//HG20072026 ---------------------------------------------------------------------------
+// Rank-K batched CSD accumulation.
+//
+// The rank-1 kernel below is a running-average read-modify-write over the whole
+// (nxnz x nxnz) CSD once per macro-electron: ~1 FLOP/byte, measured at 69% of the
+// A100's memory bandwidth, i.e. at the hardware limit. Buffering K electrons as the
+// columns of an N x K matrix A and applying
+//
+//     MI <- (MI*iter0 + sum_g w_g A_g A_g^H) / (iter0 + K)
+//
+// with one cuBLAS cherk per weight group touches the CSD ONCE per K electrons instead
+// of K times. The batching is exact, not an approximation: a sequential running mean
+// over K electrons equals the batched form identically (see tools/csd_rank_k_proto.py).
+//
+// Every PolCom is a sum of at most two rank-1 forms +-w * a a^H with a a fixed complex
+// combination of (Ex, Ez) -- e.g. s0/total is Ex Ex^H + Ez Ez^H (two positive columns),
+// s1 is Ex Ex^H - Ez Ez^H (one positive, one negative). The decomposition for all 12
+// PolCom cases is verified against the CPU switch formulas in
+// .agents/rankk/scratch/check_colspec.py (max deviation 1.8e-15 in double).
+//
+// Storage convention: the CPU/GPU rank-1 code writes MI[it*2N + 2i] for i <= it with
+// value E_i * conj(E_it). Viewed as a column-major complex N x N matrix that is element
+// (row=i, col=it) of the UPPER triangle with value (A A^H)_{i,it} -- exactly what
+// cublasCherk(CUBLAS_FILL_MODE_UPPER, CUBLAS_OP_N) computes, over exactly the same
+// elements (the lower triangle and the diagonal imaginary parts are treated the same
+// way by both: untouched resp. zero).
+//
+// The batch state is file-static: the buffered columns must outlive the individual
+// srTRadGenManip instances (one is constructed per CalcIntFromElecField call), living
+// in the same persistent GPU session as the CSD itself. The state is only reachable
+// when a session is open and the caller requested batching (TGPUUsageArg::csdBatchK
+// > 1, wired from Python as srwl.CalcIntFromElecField(..., [dev, K])); any pending
+// partial batch MUST be applied before the session closes, exposed to Python as
+// srwl.UtiGPUProc(4, dev). Failure to flush loses at most the last K-1 electrons on
+// an abnormal exit -- on the normal path srwl_wfr_emit_prop_multi_e flushes before
+// every session close (both the periodic-save close and the final one).
+//---------------------------------------------------------------------------------------
+
+struct TCSDRankKState
+{
+	bool active;       //column buffers allocated, spec fields valid
+	bool disabled;     //unrecoverable failure -> rank-1 path for the rest of the process
+	long N;            //nxnz
+	int K;             //electrons per batch
+	int nPend;         //electrons currently buffered
+	int polCom;
+	bool ehOK, evOK;
+	bool additive;     //iter < 0 mode: MI += sum (no running average)
+	long iter0;        //electrons already folded into the device CSD (averaging mode)
+	int nPosPerElec, nNegPerElec; //columns appended per electron, per weight group
+	float wPos, wNeg;  //weight magnitudes of the two groups
+	float2 *dApos, *dAneg; //device column buffers, column-major N x (K*nPerElec)
+	float *hostMI;     //host pointer of the CSD buffer (the key into the CAuxGPU map)
+	cublasHandle_t blas;
+	bool blasInit;
+};
+static TCSDRankKState gCSDRankK = {};
+
+//Per-electron column specification: column a = cEx*Ex + cEz*Ez, contribution
+//sign*w * a a^H. Returns false for a PolCom this path does not handle.
+static bool CSDRankKColumnSpec(int PolCom, float2* cEx, float2* cEz, int* grp, int& nPos, int& nNeg, float& wPos, float& wNeg)
+{
+	auto C = [](float re, float im) { float2 c; c.x = re; c.y = im; return c; };
+	nPos = 1; nNeg = 0; wPos = 1.f; wNeg = 1.f;
+	grp[0] = 0; grp[1] = 0;
+	switch(PolCom)
+	{
+		case 0: cEx[0] = C(1, 0); cEz[0] = C(0, 0); break; //Lin. Hor.
+		case 1: cEx[0] = C(0, 0); cEz[0] = C(1, 0); break; //Lin. Vert.
+		case 2: cEx[0] = C(1, 0); cEz[0] = C(1, 0); wPos = 0.5f; break; //Lin. 45
+		case 3: cEx[0] = C(1, 0); cEz[0] = C(-1, 0); wPos = 0.5f; break; //Lin. 135
+		case 5: cEx[0] = C(1, 0); cEz[0] = C(0, 1); wPos = 0.5f; break; //Circ. Left: Ex + i*Ez
+		case 4: cEx[0] = C(1, 0); cEz[0] = C(0, -1); wPos = 0.5f; break; //Circ. Right: Ex - i*Ez
+		case -2: //s1 = Ex Ex^H - Ez Ez^H
+			cEx[0] = C(1, 0); cEz[0] = C(0, 0);
+			cEx[1] = C(0, 0); cEz[1] = C(1, 0); grp[1] = 1; nNeg = 1; break;
+		case -3: //s2 = 0.5[(Ex+Ez)(...)^H - (Ex-Ez)(...)^H]
+			cEx[0] = C(1, 0); cEz[0] = C(1, 0); wPos = 0.5f;
+			cEx[1] = C(1, 0); cEz[1] = C(-1, 0); grp[1] = 1; nNeg = 1; wNeg = 0.5f; break;
+		case -4: //s3 = 0.5[(Ex-iEz)(...)^H - (Ex+iEz)(...)^H]
+			cEx[0] = C(1, 0); cEz[0] = C(0, -1); wPos = 0.5f;
+			cEx[1] = C(1, 0); cEz[1] = C(0, 1); grp[1] = 1; nNeg = 1; wNeg = 0.5f; break;
+		case -1: case -5: case 6: default: //s0 / total (the kernel's default is also "total")
+			cEx[0] = C(1, 0); cEz[0] = C(0, 0);
+			cEx[1] = C(0, 0); cEz[1] = C(1, 0); nPos = 2; break;
+	}
+	return true;
+}
+
+//Gathers one electron's field into up to two contiguous complex columns.
+//The E arrays are strided by PerX floats per transverse point (PerX = 2*ne).
+__global__ void CSDRankKAppend_Kernel(const float* __restrict__ pEx, const float* __restrict__ pEz,
+	long N, long PerX, bool ehOK, bool evOK,
+	float2 cEx0, float2 cEz0, float2* __restrict__ dst0,
+	float2 cEx1, float2 cEz1, float2* __restrict__ dst1)
+{
+	long i = (long)blockIdx.x * blockDim.x + threadIdx.x;
+	if(i >= N) return;
+	float exRe = 0.f, exIm = 0.f, ezRe = 0.f, ezIm = 0.f;
+	if(ehOK) { exRe = pEx[i*PerX]; exIm = pEx[i*PerX + 1]; }
+	if(evOK) { ezRe = pEz[i*PerX]; ezIm = pEz[i*PerX + 1]; }
+	float2 v;
+	v.x = cEx0.x*exRe - cEx0.y*exIm + cEz0.x*ezRe - cEz0.y*ezIm;
+	v.y = cEx0.x*exIm + cEx0.y*exRe + cEz0.x*ezIm + cEz0.y*ezRe;
+	dst0[i] = v;
+	if(dst1 != 0)
+	{
+		v.x = cEx1.x*exRe - cEx1.y*exIm + cEz1.x*ezRe - cEz1.y*ezIm;
+		v.y = cEx1.x*exIm + cEx1.y*exRe + cEz1.x*ezIm + cEz1.y*ezRe;
+		dst1[i] = v;
+	}
+}
+
+int srTRadGenManip::FlushMutualIntensityRankK_GPU(TGPUUsageArg* pGPU, bool teardown)
+{
+	TCSDRankKState& S = gCSDRankK;
+	int res = 0;
+	if(S.active && (S.nPend > 0))
+	{
+		if(!S.blasInit)
+		{
+			if(cublasCreate(&S.blas) != CUBLAS_STATUS_SUCCESS)
+			{
+				printf("SRW rank-K CSD: cublasCreate FAILED; %d buffered electron(s) LOST\n", S.nPend);
+				S.disabled = true; res = -1;
+			}
+			else
+			{
+				S.blasInit = true;
+				cublasSetMathMode(S.blas, CUBLAS_DEFAULT_MATH); //no TF32: match fp32 rank-1 rounding class
+			}
+		}
+		if(res == 0)
+		{
+			float* devMI = CAuxGPU::ToDevice(pGPU, S.hostMI, ((size_t)S.N)*((size_t)S.N)*2);
+			if(devMI == 0)
+			{
+				printf("SRW rank-K CSD: CSD buffer could not be mapped to the device; %d buffered electron(s) LOST\n", S.nPend);
+				res = -1;
+			}
+			else
+			{
+				CAuxGPU::EnsureDeviceMemoryReady(pGPU, devMI);
+				float alphaP, alphaN, beta;
+				if(S.additive) { alphaP = S.wPos; alphaN = -S.wNeg; beta = 1.f; }
+				else
+				{	//Running average: MI <- (MI*iter0 + sum w a a^H)/(iter0 + nPend).
+					//iter0 == 0 gives beta == 0, i.e. plain overwrite -- same semantics as
+					//the rank-1 kernel's iter == 0 case (cherk does not read C when beta==0).
+					double denom = (double)S.iter0 + (double)S.nPend;
+					alphaP = (float)(S.wPos/denom);
+					alphaN = (float)(-S.wNeg/denom);
+					beta = (float)(((double)S.iter0)/denom);
+				}
+				int kPos = S.nPend*S.nPosPerElec, kNeg = S.nPend*S.nNegPerElec;
+				cublasStatus_t st = CUBLAS_STATUS_SUCCESS;
+				if(kPos > 0) st = cublasCherk(S.blas, CUBLAS_FILL_MODE_UPPER, CUBLAS_OP_N, (int)S.N, kPos, &alphaP, (const cuComplex*)S.dApos, (int)S.N, &beta, (cuComplex*)devMI, (int)S.N);
+				if((st == CUBLAS_STATUS_SUCCESS) && (kNeg > 0))
+				{
+					float one = 1.f; //the positive-group call above already applied beta
+					st = cublasCherk(S.blas, CUBLAS_FILL_MODE_UPPER, CUBLAS_OP_N, (int)S.N, kNeg, &alphaN, (const cuComplex*)S.dAneg, (int)S.N, &one, (cuComplex*)devMI, (int)S.N);
+				}
+				if(st != CUBLAS_STATUS_SUCCESS)
+				{
+					printf("SRW rank-K CSD: cublasCherk FAILED (status %d); %d buffered electron(s) LOST\n", (int)st, S.nPend);
+					S.disabled = true; res = -1;
+				}
+				else
+				{
+					CAuxGPU::MarkUpdated(pGPU, devMI, CAuxGPU::DEVICE);
+					if(!S.additive) S.iter0 += S.nPend;
+					S.nPend = 0;
+				}
+			}
+		}
+	}
+	if(teardown && S.active)
+	{
+		if(S.dApos != 0) cudaFree(S.dApos);
+		if(S.dAneg != 0) cudaFree(S.dAneg);
+		S.dApos = 0; S.dAneg = 0;
+		S.nPend = 0;
+		S.active = false;
+		//iter0 is deliberately kept: the electrons already applied to the (still
+		//session-resident) CSD remain applied; a later re-init picks iter0 up from
+		//the incoming iter index again.
+	}
+	return res;
+}
+
+int srTRadGenManip::AppendMutualIntensityRankK_GPU(float* pEx, float* pEz, float* pMI0, long nxnz, long PerX, long iter, int PolCom, bool EhOK, bool EvOK, int batchK, TGPUUsageArg* pGPU)
+{
+	TCSDRankKState& S = gCSDRankK;
+	if(S.disabled) return -1; //caller falls back to the rank-1 path
+	if(batchK < 2) return -1;
+	bool additive = (iter < 0);
+
+	float2 cEx[2], cEz[2]; int grp[2]; int nPos = 0, nNeg = 0; float wPos = 1.f, wNeg = 1.f;
+	if(!CSDRankKColumnSpec(PolCom, cEx, cEz, grp, nPos, nNeg, wPos, wNeg)) return -1;
+
+	//Any change of geometry/mode/output buffer: apply what is buffered, drop the buffers,
+	//re-initialize below. (In production none of this changes within a session.)
+	if(S.active && ((S.N != nxnz) || (S.polCom != PolCom) || (S.ehOK != EhOK) || (S.evOK != EvOK)
+		|| (S.additive != additive) || (S.hostMI != pMI0) || (S.K != batchK)))
+	{
+		FlushMutualIntensityRankK_GPU(pGPU, true);
+		if(S.disabled) return -1;
+	}
+	if(!S.active)
+	{
+		size_t colBytes = ((size_t)nxnz)*sizeof(float2);
+		S.dApos = 0; S.dAneg = 0;
+		if(cudaMalloc((void**)&S.dApos, colBytes*batchK*nPos) != cudaSuccess) S.dApos = 0;
+		if((S.dApos != 0) && (nNeg > 0))
+		{
+			if(cudaMalloc((void**)&S.dAneg, colBytes*batchK*nNeg) != cudaSuccess)
+			{
+				cudaFree(S.dApos); S.dApos = 0;
+			}
+		}
+		if(S.dApos == 0)
+		{	//Not enough device memory for the column buffers: degrade gracefully to the
+			//rank-1 path (which allocates nothing beyond what is already resident) for
+			//the rest of the process, rather than failing.
+			printf("SRW rank-K CSD: column buffer allocation failed (N=%ld K=%d); using the rank-1 path\n", nxnz, batchK);
+			S.disabled = true;
+			return -1;
+		}
+		S.N = nxnz; S.K = batchK; S.nPend = 0;
+		S.polCom = PolCom; S.ehOK = EhOK; S.evOK = EvOK; S.additive = additive;
+		S.iter0 = additive ? 0 : iter;
+		S.nPosPerElec = nPos; S.nNegPerElec = nNeg; S.wPos = wPos; S.wNeg = wNeg;
+		S.hostMI = pMI0;
+		S.active = true;
+	}
+	//Averaging mode keeps a strict electron count: the device CSD holds the mean over
+	//iter0 electrons and the buffers hold nPend more, so the incoming index must be
+	//iter0 + nPend. Anything else (a restarted accumulation, a resumed run) applies
+	//what is buffered and restarts the count from the caller's index -- for a restart
+	//at iter == 0 the next flush then has beta == 0 and overwrites, exactly like the
+	//rank-1 kernel's iter == 0 case.
+	if(!additive && (iter != S.iter0 + S.nPend))
+	{
+		if(FlushMutualIntensityRankK_GPU(pGPU, false)) return -1;
+		S.iter0 = iter;
+	}
+
+	float* devEx = 0; float* devEz = 0;
+	if(EhOK && (pEx != 0)) devEx = CAuxGPU::ToDevice(pGPU, pEx, nxnz*2, CAuxGPU::DISCARD_HOST);
+	if(EvOK && (pEz != 0)) devEz = CAuxGPU::ToDevice(pGPU, pEz, nxnz*2, CAuxGPU::DISCARD_HOST);
+	CAuxGPU::EnsureDeviceMemoryReady(pGPU, devEx, devEz);
+	bool ehOKdev = (devEx != 0), evOKdev = (devEz != 0);
+
+	//Column destinations for this electron, in appending order (pos group first).
+	float2* dst[2] = { 0, 0 };
+	int iPos = S.nPend*S.nPosPerElec, iNeg = S.nPend*S.nNegPerElec;
+	int nCols = nPos + nNeg;
+	for(int c = 0; c < nCols; c++)
+	{
+		if(grp[c] == 0) { dst[c] = S.dApos + ((size_t)(iPos++))*S.N; }
+		else { dst[c] = S.dAneg + ((size_t)(iNeg++))*S.N; }
+	}
+
+	dim3 threads(256), blocks((unsigned)((nxnz + 255)/256));
+	CSDRankKAppend_Kernel<<<blocks, threads>>>(devEx, devEz, nxnz, PerX, ehOKdev, evOKdev,
+		cEx[0], cEz[0], dst[0], cEx[1], cEz[1], (nCols > 1) ? dst[1] : 0);
+
+	CAuxGPU::MarkUpdatedBatch(pGPU, CAuxGPU::DEVICE, devEx, devEz);
+	if(devEx != 0) CAuxGPU::ToHostAndFree(pGPU, devEx);
+	if(devEz != 0) CAuxGPU::ToHostAndFree(pGPU, devEz);
+
+	S.nPend++;
+	if(S.nPend >= S.K)
+	{
+		if(FlushMutualIntensityRankK_GPU(pGPU, false)) return -1;
+	}
+	return 0;
+}
+//HG20072026 --------------------------------------------------------------------------- (end rank-K)
+
 //template <int PolCom, int gt1_iter>
 //int ExtractSingleElecMutualIntensityVsXZ_GPUSub(float* pEx, float* pEz, float* pMI0, long nx, long nz, long ne, long itStart, long itEnd, long PerX, long iter, int PolCom, bool EhOK, bool EvOK, TGPUUsageArg* pGPU)
 int srTRadGenManip::ExtractSingleElecMutualIntensityVsXZ_GPU(float* pEx, float* pEz, float* pMI0, long nx, long nz, long ne, long itStart, long itEnd, long PerX, long iter, int PolCom, bool EhOK, bool EvOK, TGPUUsageArg* pGPU)
@@ -611,6 +892,16 @@ int srTRadGenManip::ExtractSingleElecMutualIntensityVsXZ_GPU(float* pEx, float* 
 	if((PolCom < -5) || ((((PolCom + 5) << 4) | 0xF) >= nPolTblEntries)) return -1;
 
 	long long nxnz = ((long long)nx) * ((long long)nz); //HG26022024 NOTE: GPU implementation is only called for nxnz < UINT_MAX to avoid integer overflows
+
+	//HG20072026 Rank-K batched path (see the block comment above TCSDRankKState). Only for
+	//full-range updates: a partial [itStart, itEnd] window (used by the _n_mpi > 1 CSD
+	//splitting) keeps the proven rank-1 kernel. On any refusal (unsupported shape, failed
+	//allocation) fall through to the rank-1 code below -- the refusal is sticky per process,
+	//so a session never mixes deferred-batch and immediate updates inconsistently.
+	if((pGPU != 0) && (pGPU->csdBatchK > 1) && (itStart == 0) && (itEnd == nxnz - 1) && (nxnz > 1))
+	{
+		if(AppendMutualIntensityRankK_GPU(pEx, pEz, pMI0, (long)nxnz, PerX, iter, PolCom, EhOK, EvOK, pGPU->csdBatchK, pGPU) == 0) return 0;
+	}
 
 	const int itPerBlk = 1;
 	dim3 threads = dim3(48, 16, 1);

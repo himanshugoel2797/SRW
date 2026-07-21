@@ -10099,6 +10099,22 @@ def srwl_wfr_emit_prop_multi_e(_e_beam, _mag, _mesh, _sr_meth, _sr_rel_prec, _n_
         #The close MUST run, hence try/finally: without it results stay on the GPU and the
         #host buffer keeps whatever it had.
         useCSDSession = (sessDevCSD > 0) and ((_char == 6) or (_char == 61) or (_char == 7)) and (nProc == 1) #HG20072026
+        #HG20072026 Rank-K CSD batching: with a session open, the C++ side buffers each
+        #macro-electron's field as column(s) of a device-resident N x K matrix and applies
+        #the whole batch with ONE cuBLAS rank-K update (cherk) every K electrons, instead of
+        #one full read-modify-write pass over the N x N CSD per electron. Exactly equivalent
+        #(a running mean over K electrons equals the batched mean identically); cuts CSD
+        #memory traffic K-fold. Requested per call by passing [device, K] instead of a bare
+        #device index. IMPORTANT: a partial batch stays buffered on the device until
+        #srwl.UtiGPUProc(4, ...) applies it -- that flush must precede EVERY session close
+        #(op 3), both the periodic-save one and the final one, or up to K-1 electrons would
+        #be missing from the CSD copied back to the host.
+        csdRankK = 0 #HG20072026
+        if(useCSDSession):
+            try: csdRankK = int(os.getenv('SRW_CSD_RANK_K', '32')) #HG20072026 0 or 1 disables batching
+            except: csdRankK = 32
+            if(csdRankK < 2): csdRankK = 0
+        devCSD = [sessDevCSD, csdRankK] if(csdRankK > 0) else sessDevCSD #HG20072026
         if(useCSDSession): srwl.UtiGPUProc(2, sessDevCSD) #HG20072026 open
         try: #HG20072026
             for i in range(nPartPerProc): #loop over macro-electrons
@@ -10751,7 +10767,11 @@ def srwl_wfr_emit_prop_multi_e(_e_beam, _mag, _mesh, _sr_meth, _sr_rel_prec, _n_
                             #i.e. the 4D CSD accumulation ALWAYS ran on the CPU, however _gpu_f was
                             #set. The GPU kernel in srradmnp_gpu.cu existed and was correct; it was
                             #simply never reached from this, the production entry point.
-                            srwl.CalcIntFromElecField(resStokes.arS, wfr, -1, 8, depTypeInt, phEnInt, 0., 0., arMethPar, None, sessDevCSD) #OC03032021: this call is supposed to update / extract one main Stokes component
+                            #HG20072026 devCSD is [sessDevCSD, csdRankK] when rank-K batching
+                            #is active (see where it is defined for the contract), else the
+                            #bare device index -- identical behaviour to before in that case.
+                            srwl.CalcIntFromElecField(resStokes.arS, wfr, -1, 8, depTypeInt, phEnInt, 0., 0., arMethPar, None, devCSD) #OC03032021: this call is supposed to update / extract one main Stokes component
+                            #srwl.CalcIntFromElecField(resStokes.arS, wfr, -1, 8, depTypeInt, phEnInt, 0., 0., arMethPar, None, sessDevCSD)
                             #srwl.CalcIntFromElecField(resStokes.arS, wfr, -1, 8, depTypeInt, phEnInt, 0., 0., arMethPar) #OC03032021
                             #srwl.CalcIntFromElecField(resStokes.arS, wfr, -1, 8, depTypeInt, phEnInt, 0., 0., [intSumType, i]) #OC03032021: this call is supposed to update / extract one main Stokes component
                             #srwl.CalcIntFromElecField(resStokes.arS, wfr, 6, 8, depTypeInt, phEnInt, 0., 0., [intSumType, i]) #One main Stokes component
@@ -11200,7 +11220,9 @@ def srwl_wfr_emit_prop_multi_e(_e_beam, _mag, _mesh, _sr_meth, _sr_rel_prec, _n_
                         #symmetric half of the Hermitian CSD), and a host write to a buffer that
                         #is still mapped would never reach the device -- it would be silently
                         #discarded at session close. Reopening afterwards re-uploads it.
-                        if(useCSDSession): srwl.UtiGPUProc(3, sessDevCSD) #HG20072026 flush device -> host
+                        if(useCSDSession): #HG20072026 flush device -> host
+                            if(csdRankK > 0): srwl.UtiGPUProc(4, sessDevCSD) #HG20072026 apply any pending rank-K CSD batch BEFORE the close copies the CSD back
+                            srwl.UtiGPUProc(3, sessDevCSD)
                         try: #HG20072026
 
                             #print('srwl_uti_save_intens_ascii ... ', end='') #DEBUG
@@ -11331,7 +11353,9 @@ def srwl_wfr_emit_prop_multi_e(_e_beam, _mag, _mesh, _sr_meth, _sr_rel_prec, _n_
                         finally: #HG20072026
                             if(useCSDSession): srwl.UtiGPUProc(2, sessDevCSD) #HG20072026 reopen
         finally: #HG20072026
-            if(useCSDSession): srwl.UtiGPUProc(3, sessDevCSD) #HG20072026 close: this is what copies the CSD back to the host
+            if(useCSDSession): #HG20072026 close: this is what copies the CSD back to the host
+                if(csdRankK > 0): srwl.UtiGPUProc(4, sessDevCSD) #HG20072026 apply any pending rank-K CSD batch first (also runs on the exception path, so a partial batch is never silently dropped)
+                srwl.UtiGPUProc(3, sessDevCSD)
 
     elif((rank == rankMaster) and (nProc > 1)): #OC02032021
     #elif((rank == 0) and (nProc > 1)):
