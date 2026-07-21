@@ -122,6 +122,8 @@ public:
 
 	char TrjDataContShouldBeRebuild, ProbablyTheSameLoop;
 
+	void* m_pvGPUUsageParams; //HG20072026 optional GPU usage parameters (double array as in TGPUUsageArg), 0 = CPU
+
 	srTRadInt()
 	{
 		Initialize();	
@@ -146,6 +148,10 @@ public:
 	inline int ComputeTotalRadDistr();
 	int ComputeTotalRadDistrLoops();
 	int ComputeTotalRadDistrDirectOut(srTSRWRadStructAccessData&, char showProgressInd = 1);
+#ifdef _OFFLOAD_GPU
+	//Defined in srradint_gpu.cu; returns 0 if handled on GPU, -1 to fall through to the CPU loop, >0 on error
+	int ComputeTotalRadDistrDirectOutGPU(srTSRWRadStructAccessData&, void* pvGPU, char FinalResAreSymOverX, char FinalResAreSymOverZ); //HG20072026
+#endif
 	inline int GenRadIntegration(complex<double>*, srTEFourier*);
 	inline int RadIntegrationAutoByPieces(complex<double>*);
 	inline int RadIntegrationResiduals(complex<double>*, srTEFourier*);
@@ -220,7 +226,7 @@ public:
 	int RadInterpolationOnePointXZ(srTEFourierVect*, int, int, double, double, srTEFourier*);
 
     void SetPrecParams(srTParPrecElecFld*);
-    void ComputeElectricFieldFreqDomain(srTTrjDat* pTrjDat, srTWfrSmp* pWfrSmp, srTParPrecElecFld* pPrecElecFld, srTSRWRadStructAccessData* pWfr, char showProgressInd = 1);
+    void ComputeElectricFieldFreqDomain(srTTrjDat* pTrjDat, srTWfrSmp* pWfrSmp, srTParPrecElecFld* pPrecElecFld, srTSRWRadStructAccessData* pWfr, char showProgressInd = 1, void* pvGPU = 0); //HG20072026 added pvGPU
 };
 
 //*************************************************************************

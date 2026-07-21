@@ -210,6 +210,7 @@ if(USE_CUDA) #HG01082025
         ../src/core/sroptzp_gpu.cu
         ../src/core/srradmnp_gpu.cu
         ../src/core/srmatsta_gpu.cu
+        ../src/core/srradint_gpu.cu
     )
 endif()
 

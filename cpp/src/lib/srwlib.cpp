@@ -453,7 +453,7 @@ SRWLPrtTrj* SetupTrjFromMagFld(SRWLParticle* pPartInitCond, SRWLMagFldC* pMagFld
 
 //-------------------------------------------------------------------------
 
-EXP int CALL srwlCalcElecFieldSR(SRWLWfr* pWfr, SRWLPrtTrj* pTrj, SRWLMagFldC* pMagFld, double* precPar, int nPrecPar)
+EXP int CALL srwlCalcElecFieldSR(SRWLWfr* pWfr, SRWLPrtTrj* pTrj, SRWLMagFldC* pMagFld, double* precPar, int nPrecPar, double* arParGPU) //HG20072026 added arParGPU
 {
 	if((pWfr == 0) || (precPar == 0)) return SRWL_INCORRECT_PARAM_FOR_SR_COMP;
 
@@ -468,7 +468,10 @@ EXP int CALL srwlCalcElecFieldSR(SRWLWfr* pWfr, SRWLPrtTrj* pTrj, SRWLMagFldC* p
 	if((!trjIsDefined) && (!fldIsDefined)) return SRWL_INCORRECT_PARAM_FOR_SR_COMP;
 	int locErNo = 0;
 
-	try 
+	if(getenv("SRW_RADINT_GPU_VERBOSE") != 0) { fprintf(stderr, "srwlCalcElecFieldSR: arParGPU=%p nPrecPar=%d\n", (void*)arParGPU, nPrecPar); fflush(stderr); }
+	srwlUtiGPUProc(1, arParGPU); //HG20072026 initialize GPU if requested (same bracket as srwlCalcIntFromElecField)
+
+	try
 	{
 		if(!trjIsDefined) pTrj = SetupTrjFromMagFld(&(pWfr->partBeam.partStatMom1), pMagFld, precPar); //OC23022020
 		//{
@@ -517,15 +520,16 @@ EXP int CALL srwlCalcElecFieldSR(SRWLWfr* pWfr, SRWLPrtTrj* pTrj, SRWLMagFldC* p
 		srTParPrecElecFld precElecFld((int)precPar[0], precPar[1], precPar[2], precPar[3], precPar[6], false, calcTerminTerms);
 
         srTRadInt RadInt;
-		RadInt.ComputeElectricFieldFreqDomain(&trjData, &auxSmp, &precElecFld, &wfr, 0);
+		RadInt.ComputeElectricFieldFreqDomain(&trjData, &auxSmp, &precElecFld, &wfr, 0, (void*)arParGPU); //HG20072026 added arParGPU (enables the GPU Auto1 path; 0 = CPU as before)
 		wfr.OutSRWRadPtrs(*pWfr);
 		UtiWarnCheck();
 	}
-	catch(int erNo) 
+	catch(int erNo)
 	{
 		locErNo = erNo;
 		//return erNo;
 	}
+	srwlUtiGPUProc(0, arParGPU); //HG20072026 (to free GPU)
 	if(!trjIsDefined)
 	{
 		if(pTrj->arX != 0) { delete[] pTrj->arX; pTrj->arX = 0;}
