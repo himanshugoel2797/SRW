@@ -576,9 +576,23 @@ int srTRadGenManip::ExtractSingleElecMutualIntensityVsXZ_GPU(float* pEx, float* 
 		GEN_MEMBERS(3)
 		GEN_MEMBERS(4)
 		GEN_MEMBERS(5)
+		GEN_MEMBERS(6) //HG20072026 PolCom=6 ("Total") was MISSING, and it is the most commonly used setting.
+		               //The index below is ((PolCom+5)<<4)|..., so PolCom=6 produced idx>=176 on a
+		               //176-entry table: the GPU path jumped through an out-of-bounds function
+		               //pointer and segfaulted, while the CPU path handled 6 fine via its `default`
+		               //case. The kernel itself was always correct for 6 (its switch `default:` is
+		               //"total mutual intensity, same as s0") -- only the instantiation was absent.
 	};
 #undef GEN_MEMBERS0
 #undef GEN_MEMBERS
+
+	//HG20072026 The table is indexed by ((PolCom+5)<<4)|..., so an out-of-range PolCom
+	//reads past the end and launches a garbage function pointer. Returning non-zero makes
+	//the caller fall back to the CPU loop, which handles any PolCom via its `default` case.
+	//This is a guard, not the fix -- PolCom=6 is now instantiated above.
+	const int nPolTblEntries = (int)(sizeof(ExtractSingleElecMutualIntensityVsXZ_tbl)
+	                                 / sizeof(ExtractSingleElecMutualIntensityVsXZ_tbl[0]));
+	if((PolCom < -5) || ((((PolCom + 5) << 4) | 0xF) >= nPolTblEntries)) return -1;
 
 	long long nxnz = ((long long)nx) * ((long long)nz); //HG26022024 NOTE: GPU implementation is only called for nxnz < UINT_MAX to avoid integer overflows
 

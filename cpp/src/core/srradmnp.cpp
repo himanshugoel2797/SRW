@@ -2142,18 +2142,21 @@ int srTRadGenManip::ExtractSingleElecMutualIntensityVsXZ(srTRadExtract& RadExtra
 		//	})
 		//else
 		//{
+		bool doneOnGPU = false; //HG20072026 the GPU routine's return value used to be discarded, so a
+		                        //refusal (e.g. an unsupported PolCom) silently produced no result at all
+		                        //instead of falling back. Honour it.
 #ifdef _OFFLOAD_GPU //HG30112023
 		TGPUUsageArg parGPU(pvGPU); //OC19022024
 		if(CAuxGPU::GPUEnabled(&parGPU) && nxnz <=INT_MAX) //HG26022024 Ensure that the GPU version is only called for 32-bit signed int point counts
 		//if(CAuxGPU::GPUEnabled(&parGPU)) //OC19022024
 		//if(CAuxGPU::GPUEnabled((TGPUUsageArg*)pvGPU))
 		{
-			ExtractSingleElecMutualIntensityVsXZ_GPU(pEx, pEz, pMI0, (long)nx, (long)nz, (long)ne, (long)itStart, (long)itEnd, (long)PerX, (long)iter, PolCom, EhOK, EvOK, &parGPU); //OC19022024
+			doneOnGPU = (ExtractSingleElecMutualIntensityVsXZ_GPU(pEx, pEz, pMI0, (long)nx, (long)nz, (long)ne, (long)itStart, (long)itEnd, (long)PerX, (long)iter, PolCom, EhOK, EvOK, &parGPU) == 0); //OC19022024 //HG20072026
 			//ExtractSingleElecMutualIntensityVsXZ_GPU(pEx, pEz, pMI0, (long)nx, (long)nz, (long)ne, (long)itStart, (long)itEnd, (long)PerX, (long)iter, PolCom, EhOK, EvOK, (TGPUUsageArg*)pvGPU); //OC25012024
 			//ExtractSingleElecMutualIntensityVsXZ_GPU(pEx, pEz, pMI0, nx, nz, ne, itStart, itEnd, PerX, iter, PolCom, EhOK, EvOK, (TGPUUsageArg*)pvGPU);
 		}
-		else
 #endif
+		if(!doneOnGPU)
 		{
 			for(long long it=itStart; it<=itEnd; it++) //OC16042021 (to enable partial update of MI/CSD)
 				//for(long long it=0; it<=(itEnd-itStart); it++) //OC03032021 (to enable partial update of MI/CSD)
