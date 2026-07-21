@@ -1614,6 +1614,7 @@ EXP int CALL srwlUtiGPUProc(int op, double* arParGPU) //OC20022024
 	//if(op == 1) CAuxGPU::Init();
 	if(op == 2) { CAuxGPU::BeginSession(&parGPU); return 0; } //HG20072026 open persistent session: keep device buffers resident across entry points
 	if(op == 3) { CAuxGPU::EndSession(&parGPU); return 0; } //HG20072026 close it (this is what copies results back to the host)
+	if(op == 4) { return srTRadGenManip::FlushMutualIntensityRankK_GPU(&parGPU); } //HG20072026 apply any pending rank-K CSD batch and free its buffers; MUST precede op 3 when CalcIntFromElecField was called with a [dev, K] device parameter
 	if(op == 1) //HG22032024
 	{
 		//CAuxGPU::Init();

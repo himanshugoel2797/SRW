@@ -280,6 +280,17 @@ public:
 	int ExtractSingleElecMutualIntensityVsXZ_GPU(float* pEx, float* pEz, float* pMI, long nx, long nz, long ne, long itStart, long itEnd, long PerX, long iter, int PolCom, bool EhOK, bool EvOK, TGPUUsageArg* pGPU);
 	int ExtractSingleElecIntensity2DvsXZ_GPU(srTRadExtract& RadExtract, long long ie0, long long ie1, double InvStepRelArg, TGPUUsageArg* pGPU); //HG31072024
 	//int ExtractSingleElecIntensity2DvsXZ_GPU(srTRadExtract& RadExtract, double* arAuxInt, long long ie0, long long ie1, double InvStepRelArg, TGPUUsageArg* pGPU);
+
+	//HG20072026 Rank-K CSD batching (see srradmnp_gpu.cu for the algorithm note).
+	//AppendMutualIntensityRankK_GPU buffers one macro-electron as column(s) of a device-side
+	//N x K matrix; every K electrons (or on an explicit flush) the whole batch is applied to
+	//the CSD with one cuBLAS cherk Hermitian rank-K update instead of K rank-1 passes.
+	//FlushMutualIntensityRankK_GPU applies any pending partial batch and (with teardown) frees
+	//the column buffers; it MUST be called before the GPU session that owns the CSD closes
+	//(exposed to Python as srwl.UtiGPUProc(4, dev)). It is static because the batch state is
+	//file-static in srradmnp_gpu.cu: the buffered columns outlive any single srTRadGenManip.
+	int AppendMutualIntensityRankK_GPU(float* pEx, float* pEz, float* pMI, long nxnz, long PerX, long iter, int PolCom, bool EhOK, bool EvOK, int batchK, TGPUUsageArg* pGPU);
+	static int FlushMutualIntensityRankK_GPU(TGPUUsageArg* pGPU, bool teardown=true);
 #endif
 //#ifdef _OFFLOAD_GPU
 //	int ExtractSingleElecMutualIntensityVsXZ_GPU(float* pEx, float* pEz, float* pMI, long nxnz, long itStart, long itEnd, long PerX, long iter, int PolCom, bool EhOK, bool EvOK, gpuUsageArg *pGpuUsage);

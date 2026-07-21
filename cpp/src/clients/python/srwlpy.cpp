@@ -3629,6 +3629,25 @@ void ParseDeviceParam(PyObject* oDev, double* &parGPUParam) //HG10202021 Convert
 //#endif
 			return;
 		}
+		//HG20072026 A list/tuple of numbers, e.g. [devIndex, csdBatchK]. Element [0] of the
+		//resulting array is the parameter count, matching what TGPUUsageArg expects. This is
+		//how per-call GPU options beyond the device index (currently only the rank-K CSD
+		//batch size) reach the C++ side without touching the arMeth slots, all 20 of which
+		//are already assigned meanings in srwlib.h.
+		if(PyList_Check(oDev) || PyTuple_Check(oDev)) {
+			Py_ssize_t n = PySequence_Size(oDev);
+			if(n > 0) {
+				parGPUParam = new double[n + 1];
+				parGPUParam[0] = (double)n;
+				for(Py_ssize_t i = 0; i < n; i++) {
+					PyObject *o = PySequence_GetItem(oDev, i); //new reference
+					parGPUParam[i + 1] = (o != 0)? PyFloat_AsDouble(o) : 0.;
+					Py_XDECREF(o);
+				}
+				if(PyErr_Occurred()) PyErr_Clear();
+				return;
+			}
+		}
 	}
 	//OC: treat the case when oDev is a list or an array(?!)
 

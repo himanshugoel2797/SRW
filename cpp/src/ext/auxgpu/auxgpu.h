@@ -34,17 +34,22 @@
 struct TGPUUsageArg //OC18022024
 {
 	int deviceIndex; // -1 means no device, TODO
+	int csdBatchK; //HG20072026 requested rank-K batch size for the 4D CSD accumulation (see srradmnp_gpu.cu);
+	               //0 or 1 means "no batching" (the per-electron rank-1 path), preserving prior behaviour
+	               //whenever the caller passes only the device index.
 
 	TGPUUsageArg(void* pvGPU=0) //OC18022024
 	{
 		deviceIndex = -1;
+		csdBatchK = 0; //HG20072026
 		if(pvGPU == 0) return;
 		double *arParGPU = (double*)pvGPU;
 		int nPar = (int)arParGPU[0];
 		if(nPar > 0) deviceIndex = (int)arParGPU[1];
+		if(nPar > 1) csdBatchK = (int)arParGPU[2]; //HG20072026
 		//continue here for future params
 	}
-}; 
+};
 //} TGPUUsageArg; //OC18022024 (commented-out)
 
 //#ifdef _OFFLOAD_GPU //HG23102025
