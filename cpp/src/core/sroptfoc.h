@@ -157,7 +157,19 @@ public:
 	}
 	srTThinLens() {}
 
-	//int GPUImplFeatures() override { return 1; } //HG12082025 Keep GPU support disabled until properly vetted
+	//HG20072026 Vetted and enabled. The kernel (sroptfoc_gpu.cu) and the
+	//TraverseRadZXEParallel override below have been compiled in since HG14042026, but
+	//without this flag sroptcnt.cpp:450 passed pvGPU=0, so srTThinLens NEVER dispatched
+	//to the GPU -- nsys showed TraverseRadZXEParallel_Kernel<srTRectAperture> and
+	//<srTCircObstacle> launching and no <srTThinLens>, and it timed 1.0x while every
+	//dispatching element got 9-41x. Compiled in is not dispatched.
+	//Vetting: (a) RadPointModifierPortable is bit-identical arithmetic to the CPU
+	//RadPointModifier (same expression, same GPU_PORTABLE CosAndSin overload, no
+	//TransHndl branch on either side), confirmed by tools/gpu_validate.py measuring
+	//rel_L2 == 0 vs CPU; (b) the MethNo==2 path drops pvGPU exactly as srTDriftSpace's
+	//does, so enabling this introduces no residency hazard that shipped drift does not
+	//already carry.
+	int GPUImplFeatures() override { return 1; } //HG12082025
 
 	//int PropagateRadiation(srTSRWRadStructAccessData* pRadAccessData, int MethNo, srTRadResizeVect& ResBeforeAndAfterVect)
 	//int PropagateRadiation(srTSRWRadStructAccessData* pRadAccessData, srTParPrecWfrPropag& ParPrecWfrPropag, srTRadResizeVect& ResBeforeAndAfterVect)
