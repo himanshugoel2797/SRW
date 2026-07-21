@@ -1826,30 +1826,19 @@ int srTGenOptElem::SetRadRepres1D(srTRadSect1D* pRadSect1D, char CoordOrAng)
 
 //*************************************************************************
 
-//HG20072026 ///////////////////// KNOWN OPEN BUG - READ BEFORE EDITING /////////////////////
-//The SECOND-ORDER moments this produces differ between the CPU and GPU paths by ~1.3% for
-//some wavefronts, and srTDriftSpace amplifies that into a ~12% field error. Net effect:
-//a GPU beamline with an aperture followed by a drift can be several percent wrong, silently.
+//HG20072026 ////////////////// RESOLVED BUG - HISTORY MATTERS HERE //////////////////////
+//The SECOND-ORDER moments this produces used to differ between the CPU and GPU paths by
+//~1.3% for some wavefronts, and srTDriftSpace amplified that into a ~12% field error
+//after an aperture+drift. Root cause (proven by dumping the raw sums below via
+//SRW_MOM_DEBUG): the raw second-order sums already diverged because the two paths chose
+//DIFFERENT 90%-power windows (IndLims) - the CPU's FindIntensityLimitsInds re-derives
+//its indices from float32 coordinates and can land one bin below its own scan, while
+//the GPU path kept exact integers. NOT cancellation, NOT reduction precision: both
+//paths accumulate in double. Fixed by replicating the CPU's float round-trip in
+//FindIntensityLimitsInds_GPU (srmatsta_gpu.cu) - see the comment there.
 //
-//Proven causally: grafting the CPU moments into a GPU-propagated wavefront immediately
-//before the drift takes the discrepancy from 1.199e-01 to 6.214e-07, matching the
-//CPU-propagated control (5.880e-07). Replacing ONLY the moments removes all of it.
-//
-//First-order moments agree exactly; only the second-order ones diverge. They are
-//<x^2> - <x>^2, so a reduction whose terms agree to float precision can still lose three
-//digits to cancellation - which is also why it is wavefront-dependent: it bites when the
-//centroid is near zero and not otherwise.
-//
-//Likely fix: accumulate the moment reduction in double, and/or compute the central
-//moments in a shifted (compensated) form instead of subtracting two large nearly-equal
-//float quantities. Dump the raw sums CPU vs GPU BEFORE the subtraction first.
-//
-//NOT the cause - ruled out by experiment, do not re-chase: the float32 prefix sum in
-//PrefixSum_GPU (srmatsta_gpu.cu). It was a genuine CPU/GPU divergence and is fixed, but
-//this discrepancy is bit-for-bit unmoved by it.
-//
-//Reproducers: tools/repro_moments_gap.py (diagnosis), tools/repro_multi_e_gpu_cpu_gap.py
-//(symptom). Full write-up: KNOWN_ISSUES.md at the repo root.
+//Reproducers (green as of this fix): tools/repro_moments_gap.py,
+//tools/repro_multi_e_gpu_cpu_gap.py. History: KNOWN_ISSUES.md at the repo root.
 ///////////////////////////////////////////////////////////////////////////////////////////
 int srTGenOptElem::ComputeRadMoments(srTSRWRadStructAccessData* pSRWRadStructAccessData, void* pvGPU) //HG26072024
 //int srTGenOptElem::ComputeRadMoments(srTSRWRadStructAccessData* pSRWRadStructAccessData)
@@ -2210,6 +2199,24 @@ int srTGenOptElem::ComputeRadMoments(srTSRWRadStructAccessData* pSRWRadStructAcc
 
 				for(int kk=0; kk<22; kk++) SumsZ[kk] += SumsX[kk];
 			}
+		}
+
+		//HG20072026 Instrumentation for the second-order-moment CPU/GPU gap (KNOWN_ISSUES.md #1):
+		//dump the power-limit window and the RAW SUMS before any normalization, so the two
+		//paths can be compared upstream of the <x^2>-<x>^2 arithmetic. Set SRW_MOM_DEBUG=1.
+		if(getenv("SRW_MOM_DEBUG") != 0)
+		{
+			int dbgOnGPU = 0;
+#ifdef _OFFLOAD_GPU
+			TGPUUsageArg dbgParGPU(pvGPU);
+			if(CAuxGPU::GPUEnabled(&dbgParGPU)) dbgOnGPU = 1;
+#endif
+			fprintf(stderr, "SRW_MOM_DEBUG dev=%d ie=%d nx=%d nz=%d xStart=%.17e xStep=%.17e IndLims=%d,%d,%d,%d\n",
+				dbgOnGPU, ie, pSRWRadStructAccessData->nx, pSRWRadStructAccessData->nz,
+				pSRWRadStructAccessData->xStart, pSRWRadStructAccessData->xStep,
+				IndLims[0], IndLims[1], IndLims[2], IndLims[3]);
+			for(int kk=0; kk<22; kk++)
+				fprintf(stderr, "SRW_MOM_DEBUG dev=%d SumsZ[%d]=%.17e\n", dbgOnGPU, kk, SumsZ[kk]);
 		}
 
 		double xStep_zStep_mm2 = (pSRWRadStructAccessData->xStep)*(pSRWRadStructAccessData->zStep)*1.E+06;
