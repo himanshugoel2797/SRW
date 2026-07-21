@@ -30,6 +30,13 @@
 #include "sropthck.h"
 #include "sroptgrat.h"
 
+#include <chrono> //HG20072026 host-side phase profiling (SRW_HOST_PROF=1)
+namespace { //HG20072026
+	inline bool srMomProfOn() { static const bool on = (getenv("SRW_HOST_PROF") != 0); return on; }
+	inline double srMomProfNow() { return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
+	inline void srMomProfRep(const char* tag, double t0, double t1) { if(srMomProfOn()) { fprintf(stderr, "SRW_HOST_PROF   %-32s %9.3f ms\n", tag, (t1-t0)*1e3); fflush(stderr); } }
+}
+
 #ifdef _OFFLOAD_GPU //HG01122023
 #include "auxgpu.h"
 #endif
@@ -1880,7 +1887,9 @@ int srTGenOptElem::ComputeRadMoments(srTSRWRadStructAccessData* pSRWRadStructAcc
 		pSRWRadStructAccessData->wfrReffZ = pSRWRadStructAccessData->wfrReffX;
 
 		//TreatStronglyOscillatingTerm(*pSRWRadStructAccessData, 'r');
+		double tm0 = srMomProfNow(); //HG20072026
 		TreatStronglyOscillatingTerm(*pSRWRadStructAccessData, 'r', 0, -1, pvGPU); //HG26072024
+		double tm1 = srMomProfNow(); srMomProfRep("mom: TreatStronglyOsc 'r'", tm0, tm1); //HG20072026
 		WaveFrontTermWasTreated = 1;
 	}
 
@@ -1984,7 +1993,9 @@ int srTGenOptElem::ComputeRadMoments(srTSRWRadStructAccessData* pSRWRadStructAcc
 		double TwoPi_d_Lamb_d_Rz_zStepE2 = TwoPi_d_Lamb_d_Rz_zStep*TwoPi_d_Lamb_d_Rz_zStep;
 
 		srTMomentsPtrs MomXPtrs(fpMomX), MomZPtrs(fpMomZ);
+		double tm2 = srMomProfNow(); //HG20072026
 		AuxMatStat.FindIntensityLimitsInds(hRad, ie, RelPowForLimits, IndLims, pvGPU); //HG29092025
+		double tm3 = srMomProfNow(); srMomProfRep("mom: FindIntensityLimitsInds", tm2, tm3); //HG20072026
 		//AuxMatStat.FindIntensityLimitsInds(hRad, ie, RelPowForLimits, IndLims);
 
 		//AuxMatStat.FindIntensityLimitsInds(*pSRWRadStructAccessData, ie, RelPowForLimits, IndLims);
@@ -2201,6 +2212,8 @@ int srTGenOptElem::ComputeRadMoments(srTSRWRadStructAccessData* pSRWRadStructAcc
 			}
 		}
 
+		double tm4 = srMomProfNow(); srMomProfRep("mom: moment sum loop", tm3, tm4); //HG20072026
+
 		//HG20072026 Instrumentation for the second-order-moment CPU/GPU gap (KNOWN_ISSUES.md #1):
 		//dump the power-limit window and the RAW SUMS before any normalization, so the two
 		//paths can be compared upstream of the <x^2>-<x>^2 arithmetic. Set SRW_MOM_DEBUG=1.
@@ -2356,7 +2369,9 @@ int srTGenOptElem::ComputeRadMoments(srTSRWRadStructAccessData* pSRWRadStructAcc
 	//srwlPrintTime(str,&start);
 
 	//if(WaveFrontTermWasTreated) TreatStronglyOscillatingTerm(*pSRWRadStructAccessData, 'a');
+	double tm5 = srMomProfNow(); //HG20072026
 	if(WaveFrontTermWasTreated) TreatStronglyOscillatingTerm(*pSRWRadStructAccessData, 'a', 0, -1, pvGPU); //HG26072024
+	double tm6 = srMomProfNow(); srMomProfRep("mom: TreatStronglyOsc 'a'", tm5, tm6); //HG20072026
 
 	//Added by SY (for profiling?) at parallelizing SRW via OpenMP:
 	//srwlPrintTime(":ComputeRadMoments : TreatStronglyOscillatingTerm 2",&start);
