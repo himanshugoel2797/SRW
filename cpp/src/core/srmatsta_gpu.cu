@@ -276,17 +276,29 @@ int srTAuxMatStat::FindIntensityLimitsInds_GPU(CHGenObj& hRad, int ie, double Re
         //Find the limits of integration over Y
         PrefixSum_GPU<double>(AuxArrIntOverY, Nx, xStep, RelPow, IntegratedIntens, &IndLims[0], &IndLims[1], &parGPU);
 
-        //HG20072026 THE ~1.3% SECOND-ORDER MOMENT GAP LIVED HERE (KNOWN_ISSUES.md #1).
-        //The CPU does not use its scanned integer limits directly: FindIntensityLimits2D
-        //stores them as float32 COORDINATES (AuxArrF[1..4] in FindIntensityLimitsInds), and
-        //the indices are re-derived as (int)((coordF - start)*1.0000001/step). Half a float
-        //ulp of the coordinate can outweigh the 1.0000001 fudge (e.g. ix=22, x~3.3e-4 m,
-        //step~3.1e-6 m: ulp/2/step ~ 4.6e-6 > 22*1e-7), so the CPU lands one bin BELOW the
-        //index its own scan found. This GPU path kept the exact integers, so its 90%-power
-        //window could exclude an edge column the CPU includes; with the x^2 weighting that
-        //made the second-order moments differ ~1.3%, which srTDriftSpace amplified to ~12%
-        //of peak after an aperture+drift. Replicate the CPU's float round-trip and clamps
-        //bit-for-bit so both paths select the same window.
+        //HG20072026 DELIBERATE BUG-COMPATIBILITY. Read this before "simplifying" it.
+        //
+        //This block reproduces a DEFECT in the CPU path on purpose. The CPU does not use
+        //the integer limits its own scan produced: FindIntensityLimits2D stores them as
+        //float32 COORDINATES (AuxArrF[1..4]) and FindIntensityLimitsInds re-derives the
+        //indices as (int)((coordF - start)*1.0000001/step). That 1.0000001 is clearly an
+        //anti-truncation epsilon intended to make index->coord->float32->index an IDENTITY,
+        //and it is undersized: half a float ulp of the coordinate scales with |coord|,
+        //while the fudge scales with the index. On a mesh centred on zero |coord| is
+        //largest exactly where the index is smallest, so the round-trip fails at LOW
+        //indices and always lands one bin DOWN (ix=22, x~3.3e-4 m, step~3.1e-6 m:
+        //ulp/2/step ~ 4.6e-6 > 22*1e-7). Since IndLims[0]/IndLims[2] are the LOWER limits,
+        //the CPU's 90%-power box is silently asymmetric - the low edge is sometimes
+        //widened by one bin, the high edge never is. Measured with tools/analyze_indlims_roundtrip.py:
+        //14/256, 20/512, 37/1024 indices fail to round-trip, every one of them in the
+        //lower half.
+        //
+        //Writing the mathematically correct thing here (keep the exact integers) makes the
+        //GPU DISAGREE with the CPU by ~1.3% in the second-order moments, which
+        //srTDriftSpace amplifies to ~12% of peak after an aperture+drift. So until the CPU
+        //side is fixed - which is a physics-visible change to SRW's reference results and
+        //belongs upstream, not here - the GPU matches the CPU bit-for-bit, bug included.
+        //See KNOWN_ISSUES.md #1.
         {
             double xStartWave = ExtractedWaveData.DimStartValues[0];
             double yStartWave = ExtractedWaveData.DimStartValues[1];
