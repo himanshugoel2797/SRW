@@ -2006,6 +2006,8 @@ int srTGenOptElem::ComputeRadMoments(srTSRWRadStructAccessData* pSRWRadStructAcc
 		TGPUUsageArg parGPU(pvGPU);
 		if(CAuxGPU::GPUEnabled(&parGPU))
 		{
+			// Log that the GPU path for ComputeRadMoments is taken (helps instrumentation)
+			fprintf(stderr, "ComputeRadMoments: using GPU for ie=%d\n", ie);
 			ComputeRadMoments_GPU(pSRWRadStructAccessData, ie, SumsZ, IndLims, &parGPU);
 		}
 		else

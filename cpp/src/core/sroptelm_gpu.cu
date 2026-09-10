@@ -1072,6 +1072,12 @@ __global__ void ComputeRadMoments_Kernel(const srTSRWRadStructAccessData* pSRWRa
 	}
 
 	cg::coalesced_group g = cg::coalesced_threads();
+	cg::thread_block tb = cg::this_thread_block();
+	__shared__ double sblock[22];
+	if (tb.thread_rank() == 0) {
+		for (int si = 0; si < 22; ++si) sblock[si] = 0.0;
+	}
+	tb.sync();
 	if (KernelMode == 0)
 	{
 		//Computed for whole mesh
@@ -1119,43 +1125,70 @@ __global__ void ComputeRadMoments_Kernel(const srTSRWRadStructAccessData* pSRWRa
 		}
 	}
 
-	if(g.thread_rank() == 0)
+	// Group leaders aggregate into per-block shared buffer to reduce global atomics
+	if (g.thread_rank() == 0)
 	{
 		if (KernelMode == 0)
 		{
-			atomicAdd(SumsZ, ff[0]);
-			atomicAdd(SumsZ + 11, ff[11]);
-			atomicAdd(SumsZ + 1, ff[1]);
-			atomicAdd(SumsZ + 3, ff[3]);
-			atomicAdd(SumsZ + 12, ff[12]);
-			atomicAdd(SumsZ + 14, ff[14]);
-			atomicAdd(SumsZ + 2, ff[2]);
-			atomicAdd(SumsZ + 13, ff[13]);
-			atomicAdd(SumsZ + 4, ff[4]);
-			atomicAdd(SumsZ + 15, ff[15]);
+			for (int i : {0,11,1,3,12,14,2,13,4,15}) atomicAdd(&sblock[i], ff[i]);
 		}
 		else
 		{
 			if (KernelMode & 1)
 			{
-				atomicAdd(SumsZ + 5, ff[5]);
-				atomicAdd(SumsZ + 8, ff[8]);
-				atomicAdd(SumsZ + 16, ff[16]);
-				atomicAdd(SumsZ + 19, ff[19]);
+				for (int i : {5,8,16,19}) atomicAdd(&sblock[i], ff[i]);
 			}
 			if (KernelMode & 2)
 			{
-				atomicAdd(SumsZ + 6, ff[6]);
-				atomicAdd(SumsZ + 7, ff[7]);
-				atomicAdd(SumsZ + 17, ff[17]);
-				atomicAdd(SumsZ + 18, ff[18]);
+				for (int i : {6,7,17,18}) atomicAdd(&sblock[i], ff[i]);
 			}
 			if (KernelMode & 4)
 			{
-				atomicAdd(SumsZ + 9, ff[9]);
-				atomicAdd(SumsZ + 10, ff[10]);
-				atomicAdd(SumsZ + 20, ff[20]);
-				atomicAdd(SumsZ + 21, ff[21]);
+				for (int i : {9,10,20,21}) atomicAdd(&sblock[i], ff[i]);
+			}
+		}
+	}
+
+	tb.sync();
+
+	// One thread per block flushes shared accumulators to global memory
+	if (tb.thread_rank() == 0)
+	{
+		if (KernelMode == 0)
+		{
+			atomicAdd(SumsZ + 0, sblock[0]);
+			atomicAdd(SumsZ + 11, sblock[11]);
+			atomicAdd(SumsZ + 1, sblock[1]);
+			atomicAdd(SumsZ + 3, sblock[3]);
+			atomicAdd(SumsZ + 12, sblock[12]);
+			atomicAdd(SumsZ + 14, sblock[14]);
+			atomicAdd(SumsZ + 2, sblock[2]);
+			atomicAdd(SumsZ + 13, sblock[13]);
+			atomicAdd(SumsZ + 4, sblock[4]);
+			atomicAdd(SumsZ + 15, sblock[15]);
+		}
+		else
+		{
+			if (KernelMode & 1)
+			{
+				atomicAdd(SumsZ + 5, sblock[5]);
+				atomicAdd(SumsZ + 8, sblock[8]);
+				atomicAdd(SumsZ + 16, sblock[16]);
+				atomicAdd(SumsZ + 19, sblock[19]);
+			}
+			if (KernelMode & 2)
+			{
+				atomicAdd(SumsZ + 6, sblock[6]);
+				atomicAdd(SumsZ + 7, sblock[7]);
+				atomicAdd(SumsZ + 17, sblock[17]);
+				atomicAdd(SumsZ + 18, sblock[18]);
+			}
+			if (KernelMode & 4)
+			{
+				atomicAdd(SumsZ + 9, sblock[9]);
+				atomicAdd(SumsZ + 10, sblock[10]);
+				atomicAdd(SumsZ + 20, sblock[20]);
+				atomicAdd(SumsZ + 21, sblock[21]);
 			}
 		}
 	}
@@ -1243,6 +1276,12 @@ void srTGenOptElem::ComputeRadMoments_GPU(srTSRWRadStructAccessData* pSRWRadStru
 	CAuxGPU::SyncComputeStream(pGPU, 0, (long long)stream2);
 	CAuxGPU::SyncComputeStream(pGPU, 0, (long long)stream3);
 
+	// Instrument kernel timing using CUDA events
+	cudaEvent_t evStart, evStop;
+	cudaEventCreate(&evStart);
+	cudaEventCreate(&evStop);
+	cudaEventRecord(evStart, 0);
+
 	ComputeRadMoments_tbl[(1 << 2) | ((ExIsOK & 1) << 1) | (EzIsOK & 1)] <<<blocks0, threads0 >>>(pSRWRadStructAccessData_dev, IndLims_dev, SumsZ, ie, TwoPi_d_Lamb_d_Rx_xStep, TwoPi_d_Lamb_d_Rz_zStep);
 	if(IsCoordRepres) 
 	{
@@ -1254,11 +1293,47 @@ void srTGenOptElem::ComputeRadMoments_GPU(srTSRWRadStructAccessData* pSRWRadStru
 	CAuxGPU::SyncComputeStream(pGPU, (long long)stream1, 0);
 	CAuxGPU::SyncComputeStream(pGPU, (long long)stream2, 0);
 	CAuxGPU::SyncComputeStream(pGPU, (long long)stream3, 0);
+
+	// record stop and report elapsed kernel time
+	cudaEventRecord(evStop, 0);
+	cudaEventSynchronize(evStop);
+	float ms = 0.0f;
+	cudaEventElapsedTime(&ms, evStart, evStop);
+	fprintf(stderr, "ComputeRadMoments: GPU kernel elapsed %.3f ms\n", ms);
+
+	cudaEventDestroy(evStart);
+	cudaEventDestroy(evStop);
 	CAuxGPU::MarkUpdatedBatch(pGPU, CAuxGPU::DEVICE, pSRWRadStructAccessData->pBaseRadX, pSRWRadStructAccessData->pBaseRadZ, SumsZ, pSRWRadStructAccessData_dev);
-	CAuxGPU::ToHostAndFree(pGPU, pSRWRadStructAccessData_dev);
-	pSRWRadStructAccessData->pBaseRadX = CAuxGPU::GetHostPtr(pGPU, pSRWRadStructAccessData->pBaseRadX);
-	pSRWRadStructAccessData->pBaseRadZ = CAuxGPU::GetHostPtr(pGPU, pSRWRadStructAccessData->pBaseRadZ);
-	CAuxGPU::ToHostAndFree(pGPU, SumsZ);
+		// Finalize moments on-device to avoid host-side reduction and extra CPU work
+		// AmOfMom == 11 per-energy
+		const int AmOfMom = 11;
+		double* pMomX_host = pSRWRadStructAccessData->pMomX ? (pSRWRadStructAccessData->pMomX + ie*AmOfMom) : NULL;
+		double* pMomZ_host = pSRWRadStructAccessData->pMomZ ? (pSRWRadStructAccessData->pMomZ + ie*AmOfMom) : NULL;
+		double* pMomX_dev = NULL;
+		double* pMomZ_dev = NULL;
+		if(pMomX_host) pMomX_dev = (double*)CAuxGPU::ToDevice(pGPU, pMomX_host, AmOfMom, CAuxGPU::DONT_COPY);
+		if(pMomZ_host) pMomZ_dev = (double*)CAuxGPU::ToDevice(pGPU, pMomZ_host, AmOfMom, CAuxGPU::DONT_COPY);
+
+		CAuxGPU::EnsureDeviceMemoryReady(pGPU, pSRWRadStructAccessData->pBaseRadX, pSRWRadStructAccessData->pBaseRadZ, SumsZ, pSRWRadStructAccessData_dev, pMomX_dev, pMomZ_dev);
+
+		// Kernel: compute normalized moments from SumsZ on device and write to pMom arrays
+		// one thread is sufficient
+		if(pMomX_dev || pMomZ_dev)
+		{
+			// declare kernel prototype and launch finalize kernel with single thread
+			extern __global__ void ComputeRadMoments_Finalize_Kernel(srTSRWRadStructAccessData*, double*, int, double*, double*);
+			ComputeRadMoments_Finalize_Kernel<<<1,1>>>(pSRWRadStructAccessData_dev, SumsZ, ie, pMomX_dev, pMomZ_dev);
+		}
+
+		CAuxGPU::SyncComputeStream(pGPU, (long long)CAuxGPU::GetComputeStream(pGPU,0), 0);
+		CAuxGPU::MarkUpdatedBatch(pGPU, CAuxGPU::DEVICE, pSRWRadStructAccessData->pBaseRadX, pSRWRadStructAccessData->pBaseRadZ, SumsZ, pSRWRadStructAccessData_dev, pMomX_host, pMomZ_host);
+		CAuxGPU::ToHostAndFree(pGPU, pSRWRadStructAccessData_dev);
+		pSRWRadStructAccessData->pBaseRadX = CAuxGPU::GetHostPtr(pGPU, pSRWRadStructAccessData->pBaseRadX);
+		pSRWRadStructAccessData->pBaseRadZ = CAuxGPU::GetHostPtr(pGPU, pSRWRadStructAccessData->pBaseRadZ);
+		if(pMomX_dev) CAuxGPU::ToHostAndFree(pGPU, pMomX_dev);
+		if(pMomZ_dev) CAuxGPU::ToHostAndFree(pGPU, pMomZ_dev);
+		// Free the SumsZ device buffer
+		CAuxGPU::ToHostAndFree(pGPU, SumsZ);
 }
 
 const int PerThreadOps = 16;
@@ -1772,4 +1847,100 @@ void srTGenOptElem::SetupRadXorZSectFromSliceConstE_GPU(float* pInEx, float* pIn
 	CAuxGPU::MarkUpdatedBatch(pGPU, CAuxGPU::DEVICE, pInEx, pInEz, pOutEx);
 }
 
+// Finalize normalized moments on-device and write to per-energy moment arrays
+__global__ void ComputeRadMoments_Finalize_Kernel(srTSRWRadStructAccessData* pSRWRadStructAccessData, double* SumsZ, int ie, double* pMomX_dev, double* pMomZ_dev)
+{
+	const int AmOfMom = 11;
+	bool ExIsOK = pSRWRadStructAccessData->pBaseRadX != 0;
+	bool EzIsOK = pSRWRadStructAccessData->pBaseRadZ != 0;
+	bool IsCoordRepres = (pSRWRadStructAccessData->Pres == 0);
+
+	double Inv_eV_In_m = 1.239842E-06;
+	double TwoPi = 3.141592653590*2.;
+	double FourPi = TwoPi*2.;
+
+	double ePh = pSRWRadStructAccessData->eStart + pSRWRadStructAccessData->eStep*ie;
+	if(pSRWRadStructAccessData->PresT != 0) ePh = pSRWRadStructAccessData->avgPhotEn;
+
+	double Lamb_d_FourPi = Inv_eV_In_m/(FourPi*ePh);
+	double Lamb_m = Lamb_d_FourPi*FourPi;
+	double FourPi_d_Lamb = 1./Lamb_d_FourPi;
+	double LocRobsX = pSRWRadStructAccessData->RobsX; if(LocRobsX == 0.) LocRobsX = 100.*Lamb_m;
+	double LocRobsZ = pSRWRadStructAccessData->RobsZ; if(LocRobsZ == 0.) LocRobsZ = 100.*Lamb_m;
+
+	double xStep = pSRWRadStructAccessData->xStep;
+	double zStep = pSRWRadStructAccessData->zStep;
+	double xStep_zStep_mm2 = xStep * zStep * 1.E+06;
+
+	int nx = pSRWRadStructAccessData->nx;
+	int nz = pSRWRadStructAccessData->nz;
+	bool ActualScanX = (nx > 1);
+	bool ActualScanZ = (nz > 1);
+	bool ActualScansXZ = ActualScanX && ActualScanZ;
+
+	if(ExIsOK && pMomX_dev)
+	{
+		double S0 = SumsZ[0];
+		if(S0 != 0.)
+		{
+			double InvNormX = 1./S0;
+			double InvNormXLamb_d_TwoPi = InvNormX * (2.*(FourPi/4.) / Lamb_d_FourPi); // placeholder, will derive below
+			// Use same factors as host: compute required normalization factors
+			double FourPi_d_Lamb_d_Rx = FourPi_d_Lamb/LocRobsX;
+			double TwoPi_d_Lamb_d_Rx_xStep = 0.5 * (xStep * FourPi_d_Lamb_d_Rx);
+			double InvNormXLamb_d_TwoPiInvStepX = InvNormX * TwoPi_d_Lamb_d_Rx_xStep * (1./xStep);
+			InvNormXLamb_d_TwoPi = InvNormX * TwoPi_d_Lamb_d_Rx_xStep;
+			double InvNormXLamb_d_TwoPiE2 = InvNormX * (TwoPi_d_Lamb_d_Rx_xStep * TwoPi_d_Lamb_d_Rx_xStep);
+			double InvNormXLamb_d_TwoPiE2InvStepXe2 = InvNormXLamb_d_TwoPiE2 * (1./(xStep*xStep));
+
+			// write outputs following host mapping
+			pMomX_dev[0] = (ActualScansXZ? S0 * xStep_zStep_mm2 : 0.0);
+			pMomX_dev[1] = (ActualScanX? SumsZ[1]*InvNormX : pSRWRadStructAccessData->xStart);
+			pMomX_dev[2] = (ActualScanX? SumsZ[2]*InvNormXLamb_d_TwoPiInvStepX : 0.0);
+			pMomX_dev[3] = (ActualScanZ? SumsZ[3]*InvNormX : pSRWRadStructAccessData->zStart);
+			pMomX_dev[4] = (ActualScanZ? SumsZ[4]*InvNormXLamb_d_TwoPiInvStepX : 0.0);
+			pMomX_dev[5] = (ActualScanX? SumsZ[5]*InvNormX : pSRWRadStructAccessData->xStart * pSRWRadStructAccessData->xStart);
+			pMomX_dev[6] = (ActualScanX? SumsZ[6]*InvNormXLamb_d_TwoPiInvStepX : 0.0);
+			pMomX_dev[7] = (ActualScanX? SumsZ[7]*InvNormXLamb_d_TwoPiE2InvStepXe2 : 0.0);
+			pMomX_dev[8] = (ActualScanZ? SumsZ[8]*InvNormX : pSRWRadStructAccessData->zStart * pSRWRadStructAccessData->zStart);
+			pMomX_dev[9] = (ActualScanZ? SumsZ[9]*InvNormXLamb_d_TwoPiInvStepX : 0.0);
+			pMomX_dev[10] = (ActualScanZ? SumsZ[10]*InvNormXLamb_d_TwoPiE2InvStepXe2 : 0.0);
+		}
+		else
+		{
+			for(int i=0;i<AmOfMom;i++) pMomX_dev[i] = 0.0;
+		}
+	}
+
+	if(EzIsOK && pMomZ_dev)
+	{
+		double S11 = SumsZ[11];
+		if(S11 != 0.)
+		{
+			double InvNormZ = 1./S11;
+			double FourPi_d_Lamb_d_Rz = FourPi_d_Lamb/LocRobsZ;
+			double TwoPi_d_Lamb_d_Rz_zStep = 0.5 * (zStep * FourPi_d_Lamb_d_Rz);
+			double InvNormZLamb_d_TwoPiInvStepX = InvNormZ * TwoPi_d_Lamb_d_Rz_zStep * (1./xStep);
+			double InvNormZLamb_d_TwoPi = InvNormZ * TwoPi_d_Lamb_d_Rz_zStep;
+			double InvNormZLamb_d_TwoPiE2 = InvNormZ * (TwoPi_d_Lamb_d_Rz_zStep * TwoPi_d_Lamb_d_Rz_zStep);
+			double InvNormZLamb_d_TwoPiE2InvStepXe2 = InvNormZLamb_d_TwoPiE2 * (1./(xStep*xStep));
+
+			pMomZ_dev[0] = (ActualScansXZ? S11 * xStep_zStep_mm2 : 0.0);
+			pMomZ_dev[1] = (ActualScanX? SumsZ[12]*InvNormZ : pSRWRadStructAccessData->xStart);
+			pMomZ_dev[2] = (ActualScanX? SumsZ[13]*InvNormZLamb_d_TwoPiInvStepX : 0.0);
+			pMomZ_dev[3] = (ActualScanZ? SumsZ[14]*InvNormZ : pSRWRadStructAccessData->zStart);
+			pMomZ_dev[4] = (ActualScanZ? SumsZ[15]*InvNormZLamb_d_TwoPiInvStepX : 0.0);
+			pMomZ_dev[5] = (ActualScanX? SumsZ[16]*InvNormZ : pSRWRadStructAccessData->xStart * pSRWRadStructAccessData->xStart);
+			pMomZ_dev[6] = (ActualScanX? SumsZ[17]*InvNormZLamb_d_TwoPiInvStepX : 0.0);
+			pMomZ_dev[7] = (ActualScanX? SumsZ[18]*InvNormZLamb_d_TwoPiE2InvStepXe2 : 0.0);
+			pMomZ_dev[8] = (ActualScanZ? SumsZ[19]*InvNormZ : pSRWRadStructAccessData->zStart * pSRWRadStructAccessData->zStart);
+			pMomZ_dev[9] = (ActualScanZ? SumsZ[20]*InvNormZLamb_d_TwoPiInvStepX : 0.0);
+			pMomZ_dev[10] = (ActualScanZ? SumsZ[21]*InvNormZLamb_d_TwoPiE2InvStepXe2 : 0.0);
+		}
+		else
+		{
+			for(int i=0;i<AmOfMom;i++) pMomZ_dev[i] = 0.0;
+		}
+	}
+}
 #endif

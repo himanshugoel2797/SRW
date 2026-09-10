@@ -364,8 +364,45 @@ EXP int CALL srwlCalcPartTraj(SRWLPrtTrj* pTrj, SRWLMagFldC* pMagFld, double* pr
 			sSt -= part.z; sEn -= part.z; //to make sure that ct = 0 at z = part.z
 		}
 
-		srTGenTrjDat genTrjDat(&elecBeam, hMagElem);
-		genTrjDat.CompTrjCrdVel(pTrj->ctStart, pTrj->ctEnd, pTrj->np, precPar, pTrj->arXp, pTrj->arX, pTrj->arYp, pTrj->arY, pTrj->arZp, pTrj->arZ, pTrj->arBx, pTrj->arBy, pTrj->arBz);
+		// Try to create a specialized trajectory object (periodic undulator) and use its optimized routine
+		srTGenTrjDat* pGenTrjDat = srTGenTrjDat::CreateAndSetupNewTrjDat(&elecBeam, hMagElem.rep);
+		if(pGenTrjDat != 0)
+		{
+			// Allow forcing RK fallback via environment for parity testing
+			bool forceRK = (getenv("SRW_FORCE_RK") != 0);
+
+			// If it's a periodic trajectory (undulator), use the faster analytic path
+			srTPerTrjDat* pPer = dynamic_cast<srTPerTrjDat*>(pGenTrjDat);
+			if((pPer != 0) && (!forceRK))
+			{
+				pPer->CompTotalTrjData(pTrj->ctStart, pTrj->ctEnd, pTrj->np, pTrj->arXp, pTrj->arYp, pTrj->arX, pTrj->arY, pTrj->arBx, pTrj->arBy);
+				// fill longitudinal components (approximate) and independent variable grid
+				double gamEm2 = pPer->EbmDat.GammaEm2;
+				double sStep = (pTrj->np <= 1)? 0.0 : (pTrj->ctEnd - pTrj->ctStart)/(pTrj->np - 1);
+				double s = pTrj->ctStart;
+				for(long long i=0; i<pTrj->np; i++)
+				{
+					double xd = pTrj->arXp[i];
+					double yd = pTrj->arYp[i];
+					pTrj->arZp[i] = CGenMathMeth::radicalOnePlusSmall(-(gamEm2 + xd*xd + yd*yd));
+					pTrj->arZ[i] = s;
+					s += sStep;
+				}
+				delete pGenTrjDat;
+			}
+			else
+			{
+				// fallback to generic RK-based computation
+				pGenTrjDat->CompTrjCrdVel(pTrj->ctStart, pTrj->ctEnd, pTrj->np, precPar, pTrj->arXp, pTrj->arX, pTrj->arYp, pTrj->arY, pTrj->arZp, pTrj->arZ, pTrj->arBx, pTrj->arBy, pTrj->arBz);
+				delete pGenTrjDat;
+			}
+		}
+		else
+		{
+			// as a last resort, use local generic generator (old behavior)
+			srTGenTrjDat genTrjDat(&elecBeam, hMagElem);
+			genTrjDat.CompTrjCrdVel(pTrj->ctStart, pTrj->ctEnd, pTrj->np, precPar, pTrj->arXp, pTrj->arX, pTrj->arYp, pTrj->arY, pTrj->arZp, pTrj->arZ, pTrj->arBx, pTrj->arBy, pTrj->arBz);
+		}
 
 		//hMagElem.rep->DeallocAuxData(); //could be moved to CompTrjCrdVel?
 		//not necessary; should be called from destructor
